@@ -1,3 +1,4 @@
+import {writeLog} from '../runtime-logs.ts';
 import {AIError,owner,csrf,readBody,stripSecrets} from './security.ts';
 import {rawSettings,safeSettings,saveSettings,stamp} from './settings.ts';
 import {preferenceStatus,propose,resolveProposal,runTool,paperDetails} from './tools.ts';
@@ -42,7 +43,7 @@ async function conversation(db:any,id:string,config:any,env:any,body:any,request
     if(['read_preferences','propose_preferences'].includes(call.name))configurationRead=true;
     if(output.papers)for(const p of output.papers)evidence.set(p.id,p);
     if(output.proposal)proposals.push(output.proposal);
-   }catch(e){output={error:e instanceof AIError?e.message:'工具参数无效，未执行'}}
+   }catch(e){await writeLog(db,{component:'ai',event:'tool_failed',severity:'warning',outcome:'blocked',errorCode:e instanceof AIError?e.code:'invalid_tool',correlationId:requestId});output={error:e instanceof AIError?e.message:'工具参数无效，未执行'}}
    if(config.protocol==='responses')input.push({type:'function_call_output',call_id:call.id,output:JSON.stringify(output)});
    else input.push({role:'tool',tool_call_id:call.id,content:JSON.stringify(output)});
   }
@@ -50,8 +51,9 @@ async function conversation(db:any,id:string,config:any,env:any,body:any,request
  throw new AIError('round_limit',422,'模型未在 3 次请求内完成回答，已停止计费调用；变更尚未执行，请缩小问题范围');
 }
 export async function aiApi(request:Request,env:any){
+ const started=Date.now();let authorized=false,logRequest:string|undefined,manualAnalysis=false;const route=new URL(request.url).pathname.replace('/api/site/ai/','');
  try{
-  const id=owner(request,env),db=env.DB;if(!db)throw new AIError('database_unavailable',503,'数据库暂不可用');const path=new URL(request.url).pathname.replace('/api/site/ai/','');
+  const id=owner(request,env),db=env.DB;authorized=true;if(!db)throw new AIError('database_unavailable',503,'数据库暂不可用');const path=new URL(request.url).pathname.replace('/api/site/ai/','');
   // Clear conversational content after seven days on the next authenticated visit. Retain content-free tombstones to prevent replay.
   const cutoff=new Date(Date.now()-7*86400000).toISOString();
   await db.batch([db.prepare('UPDATE ai_receipts SET response_json=NULL WHERE created_at<? AND response_json IS NOT NULL').bind(cutoff),db.prepare('UPDATE ai_requests SET result_json=NULL WHERE created_at<? AND result_json IS NOT NULL').bind(cutoff),db.prepare("DELETE FROM ai_proposals WHERE created_at<? AND status<>'pending'").bind(cutoff)]);
@@ -61,14 +63,14 @@ export async function aiApi(request:Request,env:any){
    throw new AIError('not_found',404,'接口不存在');
   }
   if(request.method!=='POST')throw new AIError('method_not_allowed',405,'请求方式不支持');csrf(request);const body=await readBody(request);
-  if(path==='settings')return json(await saveSettings(db,id,body,env));
+  if(path==='settings'){const result=await saveSettings(db,id,body,env);await writeLog(db,{component:'settings',event:'config_saved',severity:'info',outcome:'ok',durationMs:Date.now()-started,metadata:{revision:result.revision}});return json(result)}
   if(path==='preferences/propose')return json({proposal:await propose(db,id,body.value)});
   if(path==='preferences/resolve')return json(await resolveProposal(db,id,String(body.id||''),body.action));
   if(path!=='chat'&&path!=='test')throw new AIError('not_found',404,'接口不存在');
   const config=await rawSettings(db,id);if(!config?.key_ciphertext)throw new AIError('not_configured',409,'请先在网站设置中保存接入点、模型与 API key');
   if(path==='chat'&&!config.enabled)throw new AIError('ai_disabled',409,'AI 处于关闭状态，请在网站设置中启用');
   if(typeof body.requestId!=='string'||!/^[a-f0-9-]{36}$/i.test(body.requestId))throw new AIError('invalid_request_id',400,'请求标识无效');
-  const requestId=id+':'+body.requestId,fp=await fingerprint(JSON.stringify({body,revision:config.revision,path}));
+  const requestId=id+':'+body.requestId;logRequest=requestId;manualAnalysis=Array.isArray(body.paperIds)&&body.paperIds.length>0;const fp=await fingerprint(JSON.stringify({body,revision:config.revision,path}));
   const previous=await db.prepare('SELECT * FROM ai_requests WHERE id=? AND owner_id=?').bind(requestId,id).first();
   if(previous){if(previous.fingerprint!==fp)throw new AIError('request_conflict',409,'同一请求标识不能用于不同问题或设置');if(previous.status==='completed'&&previous.result_json)return json(JSON.parse(previous.result_json));throw new AIError('request_already_attempted',409,'此请求已尝试或仍在处理中，不会自动重复调用；再次主动发送是新请求，可能再次计费')}
   const claimed=await db.prepare("INSERT OR IGNORE INTO ai_requests(id,owner_id,fingerprint,status,created_at) VALUES(?,?,?,'pending',?)").bind(requestId,id,fp,stamp()).run();if(!claimed.meta?.changes)throw new AIError('request_busy',409,'此请求正在处理中');
@@ -79,7 +81,7 @@ export async function aiApi(request:Request,env:any){
     if(!r.calls.some((c:any)=>c.name==='connection_check'&&(()=>{try{return JSON.parse(c.arguments).ok===true}catch{return false}})()))throw new AIError('tool_unsupported',502,'接入点已响应，但未完成工具调用验证；该模型/协议/思考等级组合可能不支持助手所需工具');
     await db.prepare("UPDATE ai_settings SET tested_at=?,test_status='ok' WHERE owner_id=? AND revision=?").bind(stamp(),id,config.revision).run();result={ok:true,message:'连接、模型、思考等级与工具调用已通过本次实际测试',model:config.model,reasoning:config.reasoning};
    }else result=await conversation(db,id,config,env,body,requestId);
-   await db.prepare("UPDATE ai_requests SET status='completed',result_json=? WHERE id=? AND owner_id=?").bind(JSON.stringify(result),requestId,id).run();return json(result);
+   await db.prepare("UPDATE ai_requests SET status='completed',result_json=? WHERE id=? AND owner_id=?").bind(JSON.stringify(result),requestId,id).run();await writeLog(db,{component:'ai',event:'request_finished',severity:'info',outcome:'ok',correlationId:requestId,taskId:path,requestId,durationMs:Date.now()-started,metadata:{purpose:path,providerCalls:result.providerCalls??1,manualAnalysis}});return json(result);
   }catch(e){const failureAt=stamp();const failure=e instanceof AIError?{code:e.code,error:e.message}:{code:'ai_unavailable',error:'AI 服务暂不可用，已停止操作'};await db.prepare("UPDATE ai_requests SET status='failed',result_json=? WHERE id=? AND owner_id=?").bind(JSON.stringify({...failure,purpose:path,testedAt:failureAt}),requestId,id).run();if(path==='test')await db.prepare("UPDATE ai_settings SET tested_at=?,test_status='failed' WHERE owner_id=? AND revision=?").bind(failureAt,id,config.revision).run();throw e}
- }catch(e){if(e instanceof AIError)return json({code:e.code,error:e.message},e.status);return json({code:'ai_unavailable',error:'AI 服务暂不可用，已停止操作；请稍后重试'},503)}
+ }catch(e){if(authorized)await writeLog(env.DB,{component:route==='settings'?'settings':'ai',event:'request_failed',severity:e instanceof AIError&&e.status<500?'warning':'error',outcome:e instanceof AIError&&e.status<500?'blocked':'failed',errorCode:e instanceof AIError?e.code:'ai_unavailable',httpStatus:e instanceof AIError?e.status:503,correlationId:logRequest,requestId:logRequest,taskId:['test','chat','settings','preferences/propose','preferences/resolve'].includes(route)?route:undefined,durationMs:Date.now()-started,metadata:{purpose:route,manualAnalysis}});if(e instanceof AIError)return json({code:e.code,error:e.message},e.status);return json({code:'ai_unavailable',error:'AI 服务暂不可用，已停止操作；请稍后重试'},503)}
 }

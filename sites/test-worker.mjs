@@ -26,4 +26,12 @@ const proposed=await (await mf.dispatchFetch('https://local.test/api/site/ai/pre
 assert.equal((await mf.dispatchFetch('https://local.test/api/site/ai/preferences/resolve',{method:'POST',headers:writeHeaders,body:JSON.stringify({id:proposed.proposal.id,action:'confirm'})})).status,409);
 const page=await (await mf.dispatchFetch('https://local.test/settings')).text();assert.ok(page.includes('网站设置'));assert.ok(page.includes('打开 HKIS AI 助手'));
 console.log('AI WORKER OK: owner/anonymous isolation, defaults, Worker AES-GCM key save/redaction, proposal confirmation/replay, settings SSR, no provider calls');
-await mf.dispose();process.exit(0);
+assert.equal((await mf.dispatchFetch('https://local.test/api/site/logs')).status,403);
+const logs=await (await mf.dispatchFetch('https://local.test/api/site/logs?severity=all',{headers:aiHeaders})).json();assert.ok(logs.entries.some(r=>r.event==='config_saved'));assert.equal(logs.retentionDays,30);assert.equal(logs.rowCap,10000);
+console.log('RUNTIME LOGS OK: real Worker/D1 migration, owner access and settings instrumentation');
+await mf.dispose();
+// Real workerd Request construction: Node fetch mocks do not enforce this runtime enum.
+const transport=new Miniflare(convertV4MiniflareOptions({modules:true,script:`export default {async fetch(){ const request=new Request('https://example.org/responses',{method:'POST',redirect:'manual'});return Response.json({redirect:request.redirect});}}`,compatibilityDate:'2026-09-01'}));
+assert.equal((await (await transport.dispatchFetch('https://local.test')).json()).redirect,'manual');await transport.dispose();
+assert.ok((await readFile('sites/ai/provider.ts','utf8')).includes("redirect:'manual'"));
+console.log('PROVIDER TRANSPORT OK: workerd supports manual redirect; no network/provider calls');process.exit(0);

@@ -1,3 +1,4 @@
+import {logsApi,writeLog} from './runtime-logs.ts';
 import {aiApi} from './ai/api.ts';
 import {researchApi} from './research.ts';
 import bootstrap from './bootstrap.json' with {type:'json'};
@@ -18,13 +19,14 @@ function card(r:any){return {id:r.id,title:r.title,summary:r.summary,reason:null
 async function detail(db:any,id:string){const r=await db.prepare('SELECT i.*,s.name source_name FROM site_items i JOIN site_sources s ON s.id=i.source_id WHERE i.id=?').bind(id).first();if(!r)return null;const s=sources.find(s=>s.id===r.source_id);return {...card(r),revision:1,originalTitle:null,source:{id:r.source_id,name:r.source_name,kind:'rss',firstParty:s?.first_party??false,iconUrl:null},links:{aihot:`/items/${r.id}`,original:r.url},discoveredAt:r.discovered_at,story:null,readingMode:'full',author:null,language:null,body:null,outline:[],relatedStories:[],indexable:false,markdownAvailable:false,group:null,hasTranslation:false,bodyLanguage:'original'};}
 export async function collect(db:any,id:string){const s=sources.find(s=>s.id===id);if(!s)throw new Error('未知信源');await seed(db);const state=await db.prepare('SELECT * FROM site_sources WHERE id=?').bind(id).first();
  if(state.last_checked&&Date.now()-Date.parse(state.last_checked)<60000)return {id,skipped:true,message:'一分钟内已检查'};
- const checked=now();await db.prepare('UPDATE site_sources SET last_checked=? WHERE id=?').bind(checked,id).run();
+ const checked=now();await writeLog(db,{component:'feed',event:'collection_started',severity:'info',outcome:'started',sourceId:id,correlationId:checked+id});await db.prepare('UPDATE site_sources SET last_checked=? WHERE id=?').bind(checked,id).run();
  try{const entries=await fetchFeed(s.config.feedUrl);const limit=state.last_success?60:s.config._aihot.initialBackfillLimit;let saved=0;
  for(const entry of entries.slice(0,limit) as any[]){const u=new URL(entry.url);for(const k of [...u.searchParams.keys()])if(k.startsWith('utm_')||['fbclid','gclid'].includes(k))u.searchParams.delete(k);u.hash='';u.searchParams.sort();const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(u.href));const itemId=Array.from(new Uint8Array(hash)).map(x=>x.toString(16).padStart(2,'0')).join('').slice(0,32);
  const result=await db.prepare('INSERT OR IGNORE INTO site_items(id,source_id,url,title,summary,published_at,discovered_at) VALUES(?,?,?,?,?,?,?)').bind(itemId,id,u.href,entry.title,entry.summary||null,entry.publishedAt,checked).run();saved+=result.meta?.changes||0;}
- const count=await db.prepare('SELECT count(*) n FROM site_items WHERE source_id=?').bind(id).first();await db.prepare('UPDATE site_sources SET last_success=?,error=NULL,count=? WHERE id=?').bind(checked,count.n,id).run();return {id,ok:true,added:saved,count:count.n};
- }catch(e){const error=String((e as Error).message).slice(0,300);await db.prepare('UPDATE site_sources SET error=? WHERE id=?').bind(error,id).run();return {id,ok:false,error};}}
+ const count=await db.prepare('SELECT count(*) n FROM site_items WHERE source_id=?').bind(id).first();await db.prepare('UPDATE site_sources SET last_success=?,error=NULL,count=? WHERE id=?').bind(checked,count.n,id).run();await writeLog(db,{component:'feed',event:'collection_finished',severity:'info',outcome:'ok',sourceId:id,correlationId:checked+id,durationMs:Date.now()-Date.parse(checked),metadata:{added:saved}});return {id,ok:true,added:saved,count:count.n};
+ }catch(e){await writeLog(db,{component:'feed',event:'collection_failed',severity:'error',outcome:'failed',errorCode:'collection_failed',sourceId:id,correlationId:checked+id,durationMs:Date.now()-Date.parse(checked)});const error=String((e as Error).message).slice(0,300);await db.prepare('UPDATE site_sources SET error=? WHERE id=?').bind(error,id).run();return {id,ok:false,error};}}
 export async function siteApi(request:Request,env:any):Promise<Response>{
+ if(new URL(request.url).pathname==='/api/site/logs')return logsApi(request,env);
  if(new URL(request.url).pathname.startsWith('/api/site/ai/'))return aiApi(request,env);
  if(new URL(request.url).pathname.startsWith('/api/site/research/'))return researchApi(request,env);
  const db=env.DB;if(!db)return json({code:'database_unavailable',detail:'数据库暂不可用'},503);await seed(db);const u=new URL(request.url),p=u.pathname;
