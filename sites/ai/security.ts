@@ -23,7 +23,8 @@ export async function readBody(request:Request){
 }
 // Exact public endpoints prevent private-network, metadata, DNS-rebinding and redirect SSRF.
 // Custom deployments may add an exact reviewed HTTPS base URL via server runtime configuration.
-export const PUBLIC_ENDPOINTS=['https://api.openai.com/v1','https://api.deepseek.com','https://openrouter.ai/api/v1','https://generativelanguage.googleapis.com/v1beta/openai'];
+export const KIMI_CODE_ENDPOINT='https://api.kimi.com/coding/v1';
+export const PUBLIC_ENDPOINTS=['https://api.openai.com/v1','https://api.deepseek.com','https://openrouter.ai/api/v1','https://generativelanguage.googleapis.com/v1beta/openai',KIMI_CODE_ENDPOINT];
 export function endpoint(value:unknown,env:any){
  if(typeof value!=='string'||value.length>500)throw new AIError('invalid_endpoint',400,'请输入公开 HTTPS API 接入点');
  let u:URL;try{u=new URL(value)}catch{throw new AIError('invalid_endpoint',400,'API 接入点格式无效')}

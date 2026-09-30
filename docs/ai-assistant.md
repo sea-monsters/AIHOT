@@ -76,3 +76,13 @@ Sites/D1 使用专用 `sites/ai/provider.ts` 回执门控，保持原 PostgreSQL
 `npm run typecheck`；`npm run build`；`node sites/test-worker.mjs`：验证真实 Worker + D1 + AES-GCM、所有者鉴权、确认防重放、论文/周报回归。
 
 原 `apps/web/tests` 的 6 项公共缓存测试属于之前已知基线，与此私有 Sites 适配存在差异；不得宣称全仓所有测试通过。完整 PostgreSQL 集成测试仍需要单独测试数据库。
+
+## Kimi Code interactive connection (2026-09-30)
+
+The exact reviewed endpoint `https://api.kimi.com/coding/v1` is supported. The settings page has an explicit preset for `kimi-for-coding` / `Responses` / `max`; choosing it fills fields but never saves, moves credentials, enables AI, or makes a model call. The user must confirm the credential's destination and save in their authenticated owner session. A pre-existing key cannot be silently moved to this endpoint.
+
+Kimi's official [Codex integration](https://www.kimi.com/code/docs/en/third-party-tools/codex.html) documents native Responses, reasoning and function calls. Its [model configuration](https://www.kimi.com/code/docs/en/kimi-code/models.html) documents `kimi-for-coding` and `max`. These establish protocol support, not that this account or HKIS client has passed a live test. The genuine client identifier is `HKIS/1.0 (personal research assistant)`; a provider denial is returned unchanged except secret redaction and never retried under a disguised client identity.
+
+The [community guidelines](https://www.kimi.com/code/docs/en/kimi-code/community-guidelines.html) permit personal interactive usage but exclude non-interactive scripted batches/data annotation pipelines. Therefore this endpoint is only for owner-initiated chat, analysis and connectivity tests. The provider adapter rejects other purposes before reading credentials or making a request. Do not call the chat path from a scheduler or label a background job as chat. Scheduled bibliographic ingestion remains independent of AI and invokes no model. Unattended AI analysis would need a suitable separate Platform/API configuration and explicit bounded authorization; this change does not implement it or start a scheduler.
+
+The owner must save the key themselves on `/settings`; never send it through conversation, source control, logs, screenshots, or client storage. A successful save reports that settings were saved; only a successful real connection test establishes account/model/tool connectivity. Mock tests do not establish live connectivity.

@@ -1,8 +1,10 @@
-import {AIError,endpoint,unseal,stripSecrets,redactPayload} from './security.ts';
+import {AIError,endpoint,unseal,stripSecrets,redactPayload,KIMI_CODE_ENDPOINT} from './security.ts';
 import {stamp} from './settings.ts';
 import {TOOL_DEFS} from './tools.ts';
 /** D1 implementation of the receipt + budget gate. Every provider attempt is recorded before sending; uncertain attempts are never automatically replayed. */
 export async function providerCall(db:any,id:string,config:any,env:any,requestId:string,round:number,input:any[],purpose='chat'){
+ // Coding-plan access is personal and interactive only, never a background batch provider.
+ if(config.endpoint===KIMI_CODE_ENDPOINT&&!['chat','test'].includes(purpose))throw new AIError('interactive_only',403,'Kimi Code 仅用于本人主动发起的对话或测试，不能用于无人值守的批量分析管线；自动分析需另选支持该用途的 API');
  const current=await db.prepare('SELECT revision,enabled,key_ciphertext FROM ai_settings WHERE owner_id=?').bind(id).first();
  if(!current||current.revision!==config.revision||!current.key_ciphertext||(purpose==='chat'&&!current.enabled))throw new AIError('configuration_changed',409,'调用期间配置已更改或 AI 已关闭，请确认最新设置后重新发送');
  endpoint(config.endpoint,env);const secret=await unseal(config.key_ciphertext,env,`${id}|${config.endpoint}`),rid=`${requestId}:${round}`,created=stamp();
@@ -14,7 +16,7 @@ export async function providerCall(db:any,id:string,config:any,env:any,requestId
  if(responses&&config.endpoint==='https://api.openai.com/v1')payload.include=['reasoning.encrypted_content'];
  let received=false;
  try{
-  const response=await fetch(config.endpoint+(responses?'/responses':'/chat/completions'),{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${secret}`},body:JSON.stringify(payload),redirect:'error',signal:AbortSignal.timeout(90000)});
+  const response=await fetch(config.endpoint+(responses?'/responses':'/chat/completions'),{method:'POST',headers:{'Content-Type':'application/json','User-Agent':'HKIS/1.0 (personal research assistant)',Authorization:`Bearer ${secret}`},body:JSON.stringify(payload),redirect:'error',signal:AbortSignal.timeout(90000)});
   const reader=response.body?.getReader();if(!reader)throw new AIError('provider_empty',502,'模型供应商返回空响应');let text='',size=0;const decoder=new TextDecoder();while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>1000000){await reader.cancel();throw new AIError('provider_too_large',502,'供应商响应超过安全大小限制')}text+=decoder.decode(value,{stream:true})}text+=decoder.decode();
   let data:any;try{data=redactPayload(JSON.parse(text),secret);text=JSON.stringify(data)}catch{throw new AIError('provider_format',502,`接入点返回非 JSON 响应（HTTP ${response.status}），请检查地址与协议`)}
   received=true;
