@@ -11,7 +11,7 @@ import "./app.css";
 import { Sidebar } from "./components/shell/Sidebar";
 import { MobileTabBar } from "./components/shell/MobileTabBar";
 import { BackToTop, NavigationProgress } from "./components/shell/Chrome";
-import { RingMark } from "./components/Logo";
+import { RingMark, Wordmark } from "./components/Logo";
 import { buttonClass } from "./components/ui/Controls";
 import { THEME_BOOT_SCRIPT } from "./lib/local-state";
 import { apiGet } from "./lib/api.server";
@@ -80,7 +80,13 @@ function SiteShell({ changelogVersion, children }: { changelogVersion: string | 
       {/* Mobile shell (≤ 960px): one centred column, the tab bar below. Desktop: the page fills the main area
           up to the list width (--page-max-wide), centred beyond it. */}
       <main id="main" className="min-w-0 flex-1 pb-[calc(72px+env(safe-area-inset-bottom))] lg:px-7 lg:pb-[72px] lg:pt-6">
-        <div className="mx-auto w-full max-w-[640px] px-4 lg:max-w-[var(--page-max-wide)] lg:px-0">{children}</div>
+        <div className="mx-auto w-full max-w-[640px] px-4 lg:max-w-[var(--page-max-wide)] lg:px-0">
+          <Link to="/" className="flex flex-wrap items-center gap-x-3 gap-y-1 pb-1 pt-4 text-ink lg:hidden" aria-label={`${SITE.name} 首页`}>
+            <Wordmark size={22} />
+            <span className="text-[14px] font-semibold leading-5">{SITE.name}</span>
+          </Link>
+          {children}
+        </div>
       </main>
       <MobileTabBar changelogVersion={changelogVersion} />
       <BackToTop />

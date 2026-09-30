@@ -1,4 +1,6 @@
-# Sites 适配版本
+# HK的自动情报站 · Sites 适配版本
+
+品牌：HK的自动情报站；英文名 HK's Intelligent Station；文字 Logo HKIS。
 
 原始基线：sea-monsters/AIHOT，885b736dc0fd3ef3d4c9c70af2bc3a981a99ff38。
 

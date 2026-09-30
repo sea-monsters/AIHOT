@@ -1,12 +1,11 @@
-// The site's wordmark (its name from industry/site.ts, set in type) and a small ring mark used as the
-// loader. A site with its own logo can replace Wordmark here.
+// Compact text logo from the industry pack and the existing loading mark.
 import { SITE } from "@aihot/industry/site";
 
 export function Wordmark({ size = 22, className = "" }: { size?: number; className?: string }) {
   return (
-    <span className={`inline-flex items-center font-black leading-none tracking-[-0.03em] ${className}`} style={{ fontSize: size }} aria-label={SITE.name} role="img">
+    <span className={`inline-flex shrink-0 items-center whitespace-nowrap font-black leading-none tracking-[-0.03em] ${className}`} style={{ fontSize: size }} aria-label={`${SITE.englishName} (${SITE.shortName})`} title={SITE.englishName} role="img">
       <span aria-hidden="true" className="mr-[0.3em] inline-block size-[0.42em] rounded-full bg-accent" />
-      <span aria-hidden="true">{SITE.name}</span>
+      <span aria-hidden="true">{SITE.shortName}</span>
     </span>
   );
 }

@@ -4,16 +4,19 @@
 
 export const SITE = {
   /** 站名：导航、页面标题、分享图、RSS、MCP、后台都用它。 */
-  name: "MyHOT",
+  name: "HK的自动情报站",
+  /** 紧凑文字 Logo 和英文全名。 */
+  shortName: "HKIS",
+  englishName: "HK's Intelligent Station",
   /**
    * 行业词：拼进默认说法里，比如“AI 日报”“AI 动态”。
    * 改成“法律”“HR”“黄金”之类，页面上就会变成“法律日报”“法律动态”。
    */
   subject: "AI",
   /** 首页的完整标题（浏览器标签、搜索结果）。 */
-  homeTitle: "MyHOT — 研究动态工作台",
+  homeTitle: "HK的自动情报站",
   /** 一句话介绍：搜索引擎、分享卡片、RSS、llms.txt 会用。 */
-  description: "研究动态工作台。当前运行原版 AI 示范信源的 RSS 采集；半导体器件、图像传感器与 TCAD 信源及模型流程待配置。",
+  description: "HK的自动情报站（HKIS / HK's Intelligent Station）。当前运行原版 AI 示范信源的 RSS 采集；半导体器件、图像传感器与 TCAD 信源及模型流程待配置。",
   /** 首页左上角和侧边栏下面的一行小字。 */
   tagline: "研究动态 · 信源待定制",
   /** 界面语言（HTML lang、og:locale）。 */
@@ -33,12 +36,12 @@ export const SITE = {
   icp: null as string | null,
   /** 结构化数据里的网站运营者（搜索引擎用）。 */
   organization: {
-    name: "MyHOT",
+    name: "HK的自动情报站",
     /** 创始人（选填）：{ name, url, description }。 */
     founder: null as null | { name: string; url?: string; description?: string },
   },
   /** 抓取信源时报上的名字（User-Agent 里用），不要冒用别的站。 */
-  crawlerName: "MyHOTBot",
+  crawlerName: "HKISBot",
 } as const;
 
 /** 关于页的文案。数字（信源数、收录数、精选数、日报期数）来自站内实时统计，不用写在这里。 */
