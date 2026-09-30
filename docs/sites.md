@@ -1,39 +1,44 @@
 # HK的自动情报站 · Sites 适配版本
 
 品牌：HK的自动情报站；英文名 HK's Intelligent Station；文字 Logo HKIS。
-
 原始基线：sea-monsters/AIHOT，885b736dc0fd3ef3d4c9c70af2bc3a981a99ff38。
 
 ## 当前可用
 
-- 保留 React Router SSR、原版响应式界面、主题切换、文章详情、原文跳转、浏览器本地收藏
-- Workers 原生 HTTP 服务和 D1 数据库，Drizzle 迁移在发布时应用
-- 原有 18 个 AI 示范 RSS / Atom 信源：手动检查更新、来源错误状态、标题/来源摘要搜索、地址去重
-- 首次启动内置一份真实 Google Research RSS 采集结果；时间和来源在 `sites/bootstrap.json` 可追溯，之后手动采集结果以数据库为准
-- 仅展示源标题和摘要，未翻译、未评分、未精选。保留原行业 taxonomy / prompts / selection 配置供后续迁移
+- React Router SSR、原响应式界面、主题切换、详情页、原文跳转、本地收藏
+- Workers 原生服务、D1 数据库和发布时的增量 Drizzle 迁移
+- IEEE、Wiley、Elsevier 的 9 本核心期刊，先进逻辑/DRAM/NAND/新型器件/工艺机理/CIS/TCAD 的真实元数据、可用摘要与字段溯源
+- 明确区分实际摘要、作者关键词、系统主题标签，以及透明的相关度/阅读优先级规则
+- `/hot` 每周热点：近 7 自然日（UTC+08）归组和带引用的摘要摘录；已核实年度 JIF 排序，未核实指标单列
+- `/settings` 和右下角 AI 对话：所有者手动配置接入点/API key/模型/思考等级，按需检索、摘要分析、当前前 4 篇筛选，以及须再次确认的关键词/期望频次建议
+- 原 18 个 AI 示例 RSS/Atom 来源仍保留在「全部动态」，支持手动检查、错误状态、来源摘要搜索与地址去重
 
-## 未启用的能力
+AI 默认 `gpt-5.6-luna` / `xhigh` / Responses，无凭证且关闭。安全要求、配置方法、调用上限、工具边界和验证见 [AI 助手](ai-assistant.md)。没有真实配置和测试前不能声称模型已连通。
 
-原 pg-boss/PostgreSQL 后端保留在仓库，但不随 Sites 部署运行。AI 预筛/双评分/中文写作、事件聚类/热度、日报、原管理后台、公开 RSS/API/MCP 未迁移。没有配置模型凭证，也没有常驻或定时采集。不要将这个版本称为原全链路的等价替代。
+## 仍未启用
 
-当前仍为 AI 行业示范来源；半导体器件、图像传感器、TCAD 信源和相关性/排序策略尚未定制。
+- 实际每 12 小时自动采集调度未连接；期望间隔只是配置值，保存不代表建立自动化
+- 原 PostgreSQL/pg-boss 后端保留但不随 Sites 运行；原全量 AI 预筛/双评分/中文写作/事件聚类/热度及日报 worker 流程未迁移
+- 原管理后台、公开 RSS/API/MCP 与反馈收集尚未迁移
+- 没有后台连续批量模型调用；按需 AI 分不会覆盖论文原有规则分
 
-## 构建和部署
+不要将当前 Sites 版本称为原始全链路的等价替代。
 
-Node.js 24.11+，`npm ci`，`npm run db:generate`（仅修改 schema 后），`npm run build`。
+## 构建与验证
 
-部署前设置未跟踪的 `.openai/hosting.json`：Site 身份按目标环境填写，逻辑 D1 绑定为 `"d1":"DB"`，`"r2":null`。不要向 GitHub 提交凭证或私有运行配置。构建时以 SITE_URL 环境变量提供目标站点地址；不要把私有部署标识硬编码入源码。
+Node.js 24.11+；`npm ci`；schema 更改后 `npm run db:generate`，仅追加迁移；`npm run typecheck`；`npm run build`。
 
-产物：`dist/server/index.js` 的 Worker fetch 导出 + `dist/client` 静态文件；`drizzle/` 保存增量迁移。Sites 平台负责私有访问控制、数据库绑定和迁移。
+部署绑定在未跟踪的 `.openai/hosting.json`：复用原 project ID，D1 逻辑名 `DB`，不用 R2。运行时配置只通过 Sites environment 管理，不把所有者邮箱、加密 key、provider key、token 写进仓库或 manifest。
 
-## 验证
+构建产物 `dist/server/index.js` + `dist/client`；`drizzle/` 保存增量迁移。新增 AI 迁移只创建新表，不改写/删除已有论文和信源表。
 
-`npm run typecheck -w @aihot/web`；构建后 `node sites/test.mjs` 使用 Node SQLite 的 D1 适配进行页面/API/搜索/来源采集/CSRF 验证。该测试会向原公开 RSS 发起一次真实读取，不调用模型或付费接口。
+`node --test sites/ai/ai.test.ts sites/research.test.ts sites/weekly.test.ts` 全部 provider 调用 mock。`node sites/test-worker.mjs` 验证真实 Worker/D1/WebCrypto 与既有周报回归。原 PostgreSQL 集成测试仍需独立测试库；旧 web 公共缓存测试的 6 个已知失败不得当作全套通过。
 
-## 安全与差异
+## 安全边界
 
-- 仅可采集已有配置中的来源，拒绝跨主机重定向、私网字面地址、非 HTTPS、超大响应、XML 实体声明
-- 摘要解析为纯文本，React 转义输出；不展示订阅 HTML
-- SQL 使用绑定参数；写接口校验 Origin，依赖 Sites 的 owner-private 访问边界
-- 分享范围扩大前需重新审核写接口权限、内容与条款
-- 原版全量 PostgreSQL 测试需要独立测试库，不适用于 D1；保留未删除
+- AI API 依赖可信 Sites dispatcher 身份头，并额外验证所有者；所有写操作严格校验同源
+- API key 仅服务端 AES-GCM 加密保存，没有明文或缺省 key 的降级路径
+- 模型没有凭证/接入点/系统权限；只可搜索/读取已收录论文和建议个人研究偏好，变更须显式确认
+- API 端点固定公开白名单，禁止非 HTTPS、IP 地址、重定向与隐含换供应商
+- 只保存来源返回的摘要/元数据，不抓取付费全文；UI 纯文本转义，SQL 参数化
+- 私有访问范围保持不变，扩大分享前应重新审核权限和使用条款

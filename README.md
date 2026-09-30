@@ -1,4 +1,4 @@
-> **此 fork 包含 Sites 原生适配。** 当前能力、与原版的差异、构建和验证方法见 [docs/sites.md](docs/sites.md)。原始 AI 行业信源及模型策略保留，研究领域定制尚未开始。
+> **此 fork 包含 Sites 原生适配。** 当前能力、与原版的差异、构建和验证方法见 [docs/sites.md](docs/sites.md)。现已提供半导体器件/CIS/TCAD 论文情报、每周热点汇总和可自行配置接入点的按需 AI 助手；原 AI 示例 RSS 另行保留。
 
 <p align="center">
   <picture>

@@ -1,0 +1,78 @@
+# HKIS 按需 AI 助手
+
+## 用户入口
+
+- 侧栏「网站设置」(`/settings`) 配置接入点、API key、模型、接口协议、思考等级、每日请求数和单次输出 token 上限
+- 右下角「AI 助手」打开对话；详情页「AI 分析摘要」附带该篇资料；论文列表「AI 筛选当前前 4 篇」附带当前排序前四篇
+- 默认 `gpt-5.6-luna` / `xhigh` / Responses，初始无 API key，AI 关闭。保存配置不调用模型；测试与发送消息需要用户主动点击
+- API key 字段是替换入口，留空保留旧 key；只有是否已配置的状态，永不回显密钥尾号或密文。移除密钥同时关闭 AI
+- 更换接入点必须重新输入新接入点的 key 或移除旧 key，不会将保存的密钥转发给新供应商。保存新 key 时必须核对接收方
+- 连接测试是真实模型请求，会产生供应商费用。没有配置凭证时只做离线测试，不能声称已连通
+
+## 协议与可切换范围
+
+已核实 OpenAI 官方模型 `gpt-5.6-luna` 支持 `xhigh`：
+https://developers.openai.com/api/docs/models/gpt-5.6-luna
+
+OpenAI 从 GPT-5.4 起，Chat Completions 的工具调用只能搭配 reasoning effort `none`，因此此默认组合使用 Responses：
+https://developers.openai.com/api/docs/guides/migrate-to-responses
+
+用户可以显式选择 Responses / Chat Completions、模型名与思考等级。不进行自动降级、模型替换或协议回退。自定义供应商的兼容性只能由真实测试确认。API 支持标记不保证用户账号模型权限或余额。
+
+默认接入点白名单：
+- `https://api.openai.com/v1`
+- `https://api.deepseek.com`
+- `https://openrouter.ai/api/v1`
+- `https://generativelanguage.googleapis.com/v1beta/openai`
+
+这些是接入点选项，不是兼容性或可用性承诺。只支持保留所选参数的 OpenAI-compatible 请求；不支持的模型、思考参数、tools 或 strict schema 会显示供应商错误。
+
+未知网关在保存阶段拒绝。维护者审查其所有权、公开 DNS、HTTPS 与路径后，才可通过运行时 `HKIS_AI_ALLOWED_ENDPOINTS` 追加逗号分隔的精确 base URL。不得配置私网、IP 字面量、元数据服务、内网 DNS 或重定向服务。不得仅为绕过校验而加入地址。禁止携带用户名/密码、端口、查询串、片段；请求禁止重定向。白名单降低 SSRF 与误发凭证风险，不能替代第三方供应商的隐私评估。
+
+## 运行时安全配置
+
+仅部署在具有可信 Sites dispatcher 身份边界的环境；Sites 为签入请求提供 `oai-authenticated-user-id` / `oai-authenticated-user-email`。原始 Worker 不可直接公开暴露或移植到没有身份头清洗/签名验证的自托管环境。
+
+通过 Sites 的 runtime environment API 设置：
+- `HKIS_OWNER_EMAIL`：当前 Site 所有者的已验证邮箱，用于服务端所有者 allowlist；不写进公共仓库
+- `HKIS_AI_ENCRYPTION_KEY`：32 字节随机密钥的 64 位十六进制表示，必须标记为 secret；仅在用户授权后生成并安全存储，不打印、不写入源码/构建物/manifest/日志
+
+缺少 owner 配置时所有 AI API fail closed。缺少 encryption secret 时可保存非敏感模型参数，但拒绝输入/保存 API key 和启用 AI。没有回退口令或把 key 明文写入 D1 的降级路径。
+
+D1 只保存 AES-256-GCM 密文，随机 96-bit nonce，AAD 绑定所有者身份与接入点。运行时 key 丢失/改变会使旧密文无法解密，需用户重新输入 API key；不可静默轮换。模型工具无法读取或修改 provider 配置、API key、认证和运行时环境。
+
+所有 AI API 按稳定的 per-Site user ID 隔离。写请求同时验证精确 Origin、JSON Content-Type、自定义请求头和 Sec-Fetch-Site。禁止仅依赖前端隐藏按钮。未来扩大分享不赋予其他访客 AI 权限。
+
+## 数据与工具边界
+
+模型只可调用：`search_papers`、`paper_details`、`read_preferences`、`propose_preferences`。SQL 绑定参数，最多 8 个搜索结果、每次详情最多 4 篇；摘要截断到每篇 12,000 字。默认底层排序依旧是原规则分，不被 AI 覆盖。
+
+所有论文文本均当作不可信来源，不能授权配置修改。模型只能提出关键词/期望频次变更，须用户开启建议开关；前端展示旧值/新值后，只有独立的确认请求才能执行。建议绑定所有者、15 分钟过期、乐观 revision、单次执行，支持取消和冲突提示。不允许模型确认自己的建议。
+
+AI 筛选结果要求实际检索过的论文 ID，以及摘要中原样存在的证据片段。未检索引用会拦截；缺少摘要/无匹配证据不打 AI 分。无证据的科学回答被固定的证据不足说明替代。模型自由文本仍可能出错，界面提示核对原文，不把它称作科学验证。
+
+关注词可用于 AI 搜索过滤，排除词始终用于 AI 搜索。关键词不会改写既有主题 taxonomy 或删除论文。
+
+信源期望间隔保存为 owner-scoped 配置。当前实际自动调度未连接，原每 12 小时目标没有启用。保存 D1 期望值不代表建立/更改任何自动化；用户仍可手动采集。本功能不谎报“已更改运行频率”。
+
+## 调用回执与预算
+
+Sites/D1 使用专用 `sites/ai/provider.ts` 回执门控，保持原 PostgreSQL `packages/backend/src/providers/receipts.ts` 的按次计费/先留回执原则；旧 PostgreSQL 后端不会随 Sites 运行。
+
+- 每次外部调用前原子预留回执并检查每分钟 6 次 / 每日设置限额（UTC，默认 20，允许 1–100）
+- 一次聊天最多 3 次模型请求、6 次站内工具调用；单次最大输出（包括思考）默认 4,096，允许 1,024–16,000
+- 限额是请求次数与 token 上限，不是金额保证；费用以供应商为准
+- 所有失败/超时尝试计入额度。不自动重试超时/未知结果，重复相同请求 ID 返回已保存结果或错误，不重复计费
+- 用户更改模型配置/删除 key/关闭 AI 时，后续轮次停止
+- 请求 `store:false`；第三方供应商是否遵守需由其政策确认
+- 响应 JSON 解码后对字段名和内容递归去除凭证，回执不存 API key。错误只显示经过同样清洗的有限文本
+- 调用回执与结果用于故障追踪、防重复。超过 7 天的回答内容在下次所有者访问 AI API 时清空；保留不含对话内容的请求状态和 usage 信息。网页不会从服务器载入往期聊天
+- 没有后台连续批量推理；加载页面/读取状态不会发起模型调用
+
+## 验证
+
+`node --test sites/ai/ai.test.ts sites/research.test.ts sites/weekly.test.ts`：39 项离线测试，所有 provider 请求 mock，不访问真实模型。
+
+`npm run typecheck`；`npm run build`；`node sites/test-worker.mjs`：验证真实 Worker + D1 + AES-GCM、所有者鉴权、确认防重放、论文/周报回归。
+
+原 `apps/web/tests` 的 6 项公共缓存测试属于之前已知基线，与此私有 Sites 适配存在差异；不得宣称全仓所有测试通过。完整 PostgreSQL 集成测试仍需要单独测试数据库。

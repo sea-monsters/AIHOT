@@ -1,3 +1,4 @@
+import { AIAssistant } from "./components/AIAssistant";
 import { SitesStatus } from "./components/SitesStatus";
 import { titled } from "./lib/seo";
 import { SITE } from "@aihot/industry/site";
@@ -90,6 +91,7 @@ function SiteShell({ changelogVersion, children }: { changelogVersion: string | 
       </main>
       <MobileTabBar changelogVersion={changelogVersion} />
       <BackToTop />
+      <AIAssistant />
     </div>
   );
 }

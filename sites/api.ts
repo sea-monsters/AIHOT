@@ -1,3 +1,4 @@
+import {aiApi} from './ai/api.ts';
 import {researchApi} from './research.ts';
 import bootstrap from './bootstrap.json' with {type:'json'};
 import sourceConfig from '../industry/sources.json' with {type:'json'};
@@ -24,6 +25,7 @@ export async function collect(db:any,id:string){const s=sources.find(s=>s.id===i
  const count=await db.prepare('SELECT count(*) n FROM site_items WHERE source_id=?').bind(id).first();await db.prepare('UPDATE site_sources SET last_success=?,error=NULL,count=? WHERE id=?').bind(checked,count.n,id).run();return {id,ok:true,added:saved,count:count.n};
  }catch(e){const error=String((e as Error).message).slice(0,300);await db.prepare('UPDATE site_sources SET error=? WHERE id=?').bind(error,id).run();return {id,ok:false,error};}}
 export async function siteApi(request:Request,env:any):Promise<Response>{
+ if(new URL(request.url).pathname.startsWith('/api/site/ai/'))return aiApi(request,env);
  if(new URL(request.url).pathname.startsWith('/api/site/research/'))return researchApi(request,env);
  const db=env.DB;if(!db)return json({code:'database_unavailable',detail:'数据库暂不可用'},503);await seed(db);const u=new URL(request.url),p=u.pathname;
  if(p==='/api/site/refresh'&&request.method==='POST'){
