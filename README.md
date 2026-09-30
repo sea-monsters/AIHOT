@@ -1,3 +1,5 @@
+> **此 fork 包含 Sites 原生适配。** 当前能力、与原版的差异、构建和验证方法见 [docs/sites.md](docs/sites.md)。原始 AI 行业信源及模型策略保留，研究领域定制尚未开始。
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.png">

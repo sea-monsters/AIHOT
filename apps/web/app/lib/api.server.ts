@@ -1,3 +1,5 @@
+import { siteContext } from '../../../../sites/context.ts';
+import { siteApi } from '../../../../sites/api.ts';
 // Server-side HTTP client for route loaders. The web process never touches the database;
 // SSR reads the api over loopback with keep-alive, one or two requests per page.
 import { data, redirect } from "react-router";
@@ -17,7 +19,8 @@ export class ApiError extends Error {
 }
 
 export async function apiGet<T>(path: string, init?: { signal?: AbortSignal; headers?: Record<string, string>; responseHeaders?: Headers }): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const ctx = siteContext.getStore();
+  const res = ctx ? await siteApi(new Request(`https://site.internal${path}`), ctx.env) : await fetch(`${API_BASE}${path}`, {
     headers: { accept: "application/json", "x-aihot-ssr": "1", ...init?.headers },
     signal: init?.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
   });

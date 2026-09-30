@@ -44,6 +44,7 @@ function devEdge(): Plugin {
 
 export default defineConfig({
   plugins: [devEdge(), tailwindcss(), reactRouter()],
+  ssr: { noExternal: true },
   server: { port: 3000, strictPort: true },
   build: {
     rolldownOptions: {

@@ -1,0 +1,89 @@
+{
+  "collectedAt": "2026-09-30T00:02:25.349Z",
+  "sources": [
+    {
+      "id": "rss-google-research",
+      "name": "Google Research",
+      "url": "https://research.google/blog/rss/",
+      "kind": "rss",
+      "last_checked": "2026-09-30T00:02:25.349Z",
+      "last_success": "2026-09-30T00:02:25.349Z",
+      "error": null,
+      "count": 8
+    }
+  ],
+  "items": [
+    {
+      "id": "5cc8f180d7d24936a05928cadc3d22cf",
+      "source_id": "rss-google-research",
+      "url": "https://research.google/blog/how-diffusion-controller-unifies-and-simplifies-ai-image-generation/",
+      "title": "How Diffusion Controller unifies and simplifies AI image generation",
+      "summary": "Algorithms & Theory",
+      "published_at": "2026-09-29T18:38:27.000Z",
+      "discovered_at": "2026-09-30T00:02:25.349Z"
+    },
+    {
+      "id": "8451e6726f367367721594694680bf0b",
+      "source_id": "rss-google-research",
+      "url": "https://research.google/blog/coherent-long-form-video-generation/",
+      "title": "Automating coherent long-form video generation",
+      "summary": "Generative AI",
+      "published_at": "2026-09-24T19:40:00.000Z",
+      "discovered_at": "2026-09-30T00:02:25.349Z"
+    },
+    {
+      "id": "a7f1f0b4928f996bc8f693efe9143430",
+      "source_id": "rss-google-research",
+      "url": "https://research.google/blog/millemiglia-a-realistic-instance-generator-for-middle-mile-logistics/",
+      "title": "MilleMiglia: A realistic instance generator for middle-mile logistics",
+      "summary": "Algorithms & Theory",
+      "published_at": "2026-09-18T17:46:09.000Z",
+      "discovered_at": "2026-09-30T00:02:25.349Z"
+    },
+    {
+      "id": "0f83c2d1d5b8034398fa197cb21ab94e",
+      "source_id": "rss-google-research",
+      "url": "https://research.google/blog/the-future-of-practice-enabling-teachers-to-create-learning-interactives-with-generative-ui/",
+      "title": "The future of practice: Enabling teachers to create learning interactives with generative UI",
+      "summary": "Education Innovation",
+      "published_at": "2026-09-17T20:45:00.000Z",
+      "discovered_at": "2026-09-30T00:02:25.349Z"
+    },
+    {
+      "id": "f174ca4a3cbc866f5f127805277c1ee4",
+      "source_id": "rss-google-research",
+      "url": "https://research.google/blog/bypassing-inference-bottlenecks-accelerating-complex-ai-search-with-retrieve-for-train/",
+      "title": "Bypassing inference bottlenecks: Accelerating complex AI search with Retrieve-for-Train",
+      "summary": "Algorithms & Theory",
+      "published_at": "2026-09-15T20:00:00.000Z",
+      "discovered_at": "2026-09-30T00:02:25.349Z"
+    },
+    {
+      "id": "aa8533b1c5b411fc0ea7916978e8554b",
+      "source_id": "rss-google-research",
+      "url": "https://research.google/blog/toolgrad-efficient-tool-use-dataset-generation-with-textual-gradients/",
+      "title": "ToolGrad: Efficient tool-use dataset generation with textual \"gradients\"",
+      "summary": "Machine Intelligence",
+      "published_at": "2026-09-10T22:50:22.000Z",
+      "discovered_at": "2026-09-30T00:02:25.349Z"
+    },
+    {
+      "id": "8d723f6dece8e3e64bae548688a24bee",
+      "source_id": "rss-google-research",
+      "url": "https://research.google/blog/transfer-learning-for-genomic-prediction-in-underrepresented-populations/",
+      "title": "Transfer learning for genomic prediction in underrepresented populations",
+      "summary": "General Science",
+      "published_at": "2026-09-03T18:20:31.000Z",
+      "discovered_at": "2026-09-30T00:02:25.349Z"
+    },
+    {
+      "id": "8b075fa7888e4c355356e3c3da61c7f3",
+      "source_id": "rss-google-research",
+      "url": "https://research.google/blog/a-connectomics-milestone-mapping-the-complete-male-fruit-fly-brain/",
+      "title": "A connectomics milestone: Mapping the complete male fruit fly brain",
+      "summary": "General Science",
+      "published_at": "2026-09-03T16:00:00.000Z",
+      "discovered_at": "2026-09-30T00:02:25.349Z"
+    }
+  ]
+}

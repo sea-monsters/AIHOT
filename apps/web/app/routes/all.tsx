@@ -87,7 +87,7 @@ export default function AllPage() {
       {/* Phones: title with today's count, the search bar, then the same filter row as 精选. */}
       <div className="lg:hidden">
         <div className="flex items-baseline justify-between pb-3 pt-5">
-          <h1 className="text-[22px] font-bold text-ink">{title ?? "全部动态"}</h1>
+          <h1 className="text-[22px] font-bold text-ink">{title ?? "全部动态 · 来源摘要"}</h1>
           {!f.q && (
             <span className="text-[12.5px] text-ink-4">
               今日 <span className="num">{data.todayCount}</span> 条
@@ -107,7 +107,7 @@ export default function AllPage() {
             layoutId="all-search-sort"
             label="搜索排序"
             active={f.tab}
-            items={(["time", "relevance"] as const).map((t) => ({ key: t, label: t === "time" ? "最新（标题与摘要）" : "全文相关", to: searchTabHref(t) }))}
+            items={(["time"] as const).map((t) => ({ key: t, label: "最新（标题与来源摘要）", to: searchTabHref(t) }))}
           />
           <span className="text-[12px] text-ink-4">
             找到 <span className="num">{data.total >= 2000 ? "2000+" : data.total}</span> 条 · 更新于 <span className="num">{updated}</span>
@@ -120,13 +120,7 @@ export default function AllPage() {
           <div className="mt-2 lg:card">
             <EmptyState
               title="没有找到相关内容"
-              action={
-                f.q && f.tab === "time" ? (
-                  <Link to={searchTabHref("relevance")} className="text-[13px] font-medium text-accent hover:underline">
-                    试试“全文相关”，连正文一起搜
-                  </Link>
-                ) : undefined
-              }
+
             >
               {f.q ? "换个说法，或者去掉筛选再试。" : "这个筛选下暂时没有内容。"}
             </EmptyState>

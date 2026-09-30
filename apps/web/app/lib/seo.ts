@@ -64,14 +64,14 @@ export function pageMeta(input: PageMetaInput): MetaDescriptor[] {
     { property: "og:image:width", content: "1200" },
     { property: "og:image:height", content: "630" },
     { property: "og:locale", content: SITE.locale.replace("-", "_") },
-    { name: "twitter:card", content: "summary_large_image" },
+    { name: "twitter:card", content: "summary" },
     { name: "twitter:title", content: input.title ?? HOME_TITLE },
     { name: "twitter:description", content: description },
     { name: "twitter:image", content: image },
   ];
   if (input.noindex) tags.push({ name: "robots", content: input.nofollow ? "noindex, nofollow" : "noindex, follow" });
   if (input.jsonLd) tags.push({ "script:ld+json": input.jsonLd });
-  return tags;
+  return tags.filter(t => !("property" in t && typeof t.property === "string" && t.property.startsWith("og:image")) && !("name" in t && t.name === "twitter:image"));
 }
 
 export function organizationLd() {

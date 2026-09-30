@@ -1,3 +1,4 @@
+import { SitesStatus } from "./components/SitesStatus";
 import { titled } from "./lib/seo";
 import { SITE } from "@aihot/industry/site";
 import {
@@ -21,7 +22,7 @@ export const links: Route.LinksFunction = () => [
   { rel: "icon", type: "image/png", href: "/icon.png" },
   { rel: "apple-touch-icon", href: "/apple-icon.png" },
   { rel: "manifest", href: "/manifest.webmanifest" },
-  { rel: "alternate", type: "application/rss+xml", title: `${SITE.name} — 精选`, href: "/feed.xml" },
+
 ];
 
 interface SiteMeta {
@@ -95,7 +96,7 @@ export default function App() {
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return <Outlet />;
   return (
     <SiteShell changelogVersion={meta.changelogVersion}>
-      <Outlet />
+      <SitesStatus /><Outlet />
     </SiteShell>
   );
 }

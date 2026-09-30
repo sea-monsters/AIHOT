@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1790726337677,
+      "tag": "0000_mean_tyger_tiger",
+      "breakpoints": true
+    }
+  ]
+}
