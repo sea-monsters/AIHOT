@@ -14,13 +14,16 @@ export async function providerCall(db:any,id:string,config:any,env:any,requestId
  const responses=config.protocol==='responses';
  const payload:any=responses?{model:config.model,input,reasoning:{effort:config.reasoning},max_output_tokens:config.max_tokens,store:false,tools:defs.map(d=>({type:'function',...d,strict:true})),parallel_tool_calls:false}:{model:config.model,messages:input,reasoning_effort:config.reasoning,max_completion_tokens:config.max_tokens,store:false,tools:defs.map(d=>({type:'function',function:{...d,strict:true}})),parallel_tool_calls:false};
  if(responses&&config.endpoint==='https://api.openai.com/v1')payload.include=['reasoning.encrypted_content'];
- let received=false;
+ let received=false,httpStatus:number|null=null,providerRequestId:string|null=null,phase="connect";
  try{
   const response=await fetch(config.endpoint+(responses?'/responses':'/chat/completions'),{method:'POST',headers:{'Content-Type':'application/json','User-Agent':'HKIS/1.0 (personal research assistant)',Authorization:`Bearer ${secret}`},body:JSON.stringify(payload),redirect:'error',signal:AbortSignal.timeout(90000)});
+  httpStatus=response.status;phase='read_response';
+  const responseId=response.headers.get('x-request-id')||response.headers.get('request-id');
+  if(responseId&&/^[a-zA-Z0-9_.:-]{1,120}$/.test(responseId)&&!responseId.includes(secret))providerRequestId=responseId;
   const reader=response.body?.getReader();if(!reader)throw new AIError('provider_empty',502,'模型供应商返回空响应');let text='',size=0;const decoder=new TextDecoder();while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>1000000){await reader.cancel();throw new AIError('provider_too_large',502,'供应商响应超过安全大小限制')}text+=decoder.decode(value,{stream:true})}text+=decoder.decode();
-  let data:any;try{data=redactPayload(JSON.parse(text),secret);text=JSON.stringify(data)}catch{throw new AIError('provider_format',502,`接入点返回非 JSON 响应（HTTP ${response.status}），请检查地址与协议`)}
-  received=true;
-  await db.prepare('UPDATE ai_receipts SET status=?,response_json=?,usage_json=?,finished_at=? WHERE id=?').bind(response.ok?'received':'rejected',text,JSON.stringify(data.usage||{}),stamp(),rid).run();
+  phase='parse_response';let data:any;try{data=redactPayload(JSON.parse(text),secret);text=JSON.stringify(data)}catch{throw new AIError('provider_format',502,`接入点返回非 JSON 响应（HTTP ${response.status}），请检查地址与协议`)}
+  received=true;phase='validate_response';
+  await db.prepare('UPDATE ai_receipts SET status=?,response_json=?,usage_json=?,finished_at=? WHERE id=?').bind(response.ok?'received':'rejected',response.ok?text:JSON.stringify({error:{code:String(data.error?.code||data.error?.type||'').replace(/[^a-zA-Z0-9_.-]/g,'').slice(0,80),message:stripSecrets(String(data.error?.message||'请求被拒绝'),secret).slice(0,400)},diagnostic:{httpStatus,providerRequestId,phase}}),JSON.stringify(data.usage||{}),stamp(),rid).run();
   if(!response.ok){const code=String(data.error?.code||data.error?.type||'').replace(/[^a-zA-Z0-9_.-]/g,'').slice(0,80),message=stripSecrets(String(data.error?.message||'请求被拒绝'),secret).slice(0,400);throw new AIError('provider_rejected',502,`供应商 HTTP ${response.status}${code?' / '+code:''}：${message}`)}
   if(data.status==='incomplete'||data.choices?.[0]?.finish_reason==='length')throw new AIError('output_incomplete',502,'模型输出达到 token 上限，可能被思考消耗。请提高输出上限或手动调整思考等级后重试；不会自动重复计费');
   if(data.error||data.status==='failed')throw new AIError('provider_failed',502,'供应商未完成请求，请检查模型与权限');
@@ -32,5 +35,12 @@ export async function providerCall(db:any,id:string,config:any,env:any,requestId
   }
   const choice=data.choices?.[0];if(!choice?.message)throw new AIError('provider_format',502,'接入点未返回 Chat Completions 格式，请检查所选协议');if(choice.message.refusal)throw new AIError('provider_refusal',422,'模型未接受本次请求，请调整问题');
   return {raw:[choice.message],calls:(choice.message.tool_calls||[]).map((c:any)=>({id:c.id,name:c.function?.name,arguments:c.function?.arguments})),text:choice.message.content||'',usage:data.usage||{}};
- }catch(e){if(!received)await db.prepare("UPDATE ai_receipts SET status='unknown',finished_at=? WHERE id=?").bind(stamp(),rid).run();if(e instanceof AIError)throw e;throw new AIError('provider_network',502,'模型连接失败或等待超时；本次结果未知，未自动重试。请检查接入点/协议，若再次发送可能产生新的费用')}
+ }catch(e){
+  // Persist only bounded diagnostic metadata, never raw transport errors, headers, or non-JSON bodies.
+  const kind=e instanceof Error?e.name:'';
+  const transport=kind==='TimeoutError'||kind==='AbortError'?'timeout':'connection_failed';
+  const error=e instanceof AIError?e:new AIError('provider_network',502,`${transport==='timeout'?'模型请求等待超时':'模型连接未完成'}（阶段：${phase}${httpStatus!==null?'，HTTP '+httpStatus:''}）；本次结果未知，未自动重试。再次主动测试可能产生新的费用`);
+  if(!received)await db.prepare('UPDATE ai_receipts SET status=?,response_json=?,finished_at=? WHERE id=?').bind(httpStatus!==null&&httpStatus>=400?'rejected':'unknown',JSON.stringify({error:{code:error.code,message:error.message},diagnostic:{httpStatus,providerRequestId,phase,...(!(e instanceof AIError)?{transport}:{})}}),stamp(),rid).run();
+  throw error;
+ }
 }

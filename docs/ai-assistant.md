@@ -86,3 +86,7 @@ Kimi's official [Codex integration](https://www.kimi.com/code/docs/en/third-part
 The [community guidelines](https://www.kimi.com/code/docs/en/kimi-code/community-guidelines.html) permit personal interactive usage but exclude non-interactive scripted batches/data annotation pipelines. Therefore this endpoint is only for owner-initiated chat, analysis and connectivity tests. The provider adapter rejects other purposes before reading credentials or making a request. Do not call the chat path from a scheduler or label a background job as chat. Scheduled bibliographic ingestion remains independent of AI and invokes no model. Unattended AI analysis would need a suitable separate Platform/API configuration and explicit bounded authorization; this change does not implement it or start a scheduler.
 
 The owner must save the key themselves on `/settings`; never send it through conversation, source control, logs, screenshots, or client storage. A successful save reports that settings were saved; only a successful real connection test establishes account/model/tool connectivity. Mock tests do not establish live connectivity.
+
+### 连接失败诊断
+
+连接测试保留安全诊断供所有者刷新后查看：错误分类、已收到的 HTTP 状态、处理阶段和供应商请求标识（若存在且格式安全）。非 JSON/空响应不保存原始正文、请求头或传输异常原文；JSON 拒绝仅保存限长并脱敏的错误字段。明确的 HTTP 4xx/5xx 记为拒绝，未收到 HTTP 响应或成功响应无法完成解析则仍记为结果未知，不自动重试。旧版本未留存的错误无法追溯恢复，需要所有者主动再次测试，可能再次计费。

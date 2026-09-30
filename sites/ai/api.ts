@@ -80,6 +80,6 @@ export async function aiApi(request:Request,env:any){
     await db.prepare("UPDATE ai_settings SET tested_at=?,test_status='ok' WHERE owner_id=? AND revision=?").bind(stamp(),id,config.revision).run();result={ok:true,message:'连接、模型、思考等级与工具调用已通过本次实际测试',model:config.model,reasoning:config.reasoning};
    }else result=await conversation(db,id,config,env,body,requestId);
    await db.prepare("UPDATE ai_requests SET status='completed',result_json=? WHERE id=? AND owner_id=?").bind(JSON.stringify(result),requestId,id).run();return json(result);
-  }catch(e){await db.prepare("UPDATE ai_requests SET status='failed' WHERE id=? AND owner_id=?").bind(requestId,id).run();if(path==='test')await db.prepare("UPDATE ai_settings SET tested_at=?,test_status='failed' WHERE owner_id=? AND revision=?").bind(stamp(),id,config.revision).run();throw e}
+  }catch(e){const failureAt=stamp();const failure=e instanceof AIError?{code:e.code,error:e.message}:{code:'ai_unavailable',error:'AI 服务暂不可用，已停止操作'};await db.prepare("UPDATE ai_requests SET status='failed',result_json=? WHERE id=? AND owner_id=?").bind(JSON.stringify({...failure,purpose:path,testedAt:failureAt}),requestId,id).run();if(path==='test')await db.prepare("UPDATE ai_settings SET tested_at=?,test_status='failed' WHERE owner_id=? AND revision=?").bind(failureAt,id,config.revision).run();throw e}
  }catch(e){if(e instanceof AIError)return json({code:e.code,error:e.message},e.status);return json({code:'ai_unavailable',error:'AI 服务暂不可用，已停止操作；请稍后重试'},503)}
 }
