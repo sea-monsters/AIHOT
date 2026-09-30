@@ -102,7 +102,7 @@ export default function App() {
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return <Outlet />;
   return (
     <SiteShell changelogVersion={meta.changelogVersion}>
-      <SitesStatus /><Outlet />
+      {pathname!=="/"&&!pathname.startsWith("/research")&&<SitesStatus />}<Outlet />
     </SiteShell>
   );
 }

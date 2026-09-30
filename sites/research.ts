@@ -1,0 +1,88 @@
+import {RESEARCH_SOURCES,TOPICS,RULE_VERSION,type JournalSource} from './research-config.ts';
+import {fromCrossref,parsePublisherRSS,fromOpenAlex,enrichPaper,evaluate,normalizedTitle,canonicalURL,type Paper} from './research-domain.ts';
+const json=(data:any,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
+const stamp=()=>new Date().toISOString();
+const parse=(s:any,fallback:any=[])=>{try{return JSON.parse(s)}catch{return fallback}};
+const delay=(ms:number)=>new Promise(r=>setTimeout(r,ms));
+const DAY=86400000;
+export async function initResearch(db:any){await db.batch(RESEARCH_SOURCES.map(s=>db.prepare('INSERT OR IGNORE INTO research_sources(id,publisher,name,issn,rss_url) VALUES(?,?,?,?,?)').bind(s.id,s.publisher,s.name,s.issn,s.rss)));}
+export function rowPaper(r:any):Paper&Record<string,any>{return {id:r.id,doi:r.doi,title:r.title,url:r.url,publisher:r.publisher,journal:r.journal,sourceId:r.source_id,issn:r.issn,publishedAt:r.published_at,datePrecision:r.date_precision,authors:parse(r.authors_json),affiliations:parse(r.affiliations_json),abstract:r.abstract,keywords:parse(r.keywords_json),topics:parse(r.topics_json),provenance:parse(r.provenance_json,{}),relevance:r.relevance,priority:r.priority,reasons:parse(r.reasons_json),ruleVersion:r.rule_version,sourceIndexedAt:r.source_indexed_at,discovery:'database',firstSeen:r.first_seen,lastSeen:r.last_seen,updatedAt:r.updated_at};}
+async function hash(s:string){const a=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return Array.from(new Uint8Array(a)).map(n=>n.toString(16).padStart(2,'0')).join('').slice(0,32);}
+function combine(old:Paper,incoming:Paper):Paper{const p={...incoming,provenance:{...old.provenance,...incoming.provenance}};
+ for(const field of ['doi','abstract','publishedAt','datePrecision','sourceIndexedAt'] as const)if(!p[field]){(p as any)[field]=old[field];if(old.provenance[field])p.provenance[field]=old.provenance[field];}
+ if(incoming.discovery==='publisher-rss'&&old.provenance.authors==='crossref'&&old.authors.length){p.authors=old.authors;p.provenance.authors=old.provenance.authors;}
+ if(!p.authors.length){p.authors=old.authors;p.provenance.authors=old.provenance.authors;}
+ if(!p.affiliations.length){p.affiliations=old.affiliations;p.provenance.affiliations=old.provenance.affiliations;}
+ if(!p.keywords.length){p.keywords=old.keywords;p.provenance.keywords=old.provenance.keywords;}
+ // A registry refresh must not erase richer publisher abstracts or DOI-matched enrichment.
+ if(old.abstract&&['publisher-rss','openalex'].includes(old.provenance.abstract)&&!incoming.abstract){p.abstract=old.abstract;p.provenance.abstract=old.provenance.abstract;}
+ if(old.provenance.publishedAt==='publisher-rss'&&incoming.discovery!=='publisher-rss'){p.publishedAt=old.publishedAt;p.datePrecision=old.datePrecision;p.provenance.publishedAt=old.provenance.publishedAt;}
+ for(const a of p.authors){const prior=old.authors.find(b=>(a.orcid&&a.orcid===b.orcid)||normalizedTitle(a.name)===normalizedTitle(b.name));if(prior&&!a.affiliations.length&&prior.affiliations.length){a.affiliations=prior.affiliations;a.affiliationSource=prior.affiliationSource||prior.source;}if(prior?.corresponding===true)a.corresponding=true;}
+ return p;
+}
+export async function savePaper(db:any,input:Paper,retrieved=stamp()){
+ const norm=normalizedTitle(input.title);const row=await db.prepare('SELECT * FROM research_papers WHERE doi=? OR (url=? AND source_id=?) OR (normalized_title=? AND source_id=? AND length(normalized_title)>24) LIMIT 1').bind(input.doi,input.url,input.sourceId,norm,input.sourceId).first();
+ let p=evaluate(row?combine(rowPaper(row),input):input);const id=row?.id||await hash(input.doi||`${input.sourceId}:${input.url}`);
+ const values=[id,p.doi,p.title,norm,p.url,p.publisher,p.journal,p.sourceId,p.issn,p.publishedAt,p.datePrecision,JSON.stringify(p.authors),JSON.stringify(p.affiliations),p.abstract,JSON.stringify(p.keywords),JSON.stringify(p.topics),JSON.stringify(p.provenance),p.relevance,p.priority,JSON.stringify(p.reasons),RULE_VERSION,p.sourceIndexedAt,row?.first_seen||retrieved,retrieved,retrieved];
+ const cols='id,doi,title,normalized_title,url,publisher,journal,source_id,issn,published_at,date_precision,authors_json,affiliations_json,abstract,keywords_json,topics_json,provenance_json,relevance,priority,reasons_json,rule_version,source_indexed_at,first_seen,last_seen,updated_at';
+ const update=cols.split(',').filter(k=>!['id','first_seen'].includes(k)).map(k=>`${k}=excluded.${k}`).join(',');
+ const recordUrl=input.discovery==='crossref'?`https://api.crossref.org/works/${encodeURIComponent(input.doi!)}`:input.provenance.openalexRecord&&input.discovery==='openalex'?input.provenance.openalexRecord:input.url;
+ await db.batch([db.prepare(`INSERT INTO research_papers(${cols}) VALUES(${values.map(()=>'?').join(',')}) ON CONFLICT(id) DO UPDATE SET ${update}`).bind(...values),db.prepare('INSERT INTO research_records(id,paper_id,source_id,channel,record_url,retrieved_at,fields_json) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET paper_id=excluded.paper_id,retrieved_at=excluded.retrieved_at,fields_json=excluded.fields_json').bind(await hash(input.discovery+':'+recordUrl),id,input.sourceId,input.discovery,recordUrl,retrieved,JSON.stringify({title:input.title,doi:input.doi,authors:input.authors,affiliations:input.affiliations,abstract:input.abstract,authorKeywords:input.keywords,provenance:input.provenance}))]);
+ return {id,added:row?0:1,updated:row?1:0,paper:p};
+}
+const ALLOWED=new Set(['api.crossref.org','api.openalex.org','ieeexplore.ieee.org','onlinelibrary.wiley.com','advanced.onlinelibrary.wiley.com','rss.sciencedirect.com']);
+async function readURL(url:string,format:'json'|'xml'){
+ let current=new URL(url);
+ for(let redirects=0;redirects<3;redirects++){
+  if(current.protocol!=='https:'||!ALLOWED.has(current.hostname))throw Error('Unsupported metadata endpoint');
+  let r:Response|undefined;for(let attempt=0;attempt<2;attempt++){r=await fetch(current,{redirect:'manual',headers:{Accept:format==='json'?'application/json':'application/rss+xml, application/xml, text/xml','User-Agent':'HKIS/1.0 (private scholarly metadata reader)'},signal:AbortSignal.timeout(25000)});if((r.status===429||r.status>=500)&&attempt===0){await r.body?.cancel();await delay(Math.min(5000,Math.max(1200,Number(r.headers.get('retry-after')||2)*1000)));continue;}break;}
+  if(!r)throw Error('No response');if(r.status>=300&&r.status<400&&r.headers.get('location')){current=new URL(r.headers.get('location')!,current);await r.body?.cancel();continue;}if(!r.ok)throw Error(`HTTP ${r.status}`);
+  const reader=r.body?.getReader();if(!reader)throw Error('Empty response');let length=0;const chunks:Uint8Array[]=[];while(true){const {done,value}=await reader.read();if(done)break;length+=value.length;if(length>10000000){await reader.cancel();throw Error('Metadata response too large');}chunks.push(value);}const bytes=new Uint8Array(length);let pos=0;for(const c of chunks){bytes.set(c,pos);pos+=c.length;}const body=new TextDecoder().decode(bytes);return format==='json'?JSON.parse(body):body;
+ }throw Error('Too many redirects');
+}
+async function enrichBatch(db:any,papers:Paper[],counts:{added:number;updated:number}){const candidates=papers.filter(p=>p.doi&&(!p.abstract||!p.affiliations.length));let enriched=0;const failures:string[]=[];
+ for(let i=0;i<candidates.length;i+=40){const chunk=candidates.slice(i,i+40);const u=new URL('https://api.openalex.org/works');u.searchParams.set('filter','doi:'+chunk.map(p=>'https://doi.org/'+p.doi).join('|'));u.searchParams.set('per-page','100');u.searchParams.set('select','id,doi,authorships,abstract_inverted_index');try{const data=await readURL(u.href,'json');if(!Array.isArray(data.results))throw Error('Invalid OpenAlex response');for(const w of data.results){const extra=fromOpenAlex(w);const p=chunk.find(p=>p.doi===extra.doi);if(!p)continue;const merged=enrichPaper(p,extra);if(JSON.stringify(merged)!==JSON.stringify(p)){merged.discovery='openalex';await savePaper(db,merged);enriched++;}}}catch(e){failures.push('OpenAlex: '+String((e as Error).message));break;}}
+ return {enriched,failures};
+}
+export async function syncSource(db:any,s:JournalSource,maxPages=1){
+ const started=stamp();const runId=crypto.randomUUID();const lockKey='lock:'+s.id;const expires=new Date(Date.now()+10*60*1000).toISOString();
+ const locked=await db.prepare('INSERT INTO research_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE research_settings.value < ?').bind(lockKey,expires,started).run();if(!locked.meta?.changes)return {sourceId:s.id,status:'busy',message:'This source is already refreshing'};
+ await db.prepare('INSERT INTO research_runs(id,started_at,status,source_id) VALUES(?,?,?,?)').bind(runId,started,'running',s.id).run();const counts={added:0,updated:0};const warnings:string[]=[];let error:string|null=null,rssStatus='unavailable',rssCount=0,enriched=0,pending=false,fetched=0;
+ try{
+  const state=await db.prepare('SELECT * FROM research_sources WHERE id=?').bind(s.id).first();await db.prepare('UPDATE research_sources SET last_checked=? WHERE id=?').bind(started,s.id).run();
+  const windowEnd=state.window_end||started;const windowStart=state.window_start||new Date(state.watermark?Date.parse(state.watermark)-DAY:Date.now()-45*DAY).toISOString();let cursor=state.cursor||'*';
+  // Freeze the index range while paging; only advance a watermark when every page is consumed.
+  for(let page=0;page<maxPages;page++){
+   const u=new URL(`https://api.crossref.org/journals/${s.issn}/works`);u.searchParams.set('filter',`type:journal-article,from-pub-date:${new Date(Date.parse(windowEnd)-90*DAY).toISOString().slice(0,10)},from-index-date:${windowStart.slice(0,19)},until-index-date:${windowEnd.slice(0,19)}`);u.searchParams.set('rows','100');u.searchParams.set('sort','indexed');u.searchParams.set('order','desc');u.searchParams.set('cursor',cursor);
+   let data;try{data=await readURL(u.href,'json')}catch(e){error='Crossref '+String((e as Error).message);break;}const items=data.message?.items;if(!Array.isArray(items)){error='Crossref returned invalid metadata';break;}
+   const papers=items.map((w:any)=>fromCrossref(w,s)).filter(Boolean) as Paper[];fetched+=papers.length;const saved:Paper[]=[];for(const p of papers){const out=await savePaper(db,p);counts.added+=out.added;counts.updated+=out.updated;saved.push(out.paper);}
+   const extra=await enrichBatch(db,saved,counts);enriched+=extra.enriched;warnings.push(...extra.failures);
+   const complete=items.length<100;cursor=data.message['next-cursor']||cursor;if(complete){await db.prepare('UPDATE research_sources SET watermark=?,cursor=NULL,window_end=NULL,window_start=NULL,last_success=?,error=NULL WHERE id=?').bind(windowEnd,stamp(),s.id).run();pending=false;break;}
+   pending=true;await db.prepare('UPDATE research_sources SET cursor=?,window_end=?,window_start=?,last_success=?,error=NULL WHERE id=?').bind(cursor,windowEnd,windowStart,stamp(),s.id).run();await delay(1100);
+  }
+  // Publisher RSS is complementary: preserve valid records even if this channel is blocked.
+  try{const xml=await readURL(s.rss,'xml');const papers=parsePublisherRSS(xml,s);rssCount=papers.length;for(const p of papers){const out=await savePaper(db,p);counts.added+=out.added;counts.updated+=out.updated;}rssStatus='ok';await db.prepare('UPDATE research_sources SET rss_status=?,rss_error=NULL WHERE id=?').bind('ok',s.id).run();}catch(e){const message=String((e as Error).message).slice(0,200);warnings.push('Publisher RSS: '+message);await db.prepare('UPDATE research_sources SET rss_status=?,rss_error=? WHERE id=?').bind('unavailable',message,s.id).run();}
+  const count=(await db.prepare('SELECT count(*) n FROM research_papers WHERE source_id=?').bind(s.id).first()).n;await db.prepare('UPDATE research_sources SET count=?,error=? WHERE id=?').bind(count,error,s.id).run();
+  const result={runId,sourceId:s.id,status:error?'error':pending?'backfill_pending':'ok',added:counts.added,updated:counts.updated,fetched,enriched,rssStatus,rssCount,pending,error,warnings:[...new Set(warnings)],startedAt:started,finishedAt:stamp()};
+  await db.prepare('UPDATE research_runs SET finished_at=?,status=?,added=?,updated=?,details_json=? WHERE id=?').bind(result.finishedAt,result.status,counts.added,counts.updated,JSON.stringify(result),runId).run();return result;
+ }catch(e){error=String((e as Error).message).slice(0,250);await db.prepare('UPDATE research_runs SET finished_at=?,status=?,details_json=? WHERE id=?').bind(stamp(),'error',JSON.stringify({error}),runId).run();await db.prepare('UPDATE research_sources SET error=? WHERE id=?').bind(error,s.id).run();return {runId,sourceId:s.id,status:'error',error,...counts};}
+ finally{await db.prepare('DELETE FROM research_settings WHERE key=? AND value=?').bind(lockKey,expires).run();}
+}
+export async function researchStatus(db:any){await initResearch(db);const sources=(await db.prepare('SELECT * FROM research_sources ORDER BY publisher,name').all()).results.map((s:any)=>{const {cursor,...safe}=s;return {...safe,backfillPending:!!cursor}});const counts=(await db.prepare("SELECT publisher,count(*) total,sum(CASE WHEN abstract IS NOT NULL AND length(abstract)>0 THEN 1 ELSE 0 END) abstracts,sum(CASE WHEN authors_json!='[]' THEN 1 ELSE 0 END) authors,sum(CASE WHEN affiliations_json!='[]' THEN 1 ELSE 0 END) affiliations,sum(CASE WHEN keywords_json!='[]' THEN 1 ELSE 0 END) authorKeywords,sum(CASE WHEN priority>=45 THEN 1 ELSE 0 END) recommended FROM research_papers GROUP BY publisher").all()).results;const schedule=await db.prepare("SELECT value FROM research_settings WHERE key='schedule'").first();const runs=(await db.prepare('SELECT * FROM research_runs ORDER BY started_at DESC LIMIT 12').all()).results;return {sources,counts,total:counts.reduce((n:number,r:any)=>n+r.total,0),schedule:schedule?parse(schedule.value,{}):{enabled:false,status:'not_configured',intervalHours:12},modelConfigured:false,evaluation:'transparent-rules',ruleVersion:RULE_VERSION,topics:TOPICS.map(({id,label,weight})=>({id,label,weight})),runs};}
+export async function researchApi(request:Request,env:any){const db=env.DB;if(!db)return json({error:'Database unavailable'},503);const u=new URL(request.url),path=u.pathname;await initResearch(db);
+ if(request.method==='POST'){const origin=request.headers.get('origin');if(origin&&origin!==u.origin)return json({error:'Forbidden'},403);let body:any;try{body=await request.json()}catch{return json({error:'Invalid JSON'},400)};
+  if(path==='/api/site/research/sync'){const s=RESEARCH_SOURCES.find(s=>s.id===body.sourceId);if(!s)return json({error:'A configured sourceId is required'},400);const maxPages=Math.min(2,Math.max(1,Number(body.maxPages)||1));return json(await syncSource(db,s,maxPages));}
+  if(path==='/api/site/research/schedule'){if(typeof body.enabled!=='boolean'||(body.enabled&&(!body.id||!body.schedule)))return json({error:'Provide a verified schedule id and iCal schedule'},400);const value={enabled:body.enabled,id:String(body.id||''),schedule:String(body.schedule||''),timezone:'Etc/UTC',intervalHours:12,nextRun:body.nextRun||null,status:body.enabled?'enabled':String(body.status||'not_configured'),verifiedAt:stamp()};await db.prepare("INSERT INTO research_settings(key,value) VALUES('schedule',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(JSON.stringify(value)).run();return json(value);}
+  return json({error:'Not found'},404);
+ }
+ if(request.method!=='GET')return json({error:'Method not allowed'},405);
+ if(path==='/api/site/research/status')return json(await researchStatus(db));
+ if(path==='/api/site/research/papers'){
+  const binds:any[]=[];let where='1=1';const publisher=u.searchParams.get('publisher')||'',topic=u.searchParams.get('topic')||'',q=(u.searchParams.get('q')||'').slice(0,200),min=Math.min(100,Math.max(0,Number(u.searchParams.get('min')??45)||0));
+  if(['IEEE','Wiley','Elsevier'].includes(publisher)){where+=' AND publisher=?';binds.push(publisher);}if(TOPICS.some(t=>t.id===topic)){where+=' AND topics_json LIKE ?';binds.push('%"'+topic+'"%');}where+=' AND priority>=?';binds.push(min);
+  for(const term of q.toLowerCase().split(/\s+/).filter(Boolean).slice(0,6)){where+=" AND lower(title||' '||coalesce(abstract,'')||' '||authors_json||' '||affiliations_json) LIKE ? ESCAPE '\\'";binds.push('%'+term.replace(/[\\%_]/g,'\\$&')+'%');}
+  const page=Math.max(1,Math.min(10000,parseInt(u.searchParams.get('page')||'1')||1));const sort=u.searchParams.get('sort')==='latest'?'first_seen DESC,priority DESC':'priority DESC,coalesce(published_at,first_seen) DESC';const total=(await db.prepare('SELECT count(*) n FROM research_papers WHERE '+where).bind(...binds).first()).n;const papers=(await db.prepare('SELECT * FROM research_papers WHERE '+where+' ORDER BY '+sort+' LIMIT 25 OFFSET ?').bind(...binds,(page-1)*25).all()).results.map(rowPaper);return json({papers,total,page,pageCount:Math.max(1,Math.ceil(total/25)),filters:{publisher,topic,q,min,sort:u.searchParams.get('sort')||'priority'}});
+ }
+ if(path.startsWith('/api/site/research/papers/')){const id=path.split('/').pop();const p=await db.prepare('SELECT * FROM research_papers WHERE id=?').bind(id).first();if(!p)return json({error:'Not found'},404);const records=(await db.prepare('SELECT channel,record_url,retrieved_at FROM research_records WHERE paper_id=?').bind(id).all()).results;return json({...rowPaper(p),records});}
+ return json({error:'Not found'},404);
+}

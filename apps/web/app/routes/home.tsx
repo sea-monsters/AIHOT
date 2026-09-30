@@ -1,1 +1,1 @@
-export {loader,meta,headers,default} from "./all";
+export {loader,meta,headers,default} from "./research";

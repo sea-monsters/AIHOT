@@ -1,10 +1,10 @@
 import {SITE} from '@aihot/industry/site';
 import {DatabaseSync} from 'node:sqlite';
-import {readFile,writeFile} from 'node:fs/promises';
+import {readFile,writeFile,readdir} from 'node:fs/promises';
 import {strict as assert} from 'node:assert';
 import worker from '../dist/server/index.js';
 const sql=new DatabaseSync('.sites-runtime/qa.sqlite');
-try{sql.exec(await readFile('drizzle/0000_mean_tyger_tiger.sql','utf8'));}catch(e){if(!e.message.includes('already exists'))throw e;}
+for(const f of (await readdir('drizzle')).filter(f=>f.endsWith('.sql')).sort()){try{sql.exec(await readFile('drizzle/'+f,'utf8'));}catch(e){if(!e.message.includes('already exists'))throw e;}}
 const DB={prepare(query){const stmt=sql.prepare(query);return {values:[],bind(...args){this.values=args;return this;},async first(){return stmt.get(...this.values)||null;},async all(){return {results:stmt.all(...this.values)};},async run(){const r=stmt.run(...this.values);return {meta:{changes:Number(r.changes)}};}};},async batch(items){return Promise.all(items.map(s=>s.run()));}};
 async function req(path,init){return worker.fetch(new Request('https://local.test'+path,init),{DB},{waitUntil(){}});}
 let r=await req('/api/site/status');assert.equal(r.status,200);const status=await r.json();assert.equal(status.sources.length,18);
