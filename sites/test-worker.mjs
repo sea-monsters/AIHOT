@@ -3,7 +3,9 @@ import {readFile,readdir} from 'node:fs/promises';
 import {strict as assert} from 'node:assert';
 import {savePaper} from './research.ts';
 import {weekWindow} from './weekly.ts';
-const mf=new Miniflare(convertV4MiniflareOptions({modules:true,scriptPath:'dist/server/index.js',compatibilityDate:'2026-09-01',compatibilityFlags:['nodejs_compat'],d1Databases:['DB'],bindings:{HKIS_OWNER_EMAIL:'owner@example.org',HKIS_AI_ENCRYPTION_KEY:'11'.repeat(32)},assets:{directory:'dist/client',binding:'ASSETS',run_worker_first:true,routerConfig:{has_user_worker:true}}}));
+let networkProbes=0;
+const outboundService=async request=>{networkProbes++;assert.equal(request.url,'https://api.kimi.com/coding/v1/responses');assert.equal(request.method,'POST');assert.equal(request.headers.get('authorization'),null);assert.equal(request.headers.get('cookie'),null);assert.equal(request.headers.get('user-agent'),'HKIS/1.0 (personal research assistant)');assert.equal(await request.text(),'{}');return Response.json({error:{message:'Invalid Authentication'}},{status:401})};
+const mf=new Miniflare(convertV4MiniflareOptions({outboundService,modules:true,scriptPath:'dist/server/index.js',compatibilityDate:'2026-09-01',compatibilityFlags:['nodejs_compat'],d1Databases:['DB'],bindings:{HKIS_OWNER_EMAIL:'owner@example.org',HKIS_AI_ENCRYPTION_KEY:'11'.repeat(32)},assets:{directory:'dist/client',binding:'ASSETS',run_worker_first:true,routerConfig:{has_user_worker:true}}}));
 const db=await mf.getD1Database('DB');for(const f of (await readdir('drizzle')).filter(f=>f.endsWith('.sql')).sort()){const migration=await readFile('drizzle/'+f,'utf8');for(const s of migration.split('--> statement-breakpoint').map(s=>s.trim()).filter(Boolean))await db.prepare(s).run();}
 for(const path of ['/','/all','/hot','/daily','/topics','/about','/api/site/status','/research','/api/site/research/status','/api/site/research/weekly','/settings','/daily/archive','/daily/2026-09-30','/api/site/research/daily','/api/site/research/feed']){const r=await mf.dispatchFetch('https://local.test'+path);assert.equal(r.status,200,path+':'+await r.clone().text());console.log('WORKER OK',path);}
 const pool=await (await mf.dispatchFetch('https://local.test/api/site/pool')).json();assert.ok(pool.total>=8);const item=await mf.dispatchFetch('https://local.test/items/'+pool.items[0].id);assert.equal(item.status,200);console.log('D1 bootstrap and item OK',pool.total);
@@ -29,6 +31,13 @@ console.log('AI WORKER OK: owner/anonymous isolation, defaults, Worker AES-GCM k
 assert.equal((await mf.dispatchFetch('https://local.test/api/site/logs')).status,403);
 const logs=await (await mf.dispatchFetch('https://local.test/api/site/logs?severity=all',{headers:aiHeaders})).json();assert.ok(logs.entries.some(r=>r.event==='config_saved'));assert.equal(logs.retentionDays,30);assert.equal(logs.rowCap,10000);
 console.log('RUNTIME LOGS OK: real Worker/D1 migration, owner access and settings instrumentation');
+await db.prepare("UPDATE ai_settings SET endpoint='https://api.kimi.com/coding/v1',key_ciphertext='INVALID_NOT_DECRYPTED' WHERE owner_id='test-owner'").run();
+const networkBody=JSON.stringify({requestId:crypto.randomUUID()});
+assert.equal((await mf.dispatchFetch('https://local.test/api/site/ai/network',{method:'POST',headers:{origin:'https://local.test','Content-Type':'application/json','X-HKIS-Request':'1'},body:networkBody})).status,403);
+assert.equal(networkProbes,0);
+const net=await mf.dispatchFetch('https://local.test/api/site/ai/network',{method:'POST',headers:writeHeaders,body:networkBody});assert.equal(net.status,200);const netResult=await net.json();assert.equal(netResult.httpStatus,401);assert.equal(netResult.noCredential,true);assert.equal(networkProbes,1);assert.equal((await db.prepare('SELECT count(*) n FROM ai_receipts').first()).n,0);
+assert.equal((await mf.dispatchFetch('https://local.test/api/site/ai/network',{method:'POST',headers:writeHeaders,body:networkBody})).status,429);assert.equal(networkProbes,1);
+console.log('NETWORK DIAGNOSTIC WORKER OK: actual runtime sends empty body without auth/cookie, no credential decrypt, mocked upstream only, no paid receipts/retry');
 await mf.dispose();
 // Real workerd Request construction: Node fetch mocks do not enforce this runtime enum.
 const transport=new Miniflare(convertV4MiniflareOptions({modules:true,script:`export default {async fetch(){ const request=new Request('https://example.org/responses',{method:'POST',redirect:'manual'});return Response.json({redirect:request.redirect});}}`,compatibilityDate:'2026-09-01'}));

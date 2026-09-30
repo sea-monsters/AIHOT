@@ -1,3 +1,4 @@
+import {networkDiagnostic} from './network-diagnostic.ts';
 import {writeLog} from '../runtime-logs.ts';
 import {AIError,owner,csrf,readBody,stripSecrets} from './security.ts';
 import {rawSettings,safeSettings,saveSettings,stamp} from './settings.ts';
@@ -63,6 +64,7 @@ export async function aiApi(request:Request,env:any){
    throw new AIError('not_found',404,'接口不存在');
   }
   if(request.method!=='POST')throw new AIError('method_not_allowed',405,'请求方式不支持');csrf(request);const body=await readBody(request);
+  if(path==='network')return json(await networkDiagnostic(db,id,env,body));
   if(path==='settings'){const result=await saveSettings(db,id,body,env);await writeLog(db,{component:'settings',event:'config_saved',severity:'info',outcome:'ok',durationMs:Date.now()-started,metadata:{revision:result.revision}});return json(result)}
   if(path==='preferences/propose')return json({proposal:await propose(db,id,body.value)});
   if(path==='preferences/resolve')return json(await resolveProposal(db,id,String(body.id||''),body.action));
