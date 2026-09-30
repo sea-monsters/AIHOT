@@ -1,5 +1,4 @@
 import { AIAssistant } from "./components/AIAssistant";
-import { SitesStatus } from "./components/SitesStatus";
 import { titled } from "./lib/seo";
 import { SITE } from "@aihot/industry/site";
 import {
@@ -104,7 +103,7 @@ export default function App() {
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return <Outlet />;
   return (
     <SiteShell changelogVersion={meta.changelogVersion}>
-      {pathname!=="/"&&!pathname.startsWith("/research")&&<SitesStatus />}<Outlet />
+      <Outlet />
     </SiteShell>
   );
 }

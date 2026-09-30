@@ -1,3 +1,4 @@
+import {buildResearchView} from './research-views.ts';
 import {buildWeeklyDigest} from './weekly.ts';
 import {RESEARCH_SOURCES,TOPICS,RULE_VERSION,type JournalSource} from './research-config.ts';
 import {fromCrossref,parsePublisherRSS,fromOpenAlex,enrichPaper,evaluate,normalizedTitle,canonicalURL,type Paper} from './research-domain.ts';
@@ -90,6 +91,10 @@ export async function researchApi(request:Request,env:any){const db=env.DB;if(!d
  }
  if(request.method!=='GET')return json({error:'Method not allowed'},405);
  if(path==='/api/site/research/status')return json(await researchStatus(db));
+ if(path==='/api/site/research/daily'||path==='/api/site/research/feed'){
+  const rows=(await db.prepare('SELECT * FROM research_papers WHERE priority>=0').all()).results;
+  return json(buildResearchView(rows.map(rowPaper),u.searchParams,path.endsWith('/daily')?'daily':'feed'));
+ }
  if(path==='/api/site/research/weekly'){
   const rows=(await db.prepare('SELECT * FROM research_papers WHERE priority>=0').all()).results;
   const latest=await db.prepare('SELECT max(last_success) t FROM research_sources').first();

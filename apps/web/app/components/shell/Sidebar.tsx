@@ -1,3 +1,4 @@
+import {AssistantEntry} from "../AssistantEntry";
 import { SITE } from "@aihot/industry/site";
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router";
@@ -59,6 +60,7 @@ export function Sidebar({ changelogVersion }: { changelogVersion: string | null 
         ))}
       </nav>
       <div className="mt-2 space-y-2.5 px-1 pt-1">
+        <AssistantEntry />
         <ThemeSwitch className="mx-1" />
         {SITE.icp && (
           <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" className="block px-2 text-[10px] text-ink-4 hover:text-ink-3">
