@@ -1,3 +1,4 @@
+import {buildWeeklyDigest} from './weekly.ts';
 import {RESEARCH_SOURCES,TOPICS,RULE_VERSION,type JournalSource} from './research-config.ts';
 import {fromCrossref,parsePublisherRSS,fromOpenAlex,enrichPaper,evaluate,normalizedTitle,canonicalURL,type Paper} from './research-domain.ts';
 const json=(data:any,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
@@ -89,6 +90,11 @@ export async function researchApi(request:Request,env:any){const db=env.DB;if(!d
  }
  if(request.method!=='GET')return json({error:'Method not allowed'},405);
  if(path==='/api/site/research/status')return json(await researchStatus(db));
+ if(path==='/api/site/research/weekly'){
+  const rows=(await db.prepare('SELECT * FROM research_papers WHERE priority>=0').all()).results;
+  const latest=await db.prepare('SELECT max(last_success) t FROM research_sources').first();
+  return json(buildWeeklyDigest(rows.map(rowPaper),new Date(),{topic:u.searchParams.get('topic')||'',publisher:u.searchParams.get('publisher')||''},latest?.t||null));
+ }
  if(path==='/api/site/research/papers'){
   const binds:any[]=[];let where='1=1';const publisher=u.searchParams.get('publisher')||'',topic=u.searchParams.get('topic')||'',q=(u.searchParams.get('q')||'').slice(0,200),min=Math.min(100,Math.max(0,Number(u.searchParams.get('min')??45)||0));
   if(['IEEE','Wiley','Elsevier'].includes(publisher)){where+=' AND publisher=?';binds.push(publisher);}if(TOPICS.some(t=>t.id===topic)){where+=' AND topics_json LIKE ?';binds.push('%"'+topic+'"%');}where+=' AND priority>=?';binds.push(min);
