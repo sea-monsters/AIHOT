@@ -3,7 +3,7 @@ import {clean} from './rss.ts';
 import {TOPICS,RULE_VERSION,type JournalSource} from './research-config.ts';
 const arr=(x:any):any[]=>x==null?[]:Array.isArray(x)?x:[x];
 const val=(x:any):string=>x==null?'':typeof x==='object'?val(x['#text']??x['#cdata']??''):String(x);
-export const canonicalURL=(url:string)=>{try{const u=new URL(url);if(!['https:','http:'].includes(u.protocol))return '';u.hash='';if(u.hostname==='ieeexplore.ieee.org')u.protocol='https:';for(const k of [...u.searchParams.keys()])if(k.startsWith('utm_'))u.searchParams.delete(k);return u.href.replace(/\/$/,'');}catch{return '';}};
+export const canonicalURL=(url:string)=>{try{const u=new URL(url);if(!['https:','http:'].includes(u.protocol))return '';u.hash='';if(u.hostname==='ieeexplore.ieee.org')u.protocol='https:';for(const k of [...u.searchParams.keys()])if(k.startsWith('utm_')||k==='dgcid')u.searchParams.delete(k);const pii=u.pathname.match(/(?:pii\/|retrieve\/pii\/)([A-Z0-9]+)/i)?.[1];if(pii&&['linkinghub.elsevier.com','www.sciencedirect.com'].includes(u.hostname))return 'https://www.sciencedirect.com/science/article/pii/'+pii;return u.href.replace(/\/$/,'');}catch{return '';}};
 export const normalizedTitle=(s:string)=>clean(s).normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'');
 export const normalizeDoi=(s:any)=>String(s||'').replace(/^https?:\/\/(?:dx\.)?doi\.org\//i,'').trim().toLowerCase();
 export interface Author {name:string;orcid:string|null;first:boolean;corresponding:boolean|null;affiliations:string[];source:string;affiliationSource?:string}
@@ -25,9 +25,9 @@ export function parsePublisherRSS(xml:string,s:JournalSource):Paper[]{
   if(/(?:table of contents|front cover|back cover|editorial board|list of reviewers|information for authors|publication information)/i.test(title))return [];
   const raw=val(e.description??e.summary??e['content:encoded']??e.content);let abstract=clean(raw)||null;const authorsText=clean(e['dc:creator']??e.author??e['authors']);
   const match=raw.match(/Authors?\s*:\s*([\s\S]*?)(?:<br\s*\/?>|<\/p>|\n|$)/i);
-  const names=(authorsText||(match?clean(match[1]):'')).split(/\s*;\s*/).filter(Boolean);
-  const abs=raw.match(/Abstract\s*:\s*([\s\S]*)/i);if(abs)abstract=clean(abs[1]);else if(!abstract||abstract.toLowerCase()==='null')abstract=null;
-  const stamp=Date.parse(val(e.pubDate??e.updated??e['dc:date']));const date=Number.isFinite(stamp)?new Date(stamp).toISOString().slice(0,10):null;
+  const descriptionAuthors=s.publisher==='Elsevier'?clean(raw).match(/Author\(s\):\s*(.+)$/i)?.[1]:null;const names=(authorsText||(match?clean(match[1]):'')||descriptionAuthors||'').split(descriptionAuthors?/\s*[,;]\s*/:/\s*;\s*/).filter(Boolean);
+  const abs=raw.match(/Abstract\s*:\s*([\s\S]*)/i);if(abs)abstract=clean(abs[1]);else if(!abstract||abstract.toLowerCase()==='null'||s.publisher==='Elsevier'||/^Publication date:/i.test(abstract))abstract=null;
+  const pub=val(e.pubDate??e.updated??e['dc:date'])||(s.publisher==='Elsevier'?clean(raw).match(/Publication date:\s*(.*?)\s+Source:/i)?.[1]||'':'');const stamp=Date.parse(s.publisher==='Elsevier'&&!val(e.pubDate??e.updated??e['dc:date'])?pub+' UTC':pub);const date=Number.isFinite(stamp)?new Date(stamp).toISOString().slice(0,10):null;
   const keywords=arr(e['prism:keyword']??e['author-keywords']).map(clean).filter(Boolean);const doiCandidate=val(e['prism:doi']??e.doi)||url.match(/10\.\d{4,9}\/[^?#\s]+/)?.[0];
   return [{doi:doiCandidate?normalizeDoi(doiCandidate):null,title,url,publisher:s.publisher,journal:s.name,sourceId:s.id,issn:s.issn,publishedAt:date,datePrecision:date?'day':null,authors:names.map((name,i)=>({name,orcid:null,first:i===0,corresponding:null,affiliations:[],source:'publisher-rss'})),affiliations:[],abstract,keywords,provenance:{title:'publisher-rss',authors:names.length?'publisher-rss':null,abstract:abstract?'publisher-rss':null,affiliations:null,keywords:keywords.length?'publisher-rss':null,publishedAt:date?'publisher-rss':null},sourceIndexedAt:null,discovery:'publisher-rss'}];
  });

@@ -5,10 +5,18 @@ const stamp=()=>new Date().toISOString();
 const parse=(s:any,fallback:any=[])=>{try{return JSON.parse(s)}catch{return fallback}};
 const delay=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 const DAY=86400000;
-export async function initResearch(db:any){await db.batch(RESEARCH_SOURCES.map(s=>db.prepare('INSERT OR IGNORE INTO research_sources(id,publisher,name,issn,rss_url) VALUES(?,?,?,?,?)').bind(s.id,s.publisher,s.name,s.issn,s.rss)));}
+export async function initResearch(db:any){await repairLegacyFeedDescriptions(db);await db.batch(RESEARCH_SOURCES.map(s=>db.prepare('INSERT OR IGNORE INTO research_sources(id,publisher,name,issn,rss_url) VALUES(?,?,?,?,?)').bind(s.id,s.publisher,s.name,s.issn,s.rss)));}
+// Correct only the recognisable bibliographic-description shape from the first RSS parser.
+// This is an idempotent data repair, not a schema change or general mutation interface.
+async function repairLegacyFeedDescriptions(db:any){
+ const rows=(await db.prepare("SELECT * FROM research_papers WHERE publisher='Elsevier' AND abstract LIKE 'Publication date:%' LIMIT 300").all()).results;
+ for(const row of rows){const p=rowPaper(row);if(p.provenance.abstract!=='publisher-rss')continue;p.abstract=null;p.provenance.abstract=null;const scored=evaluate(p);await db.prepare('UPDATE research_papers SET abstract=NULL,provenance_json=?,relevance=?,priority=?,reasons_json=? WHERE id=?').bind(JSON.stringify(p.provenance),scored.relevance,scored.priority,JSON.stringify(scored.reasons),row.id).run();}
+ const records=(await db.prepare("SELECT id,fields_json FROM research_records WHERE source_id LIKE 'elsevier-%' AND channel='publisher-rss' AND fields_json LIKE '%\"abstract\":\"Publication date:%' LIMIT 300").all()).results;
+ for(const row of records){const fields=parse(row.fields_json,{});if(!/^Publication date:/i.test(fields.abstract||''))continue;fields.rssBibliographicDescription=fields.abstract;fields.abstract=null;if(fields.provenance)fields.provenance.abstract=null;await db.prepare('UPDATE research_records SET fields_json=? WHERE id=?').bind(JSON.stringify(fields),row.id).run();}
+}
 export function rowPaper(r:any):Paper&Record<string,any>{return {id:r.id,doi:r.doi,title:r.title,url:r.url,publisher:r.publisher,journal:r.journal,sourceId:r.source_id,issn:r.issn,publishedAt:r.published_at,datePrecision:r.date_precision,authors:parse(r.authors_json),affiliations:parse(r.affiliations_json),abstract:r.abstract,keywords:parse(r.keywords_json),topics:parse(r.topics_json),provenance:parse(r.provenance_json,{}),relevance:r.relevance,priority:r.priority,reasons:parse(r.reasons_json),ruleVersion:r.rule_version,sourceIndexedAt:r.source_indexed_at,discovery:'database',firstSeen:r.first_seen,lastSeen:r.last_seen,updatedAt:r.updated_at};}
 async function hash(s:string){const a=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return Array.from(new Uint8Array(a)).map(n=>n.toString(16).padStart(2,'0')).join('').slice(0,32);}
-function combine(old:Paper,incoming:Paper):Paper{const p={...incoming,provenance:{...old.provenance,...incoming.provenance}};
+function combine(old:Paper,incoming:Paper):Paper{if(old.publisher==='Elsevier'&&old.provenance.abstract==='publisher-rss'&&/^Publication date:/i.test(old.abstract||'')){old={...old,abstract:null,provenance:{...old.provenance,abstract:null}};}const p={...incoming,provenance:{...old.provenance,...incoming.provenance}};
  for(const field of ['doi','abstract','publishedAt','datePrecision','sourceIndexedAt'] as const)if(!p[field]){(p as any)[field]=old[field];if(old.provenance[field])p.provenance[field]=old.provenance[field];}
  if(incoming.discovery==='publisher-rss'&&old.provenance.authors==='crossref'&&old.authors.length){p.authors=old.authors;p.provenance.authors=old.provenance.authors;}
  if(!p.authors.length){p.authors=old.authors;p.provenance.authors=old.provenance.authors;}
