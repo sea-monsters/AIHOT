@@ -1,3 +1,4 @@
+import {ScholarlySearch} from '../components/ScholarlySearch';
 import {useEffect,useState} from 'react';
 import {Form,Link,useLoaderData,useRevalidator,type LoaderFunctionArgs} from 'react-router';
 import {apiGet} from '../lib/api.server';
@@ -14,6 +15,7 @@ export default function Research(){const {feed,status}=useLoaderData<typeof load
  return <div className="research-page"><header className="research-heading"><div><p className="research-eyebrow">HKIS / RESEARCH</p><h1>论文情报</h1><p>先进逻辑 · DRAM · NAND · 新型器件 · 工艺与机理 · CIS · TCAD</p></div><button onClick={sync} disabled={busy} className="research-primary">{busy?'采集中…':'立即检查更新'}</button></header>
  <div className="research-stats"><div><b>{status.total}</b><span>已入库论文</span></div><div><b>{status.sources.length}</b><span>核心期刊 / 3 家出版商</span></div><div><b>规则评分</b><span>AI 可在设置中按需启用</span></div><div><b>{status.schedule.enabled?'每 12 小时':'定时待启用'}</b><span>{status.schedule.enabled?`下次 ${time(status.schedule.nextRun)}`:'目标每 12 小时；当前未自动运行'}</span></div></div>
  {message&&<p role="status" className="research-notice">{message}</p>}
+ <details className="scholarly-discovery"><summary>跨库检索与论文入库 · Semantic Scholar / OpenAlex</summary><ScholarlySearch/></details>
  <Form method="get" className="research-filters"><label>搜索<input name="q" defaultValue={filters.q} placeholder="论文、作者、单位" type="search"/></label><label>出版商<select name="publisher" defaultValue={filters.publisher}><option value="">全部</option>{['IEEE','Wiley','Elsevier'].map(p=><option key={p}>{p}</option>)}</select></label><label>研究方向<select name="topic" defaultValue={filters.topic}><option value="">全部方向</option>{status.topics.map((t:any)=><option key={t.id} value={t.id}>{t.label}</option>)}</select></label><label>最低阅读优先级<select name="min" defaultValue={String(filters.min)}>{[0,25,45,60,75].map(n=><option key={n} value={n}>{n===0?'全部入库论文':`${n} 分`}</option>)}</select></label><label>排序<select name="sort" defaultValue={filters.sort}><option value="priority">阅读优先级</option><option value="latest">最新发现</option></select></label><button className="research-primary" type="submit">筛选</button></Form>
  <div className="ai-actions"><button className="ai-secondary" disabled={!feed.papers.length} onClick={()=>openAI('请根据当前附带论文的实际摘要，筛选与我的关注方向最相关、值得阅读的论文。分别给出有引用证据的建议和 AI 适配分，缺少摘要则不评分。',feed.papers.slice(0,4).map((p:any)=>p.id))}>AI 筛选当前前 4 篇</button><Link to="/settings">模型与关键词设置</Link></div>
  <p className="research-result-note">{feed.total} 篇符合筛选 · 优先级为可解释规则，不代表论文质量或已获科学验证。原始作者关键词与系统标签分开保存。</p>

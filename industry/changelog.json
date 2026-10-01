@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-01T14:01:29Z",
+  "latestVersion": "2026-10-01T14:27:00Z",
   "releases": [
+    {
+      "id": "scholarly-services-2026-10-01",
+      "at": "2026-10-01T14:27:00Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "新增双库学术检索、元数据核对与紧凑服务设置",
+      "body": [
+        "支持 Semantic Scholar / OpenAlex 关键词、DOI 与论文标识检索，以及逐字段核对、显式入库和安全补缺。独立保留来源、缺失与冲突，不以相似标题自动合并。",
+        "设置页面以紧凑列表管理 LLM 与两个学术服务的官方接入点、独立加密 key 和测试；现有模型设置不变。查询需主动发起，有缓存、限流和每日安全上限，不启动定时采集或后台模型调用。"
+      ],
+      "sources": [
+        {
+          "label": "实现说明与官方依据",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/scholarly-services.md"
+        }
+      ]
+    },
     {
       "id": "daily-change-timeline",
       "at": "2026-10-01T14:01:29Z",

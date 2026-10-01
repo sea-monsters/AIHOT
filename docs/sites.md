@@ -16,6 +16,10 @@
 
 AI 默认 `gpt-5.6-luna` / `xhigh` / Responses，无凭证且关闭。安全要求、配置方法、调用上限、工具边界和验证见 [AI 助手](ai-assistant.md)。没有真实配置和测试前不能声称模型已连通。
 
+## 学术数据检索与核对
+
+`/research` 新增 Semantic Scholar / OpenAlex 检索与显式入库，单篇页面提供按 DOI 跨库逐字段核对及补缺；`/settings` 以紧凑服务行分别保存 LLM 与两个学术服务的独立凭证。详见 [学术服务](scholarly-services.md)。现有 LLM 配置不迁移，学术查询不调用模型。
+
 ## 仍未启用
 
 - 实际每 12 小时自动采集调度未连接；期望间隔只是配置值，保存不代表建立自动化
