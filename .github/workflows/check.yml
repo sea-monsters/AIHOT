@@ -65,6 +65,7 @@ jobs:
           (cd apps/web && NODE_ENV=production exec node server.ts) > "$RUNNER_TEMP/web.log" 2>&1 &
           for i in $(seq 1 60); do curl -fsS -o /dev/null http://127.0.0.1:3000/api/health 2>/dev/null && break; sleep 1; done
           node scripts/smoke.ts --base http://127.0.0.1:3000
+          node scripts/mcp-check.ts http://127.0.0.1:3000/api/mcp
       # After the smoke check, which reads an empty database: these write their own rows.
       - name: Backend tests
         run: npm test

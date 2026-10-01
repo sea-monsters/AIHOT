@@ -4,6 +4,7 @@ import { sql } from "../db.ts";
 import { audit } from "./auth.ts";
 import { Conflict } from "./sources.ts";
 import { failureGroupSql, queueProcessing, requeueFailed } from "../jobs/content.ts";
+import { CAPABILITIES } from "../editorial/models.ts";
 
 const STALE_HEARTBEAT_MS = 3 * 60_000;
 
@@ -78,6 +79,11 @@ export async function runsOverview() {
   };
 }
 
+const ARTICLE_STEPS = new Set([
+  ...(["prefilter", "score", "understand", "summarize", "structure"] as const).flatMap((step) => CAPABILITIES[step].purposes),
+  "body_fallback", "x_article",
+]);
+
 /**
  * A receipt whose outcome is unknown is not re-sent by the request that lost it. Releasing it marks it
  * failed, so the next attempt calls again; an article that stopped on it goes straight back to
@@ -88,12 +94,12 @@ async function release(id: number, error: string, actor: string, note: string, b
     UPDATE receipts SET status = 'failed', error = ${error}, updated_at = now() WHERE id = ${id} AND status = 'unknown' RETURNING subject, purpose`;
   if (!before) return null;
   await sql`UPDATE receipt_attempts SET status = 'failed', error = ${error} WHERE receipt_id = ${id} AND status = 'unknown'`;
-  const article = before.purpose === "analyze_article" ? /^article:([^@]+)@/.exec(before.subject ?? "")?.[1] : undefined;
+  const article = ARTICLE_STEPS.has(before.purpose) ? /^article:([^@:#]+)/.exec(before.subject ?? "")?.[1] : undefined;
   let requeued = false;
   if (article) {
     const [a] = await sql`UPDATE articles SET processing_state = 'new', processing_attempts = 0, processing_retry_at = NULL, processing_error = NULL
                           WHERE id = ${article} AND processing_state = 'failed' RETURNING id`;
-    if (a) requeued = !!(await queueProcessing(article, { step: "analyze" }));
+    if (a) requeued = !!(await queueProcessing(article));
   }
   await audit(actor, "receipt.release", `receipt:${id}`, note, { status: "unknown" }, { status: "failed", billed, requeued });
   return { id, status: "failed", subject: before.subject, purpose: before.purpose, requeued };
@@ -144,19 +150,23 @@ export async function requeueFailedArticles(input: { group: string | null; reaso
 /** An in-doubt delivery: confirmed as arrived, given up, or sent again after checking the group. */
 export async function resolveDelivery(id: number, input: { outcome: "sent" | "drop" | "resend"; note: string }, actor: string) {
   if (!input.note?.trim()) throw new Error("note is required");
-  const [before] = await sql<{ status: string }[]>`SELECT status FROM deliveries WHERE id = ${id}`;
+  const [before] = await sql<{ status: string; version: string }[]>`SELECT status, updated_at::text AS version FROM deliveries WHERE id = ${id}`;
   if (!before) return null;
   if (before.status !== "unknown" && before.status !== "failed") throw new Conflict("这条投递不需要处理");
   let status: string;
   if (input.outcome === "sent") {
-    await sql`UPDATE deliveries SET status = 'sent', sent_at = coalesce(sent_at, now()), response = ${`人工确认已送达：${input.note}`}, updated_at = now() WHERE id = ${id}`;
+    const changed = await sql`UPDATE deliveries SET status = 'sent', sent_at = coalesce(sent_at, now()), response = ${`人工确认已送达：${input.note}`}, updated_at = now()
+      WHERE id = ${id} AND status IN ('unknown', 'failed') AND updated_at::text = ${before.version}`;
+    if (!changed.count) throw new Conflict("这条投递已被其他操作处理，请刷新后重试");
     status = "sent";
   } else if (input.outcome === "drop") {
-    await sql`UPDATE deliveries SET status = 'failed', response = ${`人工放弃：${input.note}`}, updated_at = now() WHERE id = ${id}`;
+    const changed = await sql`UPDATE deliveries SET status = 'failed', response = ${`人工放弃：${input.note}`}, updated_at = now()
+      WHERE id = ${id} AND status IN ('unknown', 'failed') AND updated_at::text = ${before.version}`;
+    if (!changed.count) throw new Conflict("这条投递已被其他操作处理，请刷新后重试");
     status = "failed";
   } else {
     const { resendDelivery } = await import("../notify/deliver.ts");
-    status = (await resendDelivery(id)).status;
+    status = (await resendDelivery(id, before.version)).status;
   }
   await audit(actor, `delivery.${input.outcome}`, `delivery:${id}`, input.note, { status: before.status }, { status });
   return { id, status };
