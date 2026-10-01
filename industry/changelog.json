@@ -1,24 +1,363 @@
 {
-  "latestVersion": "2026-10-01T21:54",
+  "schemaVersion": 1,
+  "timeZone": "Asia/Shanghai",
+  "latestVersion": "2026-10-01T14:01:29Z",
   "releases": [
     {
-      "date": "2026-10-01",
-      "time": "21:54",
-      "kind": "更新",
-      "title": "放宽 AI 单次输出预算配置上限",
+      "id": "daily-change-timeline",
+      "at": "2026-10-01T14:01:29Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "更新日志改为按日时间线",
       "body": [
-        "AI 单次输出 token 配置上限由 16,000 放宽至 1,048,576，前后端使用一致的整数校验。默认仍为 4,096，已有保存值、每日调用限额与开关不自动改变。",
-        "配置上限不是模型上下文窗口或实际输出能力承诺；保留供应商限制、90 秒超时、1,000,000 字节响应边界，超长回答显示时明确标注截断。提高预算可能增加费用。"
+        "按 UTC+08 日期整理网站功能、修复和上游同步，提供类型筛选、日期跳转及可追溯的代码来源。",
+        "补全 9 月 30 日以来的 HKIS 改动；上游原始提交时间与合入本站 fork 的时间分别显示。"
+      ],
+      "sources": [
+        {
+          "label": "变更清单",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/industry/changelog.json"
+        }
       ]
     },
     {
-      "date": "2026-10-01",
-      "time": "08:00",
-      "kind": "公告",
-      "title": "网站上线",
+      "id": "output-limit-2026-10-01",
+      "at": "2026-10-01T13:56:18Z",
+      "basis": "commit",
+      "kind": "feature",
+      "title": "放宽 AI 单次输出预算配置上限",
       "body": [
-        "用 AIHOT 开源框架搭起了这个站：自动盯住信源、精选、把同一件事归到一起，每天早上出一份日报。",
-        "这是示例条目。新条目写在 industry/changelog.json 的最前面，并把 latestVersion 改成它的日期和时间，导航上就会出现提醒红点。"
+        "AI 单次输出 token 配置上限由 16,000 放宽至 1,048,576，前后端采用一致的整数校验。默认仍为 4,096，已有保存值、每日调用限额与开关不自动改变。",
+        "配置上限不等于模型的上下文窗口或实际输出能力；保留供应商限制、90 秒超时、1,000,000 字节响应边界，超长回答明确标注显示截断。提高预算可能增加费用。"
+      ],
+      "sources": [
+        {
+          "label": "代码提交 · d3074b4",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/d3074b44c242b20a8d2719729d09c9cd0a81110e"
+        }
+      ]
+    },
+    {
+      "id": "upstream-2026-10-01",
+      "at": "2026-10-01T02:27:00Z",
+      "basis": "integration",
+      "kind": "upstream",
+      "title": "同步上游 12 个提交，保留 HKIS 定制功能",
+      "body": [
+        "合并上游 885b736 至 cf8f8d0 的 12 个提交：包含 Markdown 与图片修复、导入校验、重试恢复、评测一致性、模型榜筛选及依赖修补。",
+        "原 Node / PostgreSQL 后端的相关修复已进入仓库，但不会因此在 Sites 中启用。论文视图、手动 AI、加密配置与所有者诊断继续保留。"
+      ],
+      "sources": [
+        {
+          "label": "Fork 合并 · ed0cf9a",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/ed0cf9a24790602902b6350bb2d2d18a6168a4e7"
+        },
+        {
+          "label": "上游完整比较",
+          "url": "https://github.com/KKKKhazix/AIHOT/compare/885b736dc0fd3ef3d4c9c70af2bc3a981a99ff38...cf8f8d07d68dfa9079becc72b0717a45b33485f3"
+        },
+        {
+          "label": "同步说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/ed0cf9a24790602902b6350bb2d2d18a6168a4e7/docs/upstream-sync.md"
+        }
+      ],
+      "upstream": {
+        "repository": "KKKKhazix/AIHOT",
+        "base": "885b736dc0fd3ef3d4c9c70af2bc3a981a99ff38",
+        "head": "cf8f8d07d68dfa9079becc72b0717a45b33485f3",
+        "compareUrl": "https://github.com/KKKKhazix/AIHOT/compare/885b736dc0fd3ef3d4c9c70af2bc3a981a99ff38...cf8f8d07d68dfa9079becc72b0717a45b33485f3",
+        "commits": [
+          {
+            "sha": "cf8f8d07d68dfa9079becc72b0717a45b33485f3",
+            "at": "2026-09-30T13:41:00Z",
+            "title": "将图片依赖 fflate 固定到修补版本 0.7.5",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/cf8f8d07d68dfa9079becc72b0717a45b33485f3"
+          },
+          {
+            "sha": "e6604a4f1176a0280e3824385413c64f5cc51e1c",
+            "at": "2026-09-30T12:36:03Z",
+            "title": "MCP 冒烟检查与公开接口约定保持一致",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/e6604a4f1176a0280e3824385413c64f5cc51e1c"
+          },
+          {
+            "sha": "eb3779f2309cc81d11aaf48be00d1353f84d22a8",
+            "at": "2026-09-30T12:27:48Z",
+            "title": "补全模型筛选的精确身份映射",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/eb3779f2309cc81d11aaf48be00d1353f84d22a8"
+          },
+          {
+            "sha": "17ade6376e5b7712e760ee77fe59d8a26a819142",
+            "at": "2026-09-30T12:22:42Z",
+            "title": "完整校验导入批次后再写入数据库",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/17ade6376e5b7712e760ee77fe59d8a26a819142"
+          },
+          {
+            "sha": "b813579ead3532bd0a76e7cb22c2398a9568db0f",
+            "at": "2026-09-30T12:15:31Z",
+            "title": "拒绝向已暂停的外部信源推送内容",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/b813579ead3532bd0a76e7cb22c2398a9568db0f"
+          },
+          {
+            "sha": "a5bd87b1126c616e83675c86087ad279c78dd7a6",
+            "at": "2026-09-30T12:11:03Z",
+            "title": "通知重试采用原子领取，避免重复发送",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/a5bd87b1126c616e83675c86087ad279c78dd7a6"
+          },
+          {
+            "sha": "ad4a5491f53f9477494034fec96ff0b89e8105ba",
+            "at": "2026-09-30T12:08:15Z",
+            "title": "稳定 SelectBench 评测的回执、提示词和模型覆盖语义",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/ad4a5491f53f9477494034fec96ff0b89e8105ba"
+          },
+          {
+            "sha": "c38705b84058c53bc75c91e6b0faa71c3079f588",
+            "at": "2026-09-30T09:31:22Z",
+            "title": "模型榜支持按开发者与开放权重筛选",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/c38705b84058c53bc75c91e6b0faa71c3079f588"
+          },
+          {
+            "sha": "3e36e480bea5cc59917e4d56e8d65692f17fb0ac",
+            "at": "2026-09-30T09:23:31Z",
+            "title": "保留文章图片比例及 Markdown 列表、表格、代码结构",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/3e36e480bea5cc59917e4d56e8d65692f17fb0ac"
+          },
+          {
+            "sha": "c41a6cf7c83387f54fba0de30b9a2e5b2a81efd1",
+            "at": "2026-09-30T08:35:43Z",
+            "title": "补充贡献指南与安全问题报告说明",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/c41a6cf7c83387f54fba0de30b9a2e5b2a81efd1"
+          },
+          {
+            "sha": "c3ba0ca3c19a7823f431871869083e075fd34caf",
+            "at": "2026-09-30T08:04:10Z",
+            "title": "恢复结果不确定的回执后，从文章未完成步骤继续",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/c3ba0ca3c19a7823f431871869083e075fd34caf"
+          },
+          {
+            "sha": "a75140b380dcb0b98893deec6bbefe57314d716a",
+            "at": "2026-09-30T07:47:38Z",
+            "title": "Markdown 导出文件名使用当前站点品牌",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/a75140b380dcb0b98893deec6bbefe57314d716a"
+          }
+        ]
+      }
+    },
+    {
+      "id": "dad68f0-fix",
+      "at": "2026-09-30T21:26:13Z",
+      "basis": "commit",
+      "kind": "fix",
+      "title": "增加不带凭证的网络诊断",
+      "body": [
+        "模型设置新增手动网络检查，以空请求且不携带 API key 或 Cookie 检查接入点的 HTTP 响应。",
+        "这能帮助区分网络拦截与鉴权问题；不调用模型，也不表示 Kimi 的 403 已解决。"
+      ],
+      "sources": [
+        {
+          "label": "代码提交 · dad68f0",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/dad68f00d26cb7c5940f1d6b57d355fb896e6e1f"
+        }
+      ]
+    },
+    {
+      "id": "6ec0740-feature",
+      "at": "2026-09-30T20:51:01Z",
+      "basis": "commit",
+      "kind": "feature",
+      "title": "运行日志与模型设置诊断",
+      "body": [
+        "网站设置新增所有者专用运行日志，记录采集、模型测试及配置操作的状态和安全诊断信息，并支持级别、组件筛选与分页。",
+        "同时修正 Workers 的请求重定向处理；运行日志与本页的版本变更清单分开保留。"
+      ],
+      "sources": [
+        {
+          "label": "代码提交 · 6ec0740",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/6ec07403a0460409e8980d7eec672a8579ca4854"
+        }
+      ]
+    },
+    {
+      "id": "8d8c13d-fix",
+      "at": "2026-09-30T20:37:23Z",
+      "basis": "commit",
+      "kind": "fix",
+      "title": "更清楚地显示模型测试失败原因",
+      "body": [
+        "模型测试保留经过筛选的响应状态与诊断信息，区分供应商明确拒绝和结果不确定的请求；不确定结果不自动重试。"
+      ],
+      "sources": [
+        {
+          "label": "代码提交 · 8d8c13d",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/8d8c13d6f2c26096be27cca1991152b8f6c4ad51"
+        }
+      ]
+    },
+    {
+      "id": "bc02b7c-feature",
+      "at": "2026-09-30T20:22:14Z",
+      "basis": "commit",
+      "kind": "feature",
+      "title": "论文日报、研究进展与固定助手入口",
+      "body": [
+        "论文日报和研究进展改为读取真实论文库，支持采集日 / 发表日、研究方向、出版商、优先级与搜索筛选。",
+        "Agent 固定在桌面侧栏和手机底部入口；论文摘要证据与原始来源可直接查看，示例 RSS 不再混入论文视图。"
+      ],
+      "sources": [
+        {
+          "label": "代码提交 · bc02b7c",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/bc02b7ce836a258d411706d59cf177132f28afa6"
+        }
+      ]
+    },
+    {
+      "id": "c2d633c-feature",
+      "at": "2026-09-30T20:10:10Z",
+      "basis": "commit",
+      "kind": "feature",
+      "title": "支持手动 Kimi Responses 分析",
+      "body": [
+        "增加 Kimi Code Responses 接入和高思考等级的手动分析路径，保留单次调用、预算及重复请求保护。",
+        "这是接入能力更新，不代表当前供应商连接测试已通过；没有启用后台批量分析。"
+      ],
+      "sources": [
+        {
+          "label": "代码提交 · c2d633c",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/c2d633cd8d56cd24d11cf9a42ae2d9c8d0a7fee7"
+        }
+      ]
+    },
+    {
+      "id": "b99972a-feature",
+      "at": "2026-09-30T13:13:15Z",
+      "basis": "commit",
+      "kind": "feature",
+      "title": "可配置的 AI 研究助手",
+      "body": [
+        "新增所有者模型设置与站内助手，可手动配置接入点、模型、思考等级与 API key；凭证仅在服务端加密保存。",
+        "支持按需检索论文、摘要分析和研究偏好建议；偏好改动需确认，打开页面不会触发模型调用。"
+      ],
+      "sources": [
+        {
+          "label": "代码提交 · b99972a",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/b99972ab345bcf88cbeed014780813575a57c8d8"
+        }
+      ]
+    },
+    {
+      "id": "7cbf34f-feature",
+      "at": "2026-09-30T11:41:38Z",
+      "basis": "commit",
+      "kind": "feature",
+      "title": "每周研究热点与逐条论文引用",
+      "body": [
+        "热点页汇总最近 7 个自然日的研究主题和可追溯摘要摘录，并提供论文详情与 DOI 引用。",
+        "排序使用已核实年度的期刊 JIF；未核实的指标单列，不以推测值填补缺失摘要或指标。"
+      ],
+      "sources": [
+        {
+          "label": "代码提交 · 7cbf34f",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/7cbf34f58cca0268d077f35d472782730949ae1d"
+        }
+      ]
+    },
+    {
+      "id": "9b94b6a-fix",
+      "at": "2026-09-30T11:14:28Z",
+      "basis": "commit",
+      "kind": "fix",
+      "title": "细化半导体相关性与阅读优先级规则",
+      "body": [
+        "细化器件、CIS 和 TCAD 等方向的相关性判断，修复复数词及 NAND 误匹配，并刷新已收录论文的规则分。",
+        "规则分与按需 AI 分保持区分。"
+      ],
+      "sources": [
+        {
+          "label": "代码提交 · 9b94b6a",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/9b94b6ab3af9831f7c64251efafe2c0e44c38483"
+        }
+      ]
+    },
+    {
+      "id": "bc0d119-fix",
+      "at": "2026-09-30T11:09:11Z",
+      "basis": "commit",
+      "kind": "fix",
+      "title": "加强论文来源解析与查询稳定性",
+      "body": [
+        "修正 Elsevier / Wiley 托管信源的字段解析和来源标记，排除封面、卷期等非论文内容，保留真实缺失的摘要。",
+        "调整采集分页并限制数据库请求等待时间，减少异常请求长时间阻塞页面。"
+      ],
+      "sources": [
+        {
+          "label": "代码提交 · bc0d119",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/bc0d119b2599198936916b1bd6d70499f7e824e8"
+        }
+      ]
+    },
+    {
+      "id": "47621f9-fix",
+      "at": "2026-09-30T11:00:21Z",
+      "basis": "commit",
+      "kind": "fix",
+      "title": "修正期刊元数据字段含义",
+      "body": [
+        "按实际信源字段修正 Elsevier 解析，区分作者关键词、系统主题标签和摘要；未提供摘要时明确保留为空。"
+      ],
+      "sources": [
+        {
+          "label": "代码提交 · 47621f9",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/47621f96ecdcb569b7584fce25b87a597d5c97a6"
+        }
+      ]
+    },
+    {
+      "id": "00b3533-feature",
+      "at": "2026-09-30T10:56:11Z",
+      "basis": "commit",
+      "kind": "feature",
+      "title": "建立半导体论文情报库",
+      "body": [
+        "接入 IEEE、Wiley、Elsevier 的 9 本核心期刊，持久保存论文元数据、可用摘要与字段来源。",
+        "新增论文检索、详情页、透明的相关度和阅读优先级筛选；不抓取付费全文。"
+      ],
+      "sources": [
+        {
+          "label": "代码提交 · 00b3533",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/00b353359c72fd27753acd53ee3669c1381fad24"
+        }
+      ]
+    },
+    {
+      "id": "b223075-feature",
+      "at": "2026-09-30T10:39:05Z",
+      "basis": "commit",
+      "kind": "feature",
+      "title": "启用 HKIS 站点品牌",
+      "body": [
+        "站点更名为「HK的自动情报站 / HK's Intelligent Station」，更新 HKIS 文字标志、图标及导航中的品牌显示。"
+      ],
+      "sources": [
+        {
+          "label": "代码提交 · b223075",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/b2230756f1f799dcb76cd388a7672d52a41ce0c8"
+        }
+      ]
+    },
+    {
+      "id": "1e23545-feature",
+      "at": "2026-09-30T00:09:47Z",
+      "basis": "commit",
+      "kind": "feature",
+      "title": "完成 Sites 原生站点适配",
+      "body": [
+        "将站点适配到 Workers 与 D1，提供服务端页面、持久化 RSS 采集和原文跳转，保留原有响应式界面。",
+        "原 Node / PostgreSQL 后端留在仓库中；其自动 AI 流水线不随 Sites 运行。"
+      ],
+      "sources": [
+        {
+          "label": "代码提交 · 1e23545",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/1e2354511e22f52ce5610a605a7ff2d7eda12c57"
+        }
       ]
     }
   ]

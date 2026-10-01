@@ -20,8 +20,9 @@
     "dev:web": "npm run dev -w @aihot/web",
     "typecheck": "tsc -p packages/contracts && tsc -p packages/backend && tsc -p apps/api && tsc -p apps/worker && tsc -p tests && npm run typecheck -w @aihot/web",
     "test": "node --test --test-concurrency=1 --test-timeout=120000 \"tests/*.test.ts\"",
-    "build": "npm run build -w @aihot/web && node sites/build.mjs",
-    "db:generate": "drizzle-kit generate"
+    "build": "npm run check:changelog && npm run build -w @aihot/web && node sites/build.mjs",
+    "db:generate": "drizzle-kit generate",
+    "check:changelog": "node scripts/check-changelog.ts"
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "2.1.0",

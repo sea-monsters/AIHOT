@@ -104,7 +104,7 @@
 ## 8. 页面文案：`industry/pages/`、`industry/changelog.json`
 
 - `pages/terms.md`、`pages/privacy.md`：使用规则和隐私说明。**现在是模板**，上线前按你的实际情况改写，必要时请专业人士看一下。
-- `changelog.json`：更新日志。新条目写在最前面，把 `latestVersion` 改成它的日期和时间。
+- `changelog.json`：按 UTC+08 日期展示的更新日志。变更类型、时间依据、来源和上游同步格式见 [更新日志维护](changelog.md)；新条目写在最前面，并通过 `npm run check:changelog` 校验。
 
 ## 9. 模型和部署
 

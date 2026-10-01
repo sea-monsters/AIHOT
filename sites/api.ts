@@ -1,4 +1,5 @@
 import {logsApi,writeLog} from './runtime-logs.ts';
+import {CHANGELOG} from '../industry/changelog.ts';
 import {aiApi} from './ai/api.ts';
 import {researchApi} from './research.ts';
 import bootstrap from './bootstrap.json' with {type:'json'};
@@ -26,6 +27,11 @@ export async function collect(db:any,id:string){const s=sources.find(s=>s.id===i
  const count=await db.prepare('SELECT count(*) n FROM site_items WHERE source_id=?').bind(id).first();await db.prepare('UPDATE site_sources SET last_success=?,error=NULL,count=? WHERE id=?').bind(checked,count.n,id).run();await writeLog(db,{component:'feed',event:'collection_finished',severity:'info',outcome:'ok',sourceId:id,correlationId:checked+id,durationMs:Date.now()-Date.parse(checked),metadata:{added:saved}});return {id,ok:true,added:saved,count:count.n};
  }catch(e){await writeLog(db,{component:'feed',event:'collection_failed',severity:'error',outcome:'failed',errorCode:'collection_failed',sourceId:id,correlationId:checked+id,durationMs:Date.now()-Date.parse(checked)});const error=String((e as Error).message).slice(0,300);await db.prepare('UPDATE site_sources SET error=? WHERE id=?').bind(error,id).run();return {id,ok:false,error};}}
 export async function siteApi(request:Request,env:any):Promise<Response>{
+ const path=new URL(request.url).pathname;
+ if(path==='/api/site/changelog'||path==='/api/site/meta'){
+  if(request.method!=='GET')return json({code:'method_not_allowed'},405);
+  return json(path==='/api/site/changelog'?CHANGELOG:{changelogVersion:CHANGELOG.latestVersion});
+ }
  if(new URL(request.url).pathname==='/api/site/logs')return logsApi(request,env);
  if(new URL(request.url).pathname.startsWith('/api/site/ai/'))return aiApi(request,env);
  if(new URL(request.url).pathname.startsWith('/api/site/research/'))return researchApi(request,env);
@@ -34,7 +40,6 @@ export async function siteApi(request:Request,env:any):Promise<Response>{
  const origin=request.headers.get('origin');if(origin&&origin!==u.origin)return json({code:'forbidden'},403);let body;try{body=await request.json();}catch{return json({code:'bad_request'},400);}if(typeof body.id!=='string')return json({code:'bad_request'},400);return json(await collect(db,body.id));}
  if(request.method!=='GET')return json({code:'method_not_allowed'},405);
  if(p==='/api/site/status'){await seed(db);const list=await db.prepare('SELECT * FROM site_sources ORDER BY name').all();const count=await db.prepare('SELECT count(*) n FROM site_items').first();return json({mode:'raw-rss',modelConfigured:false,scheduled:false,total:count.n,sources:list.results});}
- if(p==='/api/site/meta'){await seed(db);return json({changelogVersion:null});}
  if(p==='/api/site/timeline')return json({filters:filters(u),cards:[],nextCursor:null,refreshAt:null,hot:[],dayCounts:{},generatedAt:now()});
  if(p==='/api/site/hot')return json({computedAt:null,ruleVersion:null,windowHours:48,entries:[]});
  if(p==='/api/site/pool'){
@@ -52,7 +57,6 @@ export async function siteApi(request:Request,env:any):Promise<Response>{
  if(/\/reports\/(daily|weekly|monthly)\/latest-page$/.test(p))return json({index:[],report:null});
  if(/\/reports\/(daily|weekly|monthly)$/.test(p))return json({kind:p.split('/').pop(),items:[]});
  if(p==='/api/site/contact')return json({wechatQr:null,feishuQr:null,makerAvatar:null});
- if(p==='/api/site/changelog')return json({latestVersion:'',releases:[]});
  if(p==='/api/site/stats'){const count=await db.prepare('SELECT count(*) n FROM site_items').first();return json({sources:sources.length,sourceKinds:{rss:sources.length},heatOnlySources:0,items:count.n,selected:0,dailies:0,day:{collected:0,selected:0},sampleSources:sources.map(s=>({name:s.name,kind:s.kind,heatOnly:false})),latest:[]});}
  return json({code:'not_found'},404);
 }
