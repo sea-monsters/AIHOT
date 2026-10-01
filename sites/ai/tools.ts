@@ -33,6 +33,27 @@ export async function resolveProposal(db:any,id:string,pid:string,action:string)
  return {status:'applied',preferences:await preferenceStatus(db,id)};
 }
 export function evidencePaper(p:any){let provenance:any={};try{provenance=JSON.parse(p.provenance_json)}catch{}return {id:p.id,title:p.title,journal:p.journal,publisher:p.publisher,publishedAt:p.published_at,doi:p.doi,detailUrl:'/research/'+p.id,originalUrl:p.doi?'https://doi.org/'+p.doi:p.url,abstract:p.abstract?.slice(0,12000)||null,abstractSource:provenance.abstract||null,ruleScore:p.priority,ruleRelevance:p.relevance,aiScore:null}}
+/** Validate before canonical counting/execution. Normalization follows the tools' actual semantics. */
+export function normalizeToolArgs(name:string,args:any):Record<string,any>{
+ const object=(v:any,keys:string[])=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).every(k=>keys.includes(k));
+ const bad=()=>{throw new AIError('invalid_tool',400,'工具参数格式无效，未执行')};
+ if(name==='read_preferences'){if(!object(args,[]))bad();return {}}
+ if(name==='search_papers'){
+  if(!object(args,['q','publisher','useKeywords'])||typeof args.q!=='string'||args.q.length>200||!['','IEEE','Wiley','Elsevier'].includes(args.publisher)||typeof args.useKeywords!=='boolean')bad();
+  return {q:args.q.trim(),publisher:args.publisher,useKeywords:args.useKeywords};
+ }
+ if(name==='paper_details'){
+  if(!object(args,['ids'])||!Array.isArray(args.ids)||args.ids.length>4||args.ids.some((id:any)=>typeof id!=='string'||!/^[\w-]{1,80}$/.test(id)))bad();
+  return {ids:[...new Set(args.ids)]};
+ }
+ if(name==='propose_preferences'){
+  if(!object(args,['keywords','excludedKeywords','sourceIntervals'])||!Array.isArray(args.sourceIntervals)||args.sourceIntervals.some((v:any)=>!object(v,['sourceId','hours'])||typeof v.sourceId!=='string'||!Number.isInteger(v.hours)))bad();
+  if(new Set(args.sourceIntervals.map((v:any)=>v.sourceId)).size!==args.sourceIntervals.length)bad();
+  const value=cleanPreferences({...args,sourceIntervals:Object.fromEntries(args.sourceIntervals.map((v:any)=>[v.sourceId,v.hours]))});
+  return {...value,sourceIntervals:Object.entries(value.sourceIntervals).sort(([a],[b])=>a.localeCompare(b)).map(([sourceId,hours])=>({sourceId,hours}))};
+ }
+ throw new AIError('tool_not_allowed',400,'模型请求了未授权工具');
+}
 const escapeLike=(s:string)=>'%'+s.toLowerCase().replace(/[\\%_]/g,'\\$&')+'%';
 export async function searchPapers(db:any,id:string,args:any){
  const q=typeof args.q==='string'?args.q.trim().slice(0,200):'',terms=q.split(/\s+/).filter(Boolean).slice(0,6),prefs=(await preferences(db,id)).value;

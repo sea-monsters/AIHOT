@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-01T14:27:00Z",
+  "latestVersion": "2026-10-01T14:41:32Z",
   "releases": [
+    {
+      "id": "layered-ai-tool-limits-2026-10-01",
+      "at": "2026-10-01T14:41:32Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "AI 工具调用改为 5 / 15 / 200 分层限制",
+      "body": [
+        "相同工具和相同参数最多连续尝试 5 次，同一工具最多连续 15 次，全任务最多累计 200 次；跨模型轮次计数，重复结果复用，配置建议仍需确认。",
+        "移除旧三轮响应限制；模型请求频率、每日额度、单次超时和已保存配置保持不变。上下文或调用边界触发时保留部分论文结果与明确原因，不自动重试计费。",
+        "修复空 JSON 分析条目及混合缺失摘要时自由文本结论的处理，引用匹配不被表述为科学正确性验证。"
+      ],
+      "sources": [
+        {
+          "label": "AI 助手边界与验证说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/ai-assistant.md"
+        }
+      ]
+    },
     {
       "id": "scholarly-services-2026-10-01",
       "at": "2026-10-01T14:27:00Z",
