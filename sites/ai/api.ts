@@ -12,19 +12,23 @@ export function parseAnswer(text:string,evidence:Map<string,any>){
  if(typeof value.answer!=='string'||!Array.isArray(value.paperIds)||!Array.isArray(value.analyses))throw new AIError('answer_format',502,'模型回答格式不完整');
  const ids=[...new Set([...value.paperIds,...[...value.answer.matchAll(/\[paper:([\w-]+)\]/g)].map((m:any)=>m[1]),...value.analyses.map((a:any)=>a.paperId)])] as string[];
  if(ids.some(id=>!evidence.has(id)))throw new AIError('unknown_citation',502,'模型引用了本次未检索到的论文，结果已拦截，请重新提问');
+ let displayTruncated=value.analyses.length>8||ids.length>16;
  const analyses=value.analyses.slice(0,8).map((a:any)=>{
   const p=evidence.get(a.paperId),quote=typeof a.evidence==='string'?a.evidence.trim():'';
   const grounded=!!p.abstract&&quote.length>=12&&quote.length<=400&&p.abstract.includes(quote);
   if(!grounded||a.decision==='insufficient')return {paperId:p.id,decision:'insufficient',score:null,summary:p.abstract?'未提供可核对的摘要证据，不作筛选判断':'来源未提供摘要，不作科学结论或 AI 评分',evidence:null};
   if(!['include','exclude'].includes(a.decision)||!Number.isInteger(a.score)||a.score<0||a.score>100)return {paperId:p.id,decision:'insufficient',score:null,summary:'模型筛选结果无效，保留原规则分',evidence:null};
-  return {paperId:p.id,decision:a.decision,score:a.score,summary:stripSecrets(String(a.summary||'')).slice(0,1200),evidence:quote};
+  const summary=stripSecrets(String(a.summary||''));if(summary.length>1200)displayTruncated=true;
+  return {paperId:p.id,decision:a.decision,score:a.score,summary:summary.slice(0,1200),evidence:quote};
  });
- let answer=stripSecrets(value.answer).slice(0,12000);
+ let answer=stripSecrets(value.answer);
  if(!evidence.size)answer='本次没有检索到可引用的论文证据，不能给出科学结论。请提供更明确的检索词，或打开论文后选择 AI 分析。';
  else if(!ids.length){answer='模型未提供可核对的论文引用，未展示其科研结论。下方列出本次实际检索到的论文，请核对原文。';ids.push(...evidence.keys())}
  else if(!ids.some(id=>evidence.get(id).abstract))answer='检索到以下已入库论文，但来源未提供可用摘要，不能据此作科学结论或 AI 评分。';
  if(analyses.length&&analyses.every((a:any)=>a.decision==='insufficient'))answer='摘要证据不足或模型未给出可核对的原文证据，已撤回分析结论与评分。请查看下方论文来源。';
- return {answer,papers:ids.slice(0,16).map(id=>{const {abstract,...p}=evidence.get(id);return {...p,hasAbstract:!!abstract}}),analyses};
+ if(ids.length>16)displayTruncated=true;
+ if(answer.length>12000){displayTruncated=true;answer=answer.slice(0,12000)}
+ return {answer,displayTruncated,papers:ids.slice(0,16).map(id=>{const {abstract,...p}=evidence.get(id);return {...p,hasAbstract:!!abstract}}),analyses};
 }
 async function conversation(db:any,id:string,config:any,env:any,body:any,requestId:string){
  const message=stripSecrets(String(body.message||'').trim());if(!message||message.length>4000)throw new AIError('invalid_message',400,'消息需为 1–4000 字');

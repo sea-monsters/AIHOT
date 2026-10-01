@@ -1,5 +1,6 @@
 import {AIError,validSettings,encryptionReady,seal,PUBLIC_ENDPOINTS} from './security.ts';
-export const DEFAULTS={endpoint:'https://api.openai.com/v1',model:'gpt-5.6-luna',protocol:'responses',reasoning:'xhigh',dailyLimit:20,maxTokens:4096,enabled:false};
+import {AI_OUTPUT_TOKENS} from '@aihot/contracts/ai-limits';
+export const DEFAULTS={endpoint:'https://api.openai.com/v1',model:'gpt-5.6-luna',protocol:'responses',reasoning:'xhigh',dailyLimit:20,maxTokens:AI_OUTPUT_TOKENS.default,enabled:false};
 export const stamp=()=>new Date().toISOString();
 export async function rawSettings(db:any,id:string){return db.prepare('SELECT * FROM ai_settings WHERE owner_id=?').bind(id).first()}
 export function settingsValues(r:any){return r?{endpoint:r.endpoint,model:r.model,protocol:r.protocol,reasoning:r.reasoning,dailyLimit:r.daily_limit,maxTokens:r.max_tokens,enabled:!!r.enabled}:DEFAULTS}

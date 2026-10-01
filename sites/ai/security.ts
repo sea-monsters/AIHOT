@@ -1,3 +1,4 @@
+import {AI_OUTPUT_TOKENS,isValidOutputTokenLimit} from '@aihot/contracts/ai-limits';
 /** Identity headers are supplied by the Sites dispatcher, not the browser. Never enable this Worker outside that trusted boundary without replacement authentication. */
 export class AIError extends Error {
  code:string;status:number;
@@ -34,13 +35,17 @@ export function endpoint(value:unknown,env:any){
  return clean;
 }
 export const REASONING=['none','low','medium','high','xhigh','max'] as const;
+export function validOutputTokenLimit(value:unknown){
+ if(!isValidOutputTokenLimit(value))throw new AIError('invalid_budget',400,`单次输出上限须为 ${AI_OUTPUT_TOKENS.min}–${AI_OUTPUT_TOKENS.max} 的整数 tokens；实际仍受模型输出能力限制`);
+ return value;
+}
 export function validSettings(body:any,env:any){
  const base=endpoint(body.endpoint,env),model=String(body.model||'').trim();
  if(!/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,119}$/.test(model))throw new AIError('invalid_model',400,'模型名称必须为 1–120 个字母、数字或 . _ : / -');
  if(!['responses','chat_completions'].includes(body.protocol)||!REASONING.includes(body.reasoning))throw new AIError('invalid_protocol',400,'请选择受支持的接口协议和思考等级');
  if(base==='https://api.openai.com/v1'&&body.protocol==='chat_completions'&&/^gpt-5\.[4-9]/.test(model)&&body.reasoning!=='none')throw new AIError('unsupported_tool_reasoning',400,'此 OpenAI 模型的工具调用与该思考等级需使用 Responses 协议，请切换接口协议');
- const dailyLimit=Number(body.dailyLimit),maxTokens=Number(body.maxTokens);
- if(!Number.isInteger(dailyLimit)||dailyLimit<1||dailyLimit>100||!Number.isInteger(maxTokens)||maxTokens<1024||maxTokens>16000)throw new AIError('invalid_budget',400,'每日调用限额为 1–100；单次输出上限为 1024–16000 tokens');
+ const dailyLimit=Number(body.dailyLimit),maxTokens=validOutputTokenLimit(body.maxTokens);
+ if(!Number.isInteger(dailyLimit)||dailyLimit<1||dailyLimit>100)throw new AIError('invalid_budget',400,'每日调用限额为 1–100 的整数');
  return {endpoint:base,model,protocol:body.protocol,reasoning:body.reasoning,dailyLimit,maxTokens,enabled:body.enabled===true};
 }
 function keyBytes(env:any){

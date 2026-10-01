@@ -60,8 +60,11 @@ AI 筛选结果要求实际检索过的论文 ID，以及摘要中原样存在�
 Sites/D1 使用专用 `sites/ai/provider.ts` 回执门控，保持原 PostgreSQL `packages/backend/src/providers/receipts.ts` 的按次计费/先留回执原则；旧 PostgreSQL 后端不会随 Sites 运行。
 
 - 每次外部调用前原子预留回执并检查每分钟 6 次 / 每日设置限额（UTC，默认 20，允许 1–100）
-- 一次聊天最多 3 次模型请求、6 次站内工具调用；单次最大输出（包括思考）默认 4,096，允许 1,024–16,000
-- 限额是请求次数与 token 上限，不是金额保证；费用以供应商为准
+- 一次聊天最多 3 次模型请求、6 次站内工具调用；单次最大输出（包括思考）默认仍为 4,096，配置允许整数 1,024–1,048,576；现有已保存值、每日预算和开关不会随部署改变
+- 限额是请求次数与 token 上限，不是金额保证；费用以供应商为准。提高单次预算可能明显增加费用
+- 1,048,576 是站点配置天花板，不是上下文窗口，也不声明任一模型支持相同长度输出。用户需按模型实际输出能力设置；供应商限制和现有协议兼容性校验仍生效，不自动降级/改模型/截低预算
+- 保存和调用前共用整数范围校验；Responses 原值映射到 `max_output_tokens`，Chat Completions 原值映射到 `max_completion_tokens`
+- 仍保留每次 90 秒超时和 1,000,000 字节响应安全上限，超过时明确报错且不自动重试。正文显示最多 12,000 字符、单篇分析摘要 1,200 字符、8 项分析和 16 篇引用；显示发生截断会明确标注，不当作完整分析。配置高 token 值不保证同等长度回答可接收或显示
 - 所有失败/超时尝试计入额度。不自动重试超时/未知结果，重复相同请求 ID 返回已保存结果或错误，不重复计费
 - 用户更改模型配置/删除 key/关闭 AI 时，后续轮次停止
 - 请求 `store:false`；第三方供应商是否遵守需由其政策确认
@@ -71,7 +74,7 @@ Sites/D1 使用专用 `sites/ai/provider.ts` 回执门控，保持原 PostgreSQL
 
 ## 验证
 
-`node --test sites/ai/ai.test.ts sites/research.test.ts sites/weekly.test.ts`：39 项离线测试，所有 provider 请求 mock，不访问真实模型。
+`node --test sites/ai/ai.test.ts sites/research.test.ts sites/weekly.test.ts`：离线测试，所有 provider 请求 mock，不访问真实模型。
 
 `npm run typecheck`；`npm run build`；`node sites/test-worker.mjs`：验证真实 Worker + D1 + AES-GCM、所有者鉴权、确认防重放、论文/周报回归。
 

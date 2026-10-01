@@ -1,12 +1,14 @@
 import {responseMetadata} from './network-diagnostic.ts';
 import {writeLog,transportDiagnostic} from '../runtime-logs.ts';
-import {AIError,endpoint,unseal,stripSecrets,redactPayload,KIMI_CODE_ENDPOINT} from './security.ts';
+import {AIError,endpoint,unseal,stripSecrets,redactPayload,KIMI_CODE_ENDPOINT,validOutputTokenLimit} from './security.ts';
 import {stamp} from './settings.ts';
 import {TOOL_DEFS} from './tools.ts';
 /** D1 implementation of the receipt + budget gate. Every provider attempt is recorded before sending; uncertain attempts are never automatically replayed. */
 export async function providerCall(db:any,id:string,config:any,env:any,requestId:string,round:number,input:any[],purpose='chat'){
  // Coding-plan access is personal and interactive only, never a background batch provider.
  if(config.endpoint===KIMI_CODE_ENDPOINT&&!['chat','test'].includes(purpose))throw new AIError('interactive_only',403,'Kimi Code 仅用于本人主动发起的对话或测试，不能用于无人值守的批量分析管线；自动分析需另选支持该用途的 API');
+ // Reject an invalid stored budget before credentials, receipts, or network; never clamp or raise it.
+ const maxTokens=validOutputTokenLimit(config.max_tokens);
  const current=await db.prepare('SELECT revision,enabled,key_ciphertext FROM ai_settings WHERE owner_id=?').bind(id).first();
  if(!current||current.revision!==config.revision||!current.key_ciphertext||(purpose==='chat'&&!current.enabled))throw new AIError('configuration_changed',409,'调用期间配置已更改或 AI 已关闭，请确认最新设置后重新发送');
  endpoint(config.endpoint,env);const secret=await unseal(config.key_ciphertext,env,`${id}|${config.endpoint}`),rid=`${requestId}:${round}`,created=stamp();
@@ -14,7 +16,7 @@ export async function providerCall(db:any,id:string,config:any,env:any,requestId
  if(!claim.meta?.changes)throw new AIError('budget_exceeded',429,'调用限额已达到：每分钟最多 6 次，或今日已用完设定额度。失败/超时尝试也计入限额');
  const defs=purpose==='test'?[{name:'connection_check',description:'Confirm protocol/tool support; call this function with ok=true.',parameters:{type:'object',properties:{ok:{type:'boolean'}},required:['ok'],additionalProperties:false}}]:TOOL_DEFS;
  const responses=config.protocol==='responses';
- const payload:any=responses?{model:config.model,input,reasoning:{effort:config.reasoning},max_output_tokens:config.max_tokens,store:false,tools:defs.map(d=>({type:'function',...d,strict:true})),parallel_tool_calls:false}:{model:config.model,messages:input,reasoning_effort:config.reasoning,max_completion_tokens:config.max_tokens,store:false,tools:defs.map(d=>({type:'function',function:{...d,strict:true}})),parallel_tool_calls:false};
+ const payload:any=responses?{model:config.model,input,reasoning:{effort:config.reasoning},max_output_tokens:maxTokens,store:false,tools:defs.map(d=>({type:'function',...d,strict:true})),parallel_tool_calls:false}:{model:config.model,messages:input,reasoning_effort:config.reasoning,max_completion_tokens:maxTokens,store:false,tools:defs.map(d=>({type:'function',function:{...d,strict:true}})),parallel_tool_calls:false};
  if(responses&&config.endpoint==='https://api.openai.com/v1')payload.include=['reasoning.encrypted_content'];
  const started=Date.now();let received=false,httpStatus:number|null=null,providerRequestId:string|null=null,phase="connect",responseInfo:any={};
  try{

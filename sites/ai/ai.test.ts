@@ -77,3 +77,63 @@ test('network diagnostic captures only fixed response categories, never raw head
 test('network diagnostic does not follow redirects or retry network failures and is rate limited',async()=>{const f=fixture();await configured(f);const original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;if(calls===1)return new Response('',{status:302,headers:{location:'https://evil.invalid/'+secret}});throw Object.assign(new Error(secret),{name:'TimeoutError'})};try{const a=await (await request(f.env,'network',{requestId:crypto.randomUUID()})).json();assert.equal(a.httpStatus,302);assert.ok(a.message.includes('未跟随'));const b=await (await request(f.env,'network',{requestId:crypto.randomUUID()})).json();assert.equal(b.httpStatus,null);assert.equal(b.transport,'timeout');assert.equal((await request(f.env,'network',{requestId:crypto.randomUUID()})).status,429);assert.equal(calls,2);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);assert.ok(!JSON.stringify(f.sql.prepare('SELECT * FROM ai_requests').all()).includes(secret))}finally{globalThis.fetch=original;f.sql.close()}});
 test('network diagnostic bounds response capture and does not read a credential column',async()=>{const f=fixture();await configured(f);const prepare=f.db.prepare;f.db.prepare=(q:string)=>{assert.ok(!/key_ciphertext|SELECT \* FROM ai_settings/.test(q),q);return prepare(q)};const original=globalThis.fetch;globalThis.fetch=async()=>new Response('x'.repeat(20000),{status:403});try{const data=await (await request(f.env,'network',{requestId:crypto.randomUUID()})).json();assert.equal(data.bodyClass,'truncated');assert.ok(JSON.stringify(data).length<1500)}finally{globalThis.fetch=original;f.sql.close()}});
 test('network diagnostic retains 403 metadata if the body stream fails after headers',async()=>{const f=fixture();await configured(f);const original=globalThis.fetch;globalThis.fetch=async()=>new Response(new ReadableStream({start(c){c.error(new Error(secret))}}),{status:403,headers:{'content-type':'text/html','cf-mitigated':'challenge'}});try{const data=await (await request(f.env,'network',{requestId:crypto.randomUUID()})).json();assert.equal(data.httpStatus,403);assert.equal(data.cloudflareChallenge,true);assert.equal(data.bodyClass,'read_failed');assert.ok(data.message.includes('已收到 HTTP 403'));assert.ok(!JSON.stringify(data).includes(secret));const log=f.sql.prepare("SELECT http_status,phase FROM runtime_logs WHERE event='network_probe'").get()!;assert.equal(log.http_status,403);assert.equal(log.phase,'read_response')}finally{globalThis.fetch=original;f.sql.close()}});
+
+test('output config accepts exact ceiling, preserves defaults and round-trips existing saved values without calling a provider',async()=>{
+ const f=fixture(),original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw Error('settings must not call a provider')};
+ try{
+  const defaults=await (await request(f.env,'settings')).json();assert.equal(defaults.maxTokens,4096);assert.equal(defaults.dailyLimit,20);
+  for(const maxTokens of [1024,4096,16000,65536,1048576]){
+   const before=await (await request(f.env,'settings')).json();
+   const saved=await request(f.env,'settings',{...before,maxTokens});assert.equal(saved.status,200,await saved.clone().text());
+   const data=await saved.json();assert.equal(data.maxTokens,maxTokens);assert.equal(data.dailyLimit,20);assert.equal(data.enabled,false);
+   const rowBefore=f.sql.prepare('SELECT * FROM ai_settings').get();
+   assert.equal((await (await request(f.env,'settings')).json()).maxTokens,maxTokens);
+   assert.deepEqual(f.sql.prepare('SELECT * FROM ai_settings').get(),rowBefore);
+  }
+  assert.equal(DEFAULTS.maxTokens,4096);assert.equal(calls,0);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
+ }finally{globalThis.fetch=original;f.sql.close()}
+});
+test('output settings reject max plus one and non-integer/non-number inputs without changing saved settings',async()=>{
+ const f=fixture();try{
+  await request(f.env,'settings',{...DEFAULTS,revision:0});const before=f.sql.prepare('SELECT * FROM ai_settings').get();
+  for(const maxTokens of [1048577,1023,4096.5,0,-1,null,'1048576','not-a-number',true,[],{},undefined,NaN,Infinity]){
+   const response=await request(f.env,'settings',{...DEFAULTS,revision:1,maxTokens});assert.equal(response.status,400,JSON.stringify(maxTokens));assert.equal((await response.json()).code,'invalid_budget');
+   assert.deepEqual(f.sql.prepare('SELECT * FROM ai_settings').get(),before);
+  }
+ }finally{f.sql.close()}
+});
+test('provider keeps exact saved output budget for both protocols at default and maximum',async()=>{
+ const original=globalThis.fetch;
+ try{for(const protocol of ['responses','chat_completions'])for(const maxTokens of [4096,1048576]){
+  const f=fixture();try{
+   await configured(f,{protocol,maxTokens,endpoint:'https://api.deepseek.com',confirmedDestination:'https://api.deepseek.com',model:'custom-large-output',reasoning:'high'});
+   let calls=0;globalThis.fetch=async(url:any,init:any)=>{calls++;const payload=JSON.parse(init.body);assert.equal(payload.model,'custom-large-output');assert.equal(payload[protocol==='responses'?'max_output_tokens':'max_completion_tokens'],maxTokens);assert.equal('max_tokens' in payload,false);assert.equal(protocol==='responses'?'max_completion_tokens' in payload:'max_output_tokens' in payload,false);assert.equal(init.redirect,'manual');return protocol==='responses'?Response.json({output:[{type:'function_call',call_id:'check',name:'connection_check',arguments:'{"ok":true}'}]}):Response.json({choices:[{finish_reason:'tool_calls',message:{role:'assistant',content:null,tool_calls:[{id:'check',type:'function',function:{name:'connection_check',arguments:'{"ok":true}'}}]}}]})};
+   const response=await request(f.env,'test',{requestId:crypto.randomUUID()});assert.equal(response.status,200,await response.clone().text());assert.equal(calls,1);assert.equal(f.sql.prepare('SELECT max_tokens FROM ai_settings').get()!.max_tokens,maxTokens);
+  }finally{f.sql.close()}
+ }}finally{globalThis.fetch=original}
+});
+test('invalid stored output budget fails before key decryption, receipt, or network without clamping',async()=>{
+ const f=fixture(),original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw Error('must not call')};
+ try{await configured(f);f.sql.exec("UPDATE ai_settings SET max_tokens=1048577,key_ciphertext='INVALID_DO_NOT_DECRYPT'");const response=await request(f.env,'test',{requestId:crypto.randomUUID()});assert.equal(response.status,400);assert.equal((await response.json()).code,'invalid_budget');assert.equal(calls,0);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0)}finally{globalThis.fetch=original;f.sql.close()}
+});
+test('maximum output budget retains attempt quota and surfaces model capability rejection without fallback',async()=>{
+ const f=fixture(),original=globalThis.fetch;let calls=0;
+ try{await configured(f,{maxTokens:1048576,dailyLimit:1});globalThis.fetch=async(_url:any,init:any)=>{calls++;assert.equal(JSON.parse(init.body).max_output_tokens,1048576);return Response.json({error:{code:'unsupported_max_output_tokens',message:'This model supports at most 32768 output tokens.'}},{status:400})};
+  const response=await request(f.env,'test',{requestId:crypto.randomUUID()});assert.equal(response.status,502);assert.match((await response.json()).error,/32768/);assert.equal((await request(f.env,'test',{requestId:crypto.randomUUID()})).status,429);assert.equal(calls,1);assert.equal(f.sql.prepare('SELECT max_tokens FROM ai_settings').get()!.max_tokens,1048576);
+ }finally{globalThis.fetch=original;f.sql.close()}
+});
+test('maximum output budget retains bounded provider response and does not report oversized data as success',async()=>{
+ const f=fixture(),original=globalThis.fetch;let calls=0;
+ try{await configured(f,{maxTokens:1048576});globalThis.fetch=async()=>{calls++;return new Response('x'.repeat(1000001))};const body={requestId:crypto.randomUUID()};const response=await request(f.env,'test',body);assert.equal(response.status,502);assert.equal((await response.json()).code,'provider_too_large');assert.equal((await request(f.env,'test',body)).status,409);assert.equal(calls,1)}finally{globalThis.fetch=original;f.sql.close()}
+});
+test('display truncation is explicit for long answers, analysis summaries and result lists',()=>{
+ const p={id:'p1',abstract:'Actual scientific evidence about measured yields.'},evidence=new Map([['p1',p]]);
+ const answer='[paper:p1] '+'x'.repeat(12000),base={answer,paperIds:['p1'],analyses:[] as any[]};
+ let result=parseAnswer(JSON.stringify(base),evidence);assert.equal(result.answer.length,12000);assert.equal(result.displayTruncated,true);
+ result=parseAnswer(JSON.stringify({...base,answer:'[paper:p1] short'}),evidence);assert.equal(result.displayTruncated,false);
+ const analysis={paperId:'p1',decision:'include',score:80,summary:'x'.repeat(1201),evidence:p.abstract};
+ result=parseAnswer(JSON.stringify({...base,answer:'[paper:p1]',analyses:[analysis]}),evidence);assert.equal(result.analyses[0].summary.length,1200);assert.equal(result.displayTruncated,true);
+ result=parseAnswer(JSON.stringify({...base,answer:'[paper:p1]',analyses:Array(9).fill({...analysis,summary:'short'})}),evidence);assert.equal(result.analyses.length,8);assert.equal(result.displayTruncated,true);
+ const many=new Map(Array.from({length:17},(_,i)=>['p'+i,{id:'p'+i,abstract:p.abstract}]));
+ result=parseAnswer(JSON.stringify({answer:'no references',paperIds:[],analyses:[]}),many);assert.equal(result.papers.length,16);assert.equal(result.displayTruncated,true);
+});
