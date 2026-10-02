@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-02T15:12:00Z",
+  "latestVersion": "2026-10-02T15:28:00Z",
   "releases": [
+    {
+      "id": "daily-calendar-fast-navigation-2026-10-02",
+      "at": "2026-10-02T15:28:00Z",
+      "basis": "record",
+      "kind": "fix",
+      "title": "日报月历连续切换年份与月份保持一致",
+      "body": [
+        "月历先在本地同步当前选择，再读取所选月份的归档状态；快速连续输入年份和切换月份时，不再误用上一次服务器返回的年份。",
+        "保留单日展示、历史链接、只读刷新和已有日报数据，不触发模型或修改采集调度。",
+        "日报任务回执同时返回真实批次覆盖和归档状态；缺批次或未通过输出检查时标为部分完成，不能误报全部成功。"
+      ],
+      "sources": [
+        {
+          "label": "日报功能与归档说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/paper-daily.md"
+        }
+      ]
+    },
     {
       "id": "ai-paper-daily-2026-10-02",
       "at": "2026-10-02T15:12:00Z",
