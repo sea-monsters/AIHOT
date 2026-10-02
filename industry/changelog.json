@@ -1,8 +1,27 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-02T13:23:00Z",
+  "latestVersion": "2026-10-02T14:43:00Z",
   "releases": [
+    {
+      "id": "persistent-paper-reader-2026-10-02",
+      "at": "2026-10-02T14:43:00Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "论文已读状态、当前页批量已读与跨设备收藏",
+      "body": [
+        "成功打开论文详情或主动打开论文原文后自动设为已读，以安静底色和次级文字降低视觉干扰，保留标题及收藏标识的清晰度。",
+        "论文列表增加多选框、全选当前页、已选数量、批量已读和设为未读；切换筛选或翻页清空选择，勾选与收藏不会误触发已读。",
+        "条目右上角显示收藏书签；论文阅读记录和收藏按账户持久保存，日报、进展、热点、详情与已入库的跨库检索结果一致，可从收藏页回看。原版订阅内容的本机收藏单独保留。",
+        "保存失败有提示并撤回未保存状态；不改变论文来源、分析、模型配置与采集调度。"
+      ],
+      "sources": [
+        {
+          "label": "论文阅读与收藏说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/paper-reader.md"
+        }
+      ]
+    },
     {
       "id": "selective-paper-processing-2026-10-02",
       "at": "2026-10-02T13:23:00Z",

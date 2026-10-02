@@ -1,3 +1,4 @@
+import {PaperFavorites} from '../components/PaperFavorites';
 import { SITE } from "@aihot/industry/site";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
@@ -7,13 +8,13 @@ import { exportBundle, importBundle, removeStar, useStarred, type ImportReport }
 import { fullDateTime, shortSourceName } from "../lib/format";
 import { IconBookmark, IconDownload, IconClose } from "../components/icons";
 
-/** Shared caches may keep this page for five minutes. */
+/** Personal paper favorites are loaded through an owner-only, no-store endpoint. */
 export function headers() {
-  return { "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=600" };
+  return { "Cache-Control": "private, no-store" };
 }
 
 export function meta() {
-  return pageMeta({ title: "我的收藏", description: `保存在这台设备上的 ${SITE.name} 收藏。`, path: "/starred", noindex: true });
+  return pageMeta({ title: "我的收藏", description: `${SITE.name} 论文收藏与本机订阅收藏。`, path: "/starred", noindex: true });
 }
 
 function reportText(r: ImportReport): string {
@@ -25,7 +26,7 @@ function reportText(r: ImportReport): string {
 }
 
 
-export default function StarredPage() {
+function LegacyStarredPage() {
   const starred = useStarred();
   const [mounted, setMounted] = useState(false);
   const [availability, setAvailability] = useState<Record<string, string>>({});
@@ -140,3 +141,5 @@ export default function StarredPage() {
     </div>
   );
 }
+
+export default function StarredPage(){return <><PaperFavorites/><details className="research-panel"><summary>原版订阅内容的本机收藏</summary><LegacyStarredPage/></details></>}

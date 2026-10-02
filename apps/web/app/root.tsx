@@ -1,3 +1,4 @@
+import {PaperReaderProvider} from './components/PaperReader';
 import { QuickSearch, WebSearch } from "./components/WebSearch";
 import { AIAssistant } from "./components/AIAssistant";
 import { titled } from "./lib/seo";
@@ -105,9 +106,9 @@ export default function App() {
   // The admin has its own chrome.
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return <Outlet />;
   return (
-    <SiteShell changelogVersion={meta.changelogVersion}>
+    <PaperReaderProvider><SiteShell changelogVersion={meta.changelogVersion}>
       <Outlet />
-    </SiteShell>
+    </SiteShell></PaperReaderProvider>
   );
 }
 
