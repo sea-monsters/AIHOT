@@ -1,3 +1,7 @@
+# 当前采集与选择性处理
+
+2026-10-02 更新：当前运行契约以 [Sites 后台更新说明](../sites/RESEARCH_UPDATES.md#current-pipeline-contract-2026-10-02-supersedes-historical-windows-below) 为准：UTC+08 滚动一个日历月、近期 DOI 轮流校对、脚本优先、难题才调用当前已保存模型。旧论文保留。AI 只给摘要证据范围内的暂定重要性与方法证据分，不能当作科学质量核验。以下记录描述来源接入时的历史状态。
+
 # Nature / Science 论文元数据来源
 
 核实与维护日期：2026-10-02

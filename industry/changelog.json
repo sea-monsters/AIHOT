@@ -1,8 +1,28 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-02T11:59:00Z",
+  "latestVersion": "2026-10-02T13:23:00Z",
   "releases": [
+    {
+      "id": "selective-paper-processing-2026-10-02",
+      "at": "2026-10-02T13:23:00Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "最近一月论文更新，脚本优先与选择性 AI 评估",
+      "body": [
+        "采集改为 UTC+08 最近一个日历月，明确到日的在线发表日期优先；旧论文保留，近期已入库 DOI 轮流校对，记录实际字段修订与来源。",
+        "抓取、去重、字段校对、规则评分和基础标签由脚本完成；仅复杂贡献判断、分类歧义或语义关键词需要当前已保存且通过连接测试的模型。缺少摘要不生成结论。",
+        "AI 结果按内容、模型与版本持久化复用，独立展示重要性、摘要方法证据分、置信度和原文引用，不代替脚本分数或作者关键词，也不宣称科学质量已核验。",
+        "每次最多 3 个模型请求，共享现有每日额度；失败和未知结果不自动重复请求，Kimi Code 继续限制无人值守用途。页面只展示当前内容和配置匹配的真实保存结果。",
+        "调度展示改为读取实际 IANA 时区，不改变已有 08:00/20:00 Asia/Singapore 任务。"
+      ],
+      "sources": [
+        {
+          "label": "运行契约、边界与证据说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-ingestion.md"
+        }
+      ]
+    },
     {
       "id": "nature-science-paper-ingestion-2026-10-02",
       "at": "2026-10-02T11:59:00Z",

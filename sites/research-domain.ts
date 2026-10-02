@@ -8,7 +8,13 @@ export const normalizedTitle=(s:string)=>clean(s).normalize('NFKC').toLowerCase(
 export const normalizeDoi=(s:any)=>String(s||'').replace(/^https?:\/\/(?:dx\.)?doi\.org\//i,'').trim().toLowerCase();
 export interface Author {name:string;orcid:string|null;first:boolean;corresponding:boolean|null;affiliations:string[];source:string;affiliationSource?:string}
 export interface Paper {doi:string|null;title:string;url:string;publisher:string;journal:string;sourceId:string;issn:string;publishedAt:string|null;datePrecision:string|null;authors:Author[];affiliations:string[];abstract:string|null;keywords:string[];provenance:Record<string,any>;sourceIndexedAt:string|null;discovery:string;topics?:string[];relevance?:number;priority?:number;reasons?:string[];ruleVersion?:string}
-function dateParts(v:any):{date:string|null;precision:string|null}{const a=v?.['date-parts']?.[0];if(!a?.[0])return {date:null,precision:null};return {date:`${a[0]}${a.length>1?'-'+String(a[1]).padStart(2,'0'):''}${a.length>2?'-'+String(a[2]).padStart(2,'0'):''}`,precision:['year','month','day'][Math.min(a.length,3)-1]};}
+function dateParts(v:any):{date:string|null;precision:string|null}{
+ const a=v?.['date-parts']?.[0];if(!Array.isArray(a)||!Number.isInteger(a[0])||a[0]<1000||a[0]>9999)return {date:null,precision:null};
+ if(a.length>1&&(!Number.isInteger(a[1])||a[1]<1||a[1]>12))return {date:null,precision:null};
+ const date=`${a[0]}${a.length>1?'-'+String(a[1]).padStart(2,'0'):''}${a.length>2?'-'+String(a[2]).padStart(2,'0'):''}`;
+ if(a.length>2&&(!Number.isInteger(a[2])||!Number.isFinite(Date.parse(date+'T00:00:00Z'))||new Date(date+'T00:00:00Z').toISOString().slice(0,10)!==date))return {date:null,precision:null};
+ return {date,precision:['year','month','day'][Math.min(a.length,3)-1]!};
+}
 export function fromCrossref(w:any,s:JournalSource):Paper|null{
  if(w.type!=='journal-article'||!w.DOI||!w.title?.[0])return null;
  const title=clean(w.title[0]);if(/(?:table of contents|publication information|editorial board|list of reviewers|information for authors)/i.test(title))return null;if(/^(?:cover|front (?:matter|cover)|back (?:matter|cover)|table of contents|editorial board|issue information|author index|list of reviewers)$/i.test(title))return null;
