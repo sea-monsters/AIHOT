@@ -53,7 +53,7 @@ test('invalid, zone-less and impossible dates are rejected', () => {
 test('duplicate release IDs and stale version markers are rejected', () => {
   const duplicate = copy(); duplicate.releases[1]!.id = duplicate.releases[0]!.id;
   assert.throws(() => validateChangelog(duplicate), /unique release/);
-  const stale = copy(); stale.latestVersion = stale.releases[1]!.at;
+  const stale = copy(); stale.latestVersion = stale.releases.find(entry => entry.at !== stale.latestVersion)!.at;
   assert.throws(() => validateChangelog(stale), /latestVersion/);
 });
 test('source releases must be newest first and upstream commits cannot follow merge', () => {

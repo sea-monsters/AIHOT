@@ -1,3 +1,4 @@
+import {QuickSearch} from "../WebSearch";
 import {AssistantEntry} from "../AssistantEntry";
 import { SITE } from "@aihot/industry/site";
 import { useEffect, useState } from "react";
@@ -26,7 +27,7 @@ function SideLink({ item, dot }: { item: NavItem; dot: boolean }) {
       to={item.to}
       prefetch="intent"
       aria-current={isActive ? "page" : undefined}
-      className={`flex h-10 items-center gap-2.5 rounded-control px-2.5 text-[14px] transition-colors duration-150 ${
+      className={`flex h-9 items-center gap-2 rounded-control px-2.5 text-[14px] transition-colors duration-150 ${
         isActive ? "bg-accent/10 font-semibold text-ink dark:bg-accent-soft" : "font-medium text-ink-3 hover:bg-bg-sunk hover:text-ink"
       }`}
     >
@@ -42,21 +43,22 @@ function SideLink({ item, dot }: { item: NavItem; dot: boolean }) {
 export function Sidebar({ changelogVersion }: { changelogVersion: string | null }) {
   const dot = useChangelogDot(changelogVersion);
   return (
-    <aside className="sticky top-0 hidden h-dvh w-[180px] shrink-0 flex-col border-r border-line bg-sidebar px-3 pb-3.5 pt-6 lg:flex">
-      <Link to="/" className="mb-4 flex min-h-[64px] flex-col items-start justify-center gap-2 px-1 text-ink" aria-label={`${SITE.name} 首页`}>
+    <aside className="sticky top-0 hidden h-dvh w-[180px] shrink-0 flex-col border-r border-line bg-sidebar px-3 pb-3 pt-4 lg:flex">
+      <Link to="/" className="mb-2 flex min-h-[56px] flex-col items-start justify-center gap-2 px-1 text-ink" aria-label={`${SITE.name} 首页`}>
         <Wordmark size={24} />
         <span className="text-[14px] font-semibold leading-5">{SITE.name}</span>
       </Link>
+      <QuickSearch />
       <nav className="-mx-1 flex-1 overflow-y-auto px-1" aria-label="主导航">
-        {SIDEBAR.map((section) => (
-          <div key={section.title}>
-            <div className="px-2.5 pb-1 pt-3.5 text-[11px] text-ink-4">{section.title}</div>
-            <div className="flex flex-col gap-1">
+        {SIDEBAR.map((section, sectionIndex) => (
+          <section key={section.title} aria-label={section.title} className={sectionIndex?"mt-2 border-t border-line pt-2":"pt-1"}>
+            <h2 className="sr-only">{section.title}</h2>
+            <div className="flex flex-col gap-0.5">
               {section.items.map((item) => (
                 <SideLink key={item.to} item={item} dot={dot} />
               ))}
             </div>
-          </div>
+          </section>
         ))}
       </nav>
       <div className="mt-2 space-y-2.5 px-1 pt-1">

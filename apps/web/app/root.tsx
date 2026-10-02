@@ -1,3 +1,4 @@
+import { QuickSearch, WebSearch } from "./components/WebSearch";
 import { AIAssistant } from "./components/AIAssistant";
 import { titled } from "./lib/seo";
 import { SITE } from "@aihot/industry/site";
@@ -85,12 +86,14 @@ function SiteShell({ changelogVersion, children }: { changelogVersion: string | 
             <Wordmark size={22} />
             <span className="text-[14px] font-semibold leading-5">{SITE.name}</span>
           </Link>
+          <QuickSearch mobile />
           {children}
         </div>
       </main>
       <MobileTabBar changelogVersion={changelogVersion} />
       <BackToTop />
       <AIAssistant />
+      <WebSearch />
     </div>
   );
 }

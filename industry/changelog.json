@@ -1,8 +1,43 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-01T14:41:32Z",
+  "latestVersion": "2026-10-02T02:24:04Z",
   "releases": [
+    {
+      "id": "anysearch-agent-quick-search-2026-10-02",
+      "at": "2026-10-02T02:24:04Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "新增 AnySearch 独立服务与快捷联网检索",
+      "body": [
+        "设置页新增 AnySearch 官方地址与独立加密密钥，可单独允许 Agent 在主动对话中补充网页信息；左侧 Logo 下方和手机页顶提供关键词快捷检索，提交后显示真实标题、摘要、来源链接与检索时间。",
+        "搜索只在主动提交或已启用的 Agent 对话中触发，不采用匿名模式；每次最多 10 条、20 秒，无自动重试。官方接口暂无分页和发布日期，不以检索时间冒充发布时间。缺少密钥时明确引导设置，未把本次离线验证表述为真实搜索已连通。",
+        "网页证据与论文证据分别展示，引用限于实际返回来源；失败、限流与部分结果可见。保留 5 / 15 / 200 工具边界与现有模型配置，重复失败和缓存请求均有防重放保护。"
+      ],
+      "sources": [
+        {
+          "label": "AnySearch 接入与验证说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/anysearch.md"
+        }
+      ]
+    },
+    {
+      "id": "compact-reading-disclosure-2026-10-02",
+      "at": "2026-10-02T02:24:04Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "更新日志可逐条折叠，侧栏与正文更紧凑",
+      "body": [
+        "更新日志保留标题字号，正文、元信息与来源使用更小字号和紧凑行距；点击标题独立展开或收起，最新条目默认展开，日期及条目锚点会展开目标内容。",
+        "左侧导航压缩纵向间距，以细分割线区分栏目并保留无障碍分组标签；论文、日报、进展、热点与检索结果用标题、摘要和元数据的字号及粗细建立层级，手机检索和底部助手入口保持可用。"
+      ],
+      "sources": [
+        {
+          "label": "更新日志界面与维护说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/changelog.md"
+        }
+      ]
+    },
     {
       "id": "layered-ai-tool-limits-2026-10-01",
       "at": "2026-10-01T14:41:32Z",
