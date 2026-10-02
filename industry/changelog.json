@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-02T18:54:00Z",
+  "latestVersion": "2026-10-02T19:33:00Z",
   "releases": [
+    {
+      "id": "sticky-reading-control-rail-2026-10-03",
+      "at": "2026-10-02T19:33:00Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "长正文滚动时，右侧月历与筛选保持可用",
+      "body": [
+        "桌面右栏滚动到窗口顶部附近后停留，阅读较长正文时仍可切换日期、搜索或调整筛选；首页、论文情报、研究进展、热点、论文日报与更新日志统一生效。",
+        "较矮窗口或较长筛选面板在右栏内自然滚动，保留键盘和滚轮操作；窄屏继续使用正文上方可展开面板。沿用暖橙纸张配色与无阴影层级，不覆盖正文。",
+        "仅调整阅读布局，不改变论文数据、已读 / 收藏、模型调用、采集或日报调度。"
+      ],
+      "sources": [
+        {
+          "label": "阅读布局与验证范围",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/reading-design.md"
+        }
+      ]
+    },
     {
       "id": "unified-reading-control-rail-2026-10-03",
       "at": "2026-10-02T18:54:00Z",

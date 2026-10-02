@@ -775,7 +775,9 @@
 @media(min-width:1120px){
  .control-reading-layout{grid-template-columns:minmax(0,1fr) 280px;gap:1.5rem}
  .reading-primary-content{grid-column:1;grid-row:1}
- .reading-control-rail{grid-column:2;grid-row:1}
+ /* No desktop header covers this rail. Leave space below for the back-to-top control.
+    Keep overflow on the sticky item, not its ancestors, and allow wheel scroll chaining. */
+ .reading-control-rail{grid-column:2;grid-row:1;position:sticky;top:1.5rem;align-self:start;max-height:calc(100vh - 6.5rem);max-height:calc(100dvh - 6.5rem);overflow-y:auto;scrollbar-gutter:stable;scroll-padding-block:.5rem}
  .reading-control-toggle{display:none}
  .reading-control-panel[data-open=false]{display:grid}
 }
