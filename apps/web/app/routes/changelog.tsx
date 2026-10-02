@@ -1,3 +1,4 @@
+import {ControlReadingLayout} from '../components/ui/ControlReadingLayout';
 import { SITE } from "@aihot/industry/site";
 import { changelogDays, type Changelog, type ChangeKind, type ChangeRelease } from "@aihot/contracts/changelog";
 import { beijingDate, beijingTime } from "@aihot/contracts/time";
@@ -6,7 +7,7 @@ import { Link, useLoaderData, useLocation, useNavigate } from "react-router";
 import { apiGet } from "../lib/api.server";
 import { pageMeta } from "../lib/seo";
 import { setChangelogSeen } from "../lib/local-state";
-import { AsideCard, ReadingLayout } from "../components/ui/Page";
+import { AsideCard } from "../components/ui/Page";
 import {ChangelogCalendar} from '../features/changelog/Calendar';
 import {calendarToday,updateDays} from '../features/changelog/calendar-domain';
 import {anchorEntries,toggleEntry} from "../features/changelog/disclosure";
@@ -76,7 +77,11 @@ export default function ChangelogPage() {
   const days = changelogDays(data.releases, kind);
   const count = days.reduce((sum, day) => sum + day.entries.length, 0);
   const aside = <>
-    <div className="hidden lg:block">{calendar}</div>
+    {calendar}
+    <section className="reading-filter-card"><h2>变更类型</h2>    <div role="group" aria-label="按变更类型筛选" className="reading-kind-filters">
+      {[null, ...KINDS].map(value => <button key={value ?? 'all'} type="button" onClick={() => setKind(value)} aria-pressed={kind === value} className={`rounded-full border px-3 py-2 text-sm transition-colors ${kind === value ? 'border-accent bg-selected text-accent-ink' : 'border-line bg-surface text-ink-2 hover:bg-bg-sunk'}`}>{value ? LABELS[value] : '全部'} <span className="ml-1 text-xs">{value ? data.releases.filter(entry => entry.kind === value).length : data.releases.length}</span></button>)}
+    </div>
+</section>
     <AsideCard title="记录口径">
       <p className="text-sm leading-relaxed text-ink-3">所有日期统一为 UTC+08。历史条目按代码提交或上游合入日期归档；本页维护记为「维护记录」，不推测精确上线时间。</p>
       <p className="mt-2 text-xs leading-relaxed text-ink-3">每条记录附代码来源。上游更新只有合入本站 fork 后才进入主时间线。</p>
@@ -86,16 +91,13 @@ export default function ChangelogPage() {
       <Link to="/settings#diagnostics" className="mt-3 inline-block text-sm text-accent underline underline-offset-4">查看运行日志</Link>
     </AsideCard>
   </>;
-  return <ReadingLayout aside={aside} className="changelog-page">
+  return <div className="research-page changelog-page">
     <header className="pb-5">
       <h1 className="text-2xl font-semibold leading-snug text-ink">更新日志</h1>
       <p className="mt-2 text-sm leading-relaxed text-ink-3">网站变更与 GitHub 上游同步，按日记录，最新在前</p>
       <p className="mt-1 text-xs text-ink-3">UTC+08 · 按提交 / 合入 / 维护日期归档，非精确上线时间</p>
     </header>
-    <div role="group" aria-label="按变更类型筛选" className="mb-4 flex flex-wrap gap-2">
-      {[null, ...KINDS].map(value => <button key={value ?? 'all'} type="button" onClick={() => setKind(value)} aria-pressed={kind === value} className={`rounded-full border px-3 py-2 text-sm transition-colors ${kind === value ? 'border-accent bg-selected text-accent-ink' : 'border-line bg-surface text-ink-2 hover:bg-bg-sunk'}`}>{value ? LABELS[value] : '全部'} <span className="ml-1 text-xs">{value ? data.releases.filter(entry => entry.kind === value).length : data.releases.length}</span></button>)}
-    </div>
-    <div className="mb-5 lg:hidden">{calendar}</div>
+    <ControlReadingLayout label="更新日期与筛选" summary={`${selected || month} · ${kind ? LABELS[kind] : '全部类型'}`} rail={aside}>
     <p className="mb-4 text-xs text-ink-3" aria-live="polite">{days.length} 天 · {count} 条变更</p>
     <div className="space-y-4" data-changelog-timeline>
       {days.map(day => {
@@ -110,5 +112,5 @@ export default function ChangelogPage() {
       })}
       {days.length === 0 && <p className="card p-6 text-sm text-ink-3">暂无这一类型的变更记录</p>}
     </div>
-  </ReadingLayout>;
+  </ControlReadingLayout></div>;
 }

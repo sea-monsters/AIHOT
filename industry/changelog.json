@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-02T15:59:00Z",
+  "latestVersion": "2026-10-02T18:54:00Z",
   "releases": [
+    {
+      "id": "unified-reading-control-rail-2026-10-03",
+      "at": "2026-10-02T18:54:00Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "月历与论文筛选统一放在右侧，正文居中阅读",
+      "body": [
+        "论文日报与更新日志共用右侧月历栏；首页、论文情报、研究进展和热点榜的现有筛选也归入同一右栏，正文与结果列表保留在中间。",
+        "窄桌面与手机使用正文上方的可展开日期 / 筛选面板，默认收起以腾出阅读空间。每页只保留一套控件，年份、月份、日期跳转、类型筛选、重置与翻页继续沿用原有行为。",
+        "沿用暖橙淡黄纸张主题和无阴影层级；本次仅调整布局，不改变 AI 调用、日报生成、采集调度、论文数据、已读或收藏。"
+      ],
+      "sources": [
+        {
+          "label": "统一阅读布局与验证范围",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/reading-design.md"
+        }
+      ]
+    },
     {
       "id": "reading-search-breakpoint-2026-10-02",
       "at": "2026-10-02T15:59:00Z",
