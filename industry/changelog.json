@@ -1,8 +1,24 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-02T19:33:00Z",
+  "latestVersion": "2026-10-02T19:41:00Z",
   "releases": [
+    {
+      "id": "sticky-rail-bottom-boundary-2026-10-03",
+      "at": "2026-10-02T19:41:00Z",
+      "basis": "record",
+      "kind": "fix",
+      "title": "修正长筛选栏在正文底部的可见边界",
+      "body": [
+        "实际长页面检查发现，页面底部原有留白会把较高的右栏向上挤出少量。现把该留白纳入右栏高度限制，在正文底部仍保留完整可视面板和内部滚动。"
+      ],
+      "sources": [
+        {
+          "label": "阅读布局与验证范围",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/reading-design.md"
+        }
+      ]
+    },
     {
       "id": "sticky-reading-control-rail-2026-10-03",
       "at": "2026-10-02T19:33:00Z",
