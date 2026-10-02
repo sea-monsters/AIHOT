@@ -26,12 +26,13 @@ const GROUPS: Array<{ title: string; rows: Row[] }> = [
       { to: "/topics", label: "主题索引", icon: <IconGrid size={18} /> },
       ...(FEATURES.leaderboard ? [{ to: "/leaderboard", label: "模型榜", icon: <IconChart size={18} /> }] : []),
       ...(FEATURES.codexResetMonitor ? [{ to: "/codex-reset", label: "Tibo重置监控", icon: <IconHistory size={18} /> }] : []),
-      { to: "/agent", label: "Agent 接入", icon: <IconPlug size={18} /> },
+      { to: "/agent", label: "运行说明", icon: <IconPlug size={18} /> },
     ],
   },
   {
     title: "偏好",
     rows: [
+      { to: "/settings", label: "网站设置", icon: <IconPlug size={18} /> },
       { to: "/hot", label: "热点榜", icon: <IconFlame size={18} /> },
       { to: "/starred", label: "收藏", icon: <IconBookmark size={18} /> },
     ],
@@ -49,7 +50,7 @@ const GROUPS: Array<{ title: string; rows: Row[] }> = [
 function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="card overflow-hidden">
-      <div className="px-4 pb-1 pt-3 text-[11.5px] text-ink-4">{title}</div>
+      <div className="bg-section px-4 py-2 text-[11.5px] text-ink-3">{title}</div>
       <ul className="divide-y divide-line-soft">{children}</ul>
     </section>
   );

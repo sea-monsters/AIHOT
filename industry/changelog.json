@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-02T02:24:04Z",
+  "latestVersion": "2026-10-02T11:34:37Z",
   "releases": [
+    {
+      "id": "surface-calendar-navigation-2026-10-02",
+      "at": "2026-10-02T11:34:37Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "新增更新月历，按底色层级梳理阅读焦点",
+      "body": [
+        "更新日志右侧改为月历，默认显示 UTC+08 当前月；有更新的日期以底色和条数共同标记，可直接输入年份、选择月份或逐月切换，点击日期跳转并展开对应记录。手机显示紧凑月历，保留类型筛选与逐条折叠。",
+        "页面底色、导航、栏目标题、正文与补充信息采用克制的相对色深区分，统一浅色与深色层级；移除卡片、助手和联网检索窗口的装饰阴影，保留清晰边界与键盘焦点。修正深色主按钮文字对比度。",
+        "按真实站点的阅读与跳转体验，补上手机“更多”中的网站设置入口；原“Agent 接入”仅展示当前版本说明，因此改为“运行说明”，Agent 对话入口保持可用。"
+      ],
+      "sources": [
+        {
+          "label": "月历、阅读层级与验证说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/changelog.md"
+        }
+      ]
+    },
     {
       "id": "anysearch-agent-quick-search-2026-10-02",
       "at": "2026-10-02T02:24:04Z",

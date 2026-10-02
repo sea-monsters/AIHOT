@@ -28,7 +28,7 @@ function SideLink({ item, dot }: { item: NavItem; dot: boolean }) {
       prefetch="intent"
       aria-current={isActive ? "page" : undefined}
       className={`flex h-9 items-center gap-2 rounded-control px-2.5 text-[14px] transition-colors duration-150 ${
-        isActive ? "bg-accent/10 font-semibold text-ink dark:bg-accent-soft" : "font-medium text-ink-3 hover:bg-bg-sunk hover:text-ink"
+        isActive ? "bg-selected font-semibold text-accent-ink" : "font-medium text-ink-3 hover:bg-bg-sunk hover:text-ink"
       }`}
     >
       <span className={`flex w-[22px] shrink-0 justify-center ${isActive ? "text-accent" : ""}`}>

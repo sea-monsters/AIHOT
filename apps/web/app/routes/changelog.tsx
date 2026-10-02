@@ -1,12 +1,14 @@
 import { SITE } from "@aihot/industry/site";
 import { changelogDays, type Changelog, type ChangeKind, type ChangeRelease } from "@aihot/contracts/changelog";
 import { beijingDate, beijingTime } from "@aihot/contracts/time";
-import { useEffect, useState } from "react";
-import { Link, useLoaderData, useLocation } from "react-router";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { Link, useLoaderData, useLocation, useNavigate } from "react-router";
 import { apiGet } from "../lib/api.server";
 import { pageMeta } from "../lib/seo";
 import { setChangelogSeen } from "../lib/local-state";
 import { AsideCard, ReadingLayout } from "../components/ui/Page";
+import {ChangelogCalendar} from '../features/changelog/Calendar';
+import {calendarToday,updateDays} from '../features/changelog/calendar-domain';
 import {anchorEntries,toggleEntry} from "../features/changelog/disclosure";
 import { Inline, dateHeading } from "../features/changelog/text";
 
@@ -14,19 +16,19 @@ export function headers() {
   return { "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=600" };
 }
 export async function loader({ request }: { request: Request }) {
-  return apiGet<Changelog>("/api/site/changelog", { signal: request.signal });
+  const data = await apiGet<Changelog>("/api/site/changelog", { signal: request.signal });
+  return {...data, calendarToday: calendarToday()};
 }
 export function meta() {
   return pageMeta({ title: "更新日志", description: `${SITE.name} 按日整理的功能更新、问题修复与 GitHub 上游同步记录。`, path: "/changelog", image: "/og/pages/changelog.png" });
 }
 const KINDS: ChangeKind[] = ["feature", "fix", "upstream"];
 const LABELS: Record<ChangeKind, string> = { feature: "功能更新", fix: "问题修复", upstream: "上游同步" };
-const COLORS: Record<ChangeKind, string> = { feature: "bg-accent/10 text-accent", fix: "bg-ok/10 text-ok", upstream: "bg-amber/10 text-amber" };
+const COLORS: Record<ChangeKind, string> = { feature: "bg-accent/10 text-accent", fix: "bg-ok/10 text-ok-ink", upstream: "bg-amber/10 text-amber-ink" };
 const BASIS: Record<ChangeRelease["basis"], string> = { commit: "代码提交", integration: "合入 fork", record: "维护记录" };
 
 export function Entry({ entry, open, onToggle }: { entry: ChangeRelease; open:boolean; onToggle:()=>void }) {
-  return <li id={`change-${entry.id}`} className="relative scroll-mt-8 border-l border-line pb-5 pl-5 last:pb-2 sm:pl-7">
-    <span className="absolute -left-[5px] top-2 h-2 w-2 rounded-full bg-accent ring-4 ring-surface" aria-hidden="true" />
+  return <li id={`change-${entry.id}`} className="changelog-entry scroll-mt-8">
     <article className="min-w-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
         <span className={`rounded-full px-2 py-0.5 font-medium ${COLORS[entry.kind]}`}>{LABELS[entry.kind]}</span>
@@ -60,16 +62,21 @@ export default function ChangelogPage() {
   useEffect(() => setChangelogSeen(data.latestVersion), [data.latestVersion]);
   const [kind, setKind] = useState<ChangeKind | null>(null);
   const [expanded,setExpanded]=useState<Record<string,boolean>>(()=>({[data.releases[0]?.id]:true}));
-  const location=useLocation();
-  function reveal(hash:string){const ids=anchorEntries(hash,data.releases);if(ids.length){setKind(null);setExpanded(v=>({...v,...Object.fromEntries(ids.map(id=>[id,true]))}))}}
+  const location=useLocation(),navigate=useNavigate();
+  const [today,setToday]=useState(data.calendarToday),[month,setMonth]=useState(data.calendarToday.slice(0,7));
+  const [target,setTarget]=useState<{hash:string;sequence:number}|null>(null);
+  const calendarDays=useMemo(()=>updateDays(data.releases),[data.releases]);
+  useEffect(()=>{const current=calendarToday();setToday(current);setMonth(value=>value===data.calendarToday.slice(0,7)?current.slice(0,7):value)},[data.calendarToday]);
+  function reveal(hash:string){const ids=anchorEntries(hash,data.releases);if(ids.length){setKind(null);setExpanded(v=>({...v,...Object.fromEntries(ids.map(id=>[id,true]))}));setTarget(v=>({hash,sequence:(v?.sequence??0)+1}))}}
   useEffect(()=>{reveal(location.hash)},[location.hash,data.releases]);
+  useEffect(()=>{if(!target)return;const frame=requestAnimationFrame(()=>{const element=document.getElementById(target.hash.slice(1));if(!element)return;element.scrollIntoView({block:'start'});const heading=element.querySelector<HTMLElement>('h2, h3 button');heading?.focus({preventScroll:true})});return()=>cancelAnimationFrame(frame)},[target]);
+  function jump(hash:string,event:MouseEvent<HTMLAnchorElement>){if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;event.preventDefault();reveal(hash);navigate({pathname:location.pathname,search:location.search,hash},{preventScrollReset:true})}
+  const selected=location.hash.startsWith('#d-')&&calendarDays[location.hash.slice(3)]?location.hash.slice(3):null;
+  const calendar=<ChangelogCalendar today={today} month={month} selected={selected} days={calendarDays} onMonth={setMonth} onDate={(date,event)=>jump(`#d-${date}`,event)}/>;
   const days = changelogDays(data.releases, kind);
   const count = days.reduce((sum, day) => sum + day.entries.length, 0);
-  const dateLinks = <nav aria-label="按日期跳转" className="flex flex-wrap gap-2 lg:flex-col">
-    {days.map(day => <a key={day.date} href={`#d-${day.date}`} onClick={()=>reveal(`#d-${day.date}`)} className="flex items-center justify-between gap-3 rounded-control border border-line-soft px-3 py-2 text-sm text-ink-2 hover:bg-bg-sunk"><span className="mono">{day.date}</span><span className="text-xs text-ink-3">{day.entries.length} 条</span></a>)}
-  </nav>;
   const aside = <>
-    <AsideCard title="按日期跳转" className="hidden lg:block">{dateLinks}</AsideCard>
+    <div className="hidden lg:block">{calendar}</div>
     <AsideCard title="记录口径">
       <p className="text-sm leading-relaxed text-ink-3">所有日期统一为 UTC+08。历史条目按代码提交或上游合入日期归档；本页维护记为「维护记录」，不推测精确上线时间。</p>
       <p className="mt-2 text-xs leading-relaxed text-ink-3">每条记录附代码来源。上游更新只有合入本站 fork 后才进入主时间线。</p>
@@ -79,26 +86,26 @@ export default function ChangelogPage() {
       <Link to="/settings#diagnostics" className="mt-3 inline-block text-sm text-accent underline underline-offset-4">查看运行日志</Link>
     </AsideCard>
   </>;
-  return <ReadingLayout aside={aside}>
+  return <ReadingLayout aside={aside} className="changelog-page">
     <header className="pb-5">
       <h1 className="text-2xl font-semibold leading-snug text-ink">更新日志</h1>
       <p className="mt-2 text-sm leading-relaxed text-ink-3">网站变更与 GitHub 上游同步，按日记录，最新在前</p>
       <p className="mt-1 text-xs text-ink-3">UTC+08 · 按提交 / 合入 / 维护日期归档，非精确上线时间</p>
     </header>
     <div role="group" aria-label="按变更类型筛选" className="mb-4 flex flex-wrap gap-2">
-      {[null, ...KINDS].map(value => <button key={value ?? 'all'} type="button" onClick={() => setKind(value)} aria-pressed={kind === value} className={`rounded-full border px-3 py-2 text-sm transition-colors ${kind === value ? 'border-accent bg-accent text-white' : 'border-line bg-surface text-ink-2 hover:bg-bg-sunk'}`}>{value ? LABELS[value] : '全部'} <span className="ml-1 text-xs">{value ? data.releases.filter(entry => entry.kind === value).length : data.releases.length}</span></button>)}
+      {[null, ...KINDS].map(value => <button key={value ?? 'all'} type="button" onClick={() => setKind(value)} aria-pressed={kind === value} className={`rounded-full border px-3 py-2 text-sm transition-colors ${kind === value ? 'border-accent bg-selected text-accent-ink' : 'border-line bg-surface text-ink-2 hover:bg-bg-sunk'}`}>{value ? LABELS[value] : '全部'} <span className="ml-1 text-xs">{value ? data.releases.filter(entry => entry.kind === value).length : data.releases.length}</span></button>)}
     </div>
-    <div className="mb-5 lg:hidden">{dateLinks}</div>
+    <div className="mb-5 lg:hidden">{calendar}</div>
     <p className="mb-4 text-xs text-ink-3" aria-live="polite">{days.length} 天 · {count} 条变更</p>
     <div className="space-y-4" data-changelog-timeline>
       {days.map(day => {
         const heading = dateHeading(day.date);
-        return <section key={day.date} id={`d-${day.date}`} className="card scroll-mt-6 px-4 py-4 sm:px-6" aria-labelledby={`heading-${day.date}`}>
-          <h2 id={`heading-${day.date}`} className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line-soft pb-3">
-            <a href={`#d-${day.date}`} onClick={()=>reveal(`#d-${day.date}`)} className="text-lg font-semibold text-ink hover:text-accent"><time dateTime={day.date}>{heading.label}</time></a>
+        return <section key={day.date} id={`d-${day.date}`} className="changelog-day card scroll-mt-6" aria-labelledby={`heading-${day.date}`}>
+          <h2 id={`heading-${day.date}`} tabIndex={-1} className="changelog-day-heading flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <a href={`#d-${day.date}`} onClick={event=>jump(`#d-${day.date}`,event)} className="text-lg font-semibold text-ink hover:text-accent"><time dateTime={day.date}>{heading.label}</time></a>
             <span className="text-xs text-ink-3">{heading.weekday} · {day.entries.length} 条</span>
           </h2>
-          <ol className="ml-1">{day.entries.map(entry => <Entry key={entry.id} entry={entry} open={!!expanded[entry.id]} onToggle={()=>setExpanded(v=>toggleEntry(v,entry.id))} />)}</ol>
+          <ol className="changelog-entries">{day.entries.map(entry => <Entry key={entry.id} entry={entry} open={!!expanded[entry.id]} onToggle={()=>setExpanded(v=>toggleEntry(v,entry.id))} />)}</ol>
         </section>;
       })}
       {days.length === 0 && <p className="card p-6 text-sm text-ink-3">暂无这一类型的变更记录</p>}
