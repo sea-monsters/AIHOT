@@ -1,4 +1,4 @@
-import {TOPICS,RESEARCH_SOURCES} from './research-config.ts';
+import {PUBLISHERS,TOPICS,RESEARCH_SOURCES} from './research-config.ts';
 import {journalMetric,type JournalMetric} from './journal-metrics.ts';
 import type {Paper} from './research-domain.ts';
 export const DIGEST_VERSION='hkis-weekly-extractive-v1';
@@ -51,7 +51,7 @@ export function buildWeeklyDigest(papers:StoredPaper[],at=new Date(),filters:{to
   const publication=publicationDay(p);if(!publication.date){exclusions.missingOrImpreciseDate++;continue;}if(publication.date>window.endDate){exclusions.futureDate++;continue;}if(publication.date<window.startDate){exclusions.outsideWindow++;continue;}
   candidates.push({id:p.id,reference:0,title:p.title,doi:p.doi,url:p.doi?`https://doi.org/${encodeURI(p.doi)}`:p.url,detailUrl:'/research/'+p.id,journal:p.journal,publisher:p.publisher,sourceId:p.sourceId,publicationDate:publication.date,dateBasis:publication.basis,metric:journalMetric(p.sourceId),topics,keywords:p.keywords,extractedKeywords:extractedKeywords(p),hasAbstract:!!p.abstract?.trim(),abstractSource:p.provenance?.abstract||null,evidence:evidenceExcerpt(p)});
  }
- const topic=TOPICS.some(t=>t.id===filters.topic)?filters.topic!:'',publisher=['IEEE','Wiley','Elsevier'].includes(filters.publisher||'')?filters.publisher!:'';
+ const topic=TOPICS.some(t=>t.id===filters.topic)?filters.topic!:'',publisher=PUBLISHERS.includes(filters.publisher||'')?filters.publisher!:'';
  const selected=candidates.filter(p=>(!topic||p.topics.includes(topic))&&(!publisher||p.publisher===publisher)).sort(compareJif).map((p,i)=>({...p,reference:i+1}));
  const groups=TOPICS.map(t=>{const members=selected.filter(p=>p.topics.includes(t.id));const counts=new Map<string,number>();for(const p of members)for(const k of new Set(p.extractedKeywords))counts.set(k,(counts.get(k)||0)+1);
   const keywordGroups=[...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,6).map(([label,count])=>({label,count,paperIds:members.filter(p=>p.extractedKeywords.includes(label)).map(p=>p.id)}));

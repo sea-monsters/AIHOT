@@ -1,5 +1,6 @@
-export type Publisher = 'IEEE'|'Wiley'|'Elsevier';
-export interface JournalSource {id:string;publisher:Publisher;name:string;issn:string;rss:string;homepage:string}
+export const PUBLISHERS:string[]=['IEEE','Wiley','Elsevier','Nature','Science'];
+export type Publisher = 'IEEE'|'Wiley'|'Elsevier'|'Nature'|'Science';
+export interface JournalSource {id:string;publisher:Publisher;name:string;issn:string;rss:string;homepage:string;topicFilter?:boolean;initialDays?:number;publisherName?:string;feedCoverage?:string;verifiedAt?:string}
 export const RESEARCH_SOURCES:JournalSource[]=[
  {id:'ieee-ted',publisher:'IEEE',name:'IEEE Transactions on Electron Devices',issn:'0018-9383',rss:'https://ieeexplore.ieee.org/rss/TOC16.XML',homepage:'https://ieeexplore.ieee.org/xpl/RecentIssue.jsp?punumber=16'},
  {id:'ieee-edl',publisher:'IEEE',name:'IEEE Electron Device Letters',issn:'0741-3106',rss:'https://ieeexplore.ieee.org/rss/TOC55.XML',homepage:'https://ieeexplore.ieee.org/xpl/RecentIssue.jsp?punumber=55'},
@@ -10,6 +11,14 @@ export const RESEARCH_SOURCES:JournalSource[]=[
  {id:'elsevier-sse',publisher:'Elsevier',name:'Solid-State Electronics',issn:'0038-1101',rss:'https://rss.sciencedirect.com/publication/science/00381101',homepage:'https://www.sciencedirect.com/journal/solid-state-electronics'},
  {id:'elsevier-mee',publisher:'Elsevier',name:'Microelectronic Engineering',issn:'0167-9317',rss:'https://rss.sciencedirect.com/publication/science/01679317',homepage:'https://www.sciencedirect.com/journal/microelectronic-engineering'},
  {id:'elsevier-sna',publisher:'Elsevier',name:'Sensors and Actuators A: Physical',issn:'0924-4247',rss:'https://rss.sciencedirect.com/publication/science/09244247',homepage:'https://www.sciencedirect.com/journal/sensors-and-actuators-a-physical'},
+ {id:'nature',publisher:'Nature',name:'Nature',issn:'1476-4687',rss:'https://www.nature.com/nature.rss',homepage:'https://www.nature.com/',topicFilter:true,initialDays:7,publisherName:'Springer Nature',feedCoverage:'综合期刊；RSS 同时含新闻与评论',verifiedAt:'2026-10-02'},
+ {id:'nature-electronics',publisher:'Nature',name:'Nature Electronics',issn:'2520-1131',rss:'https://www.nature.com/natelectron.rss',homepage:'https://www.nature.com/natelectron/',topicFilter:true,initialDays:7,publisherName:'Springer Nature',feedCoverage:'电子器件、存储、集成；滚动 RSS 范围有限',verifiedAt:'2026-10-02'},
+ {id:'nature-photonics',publisher:'Nature',name:'Nature Photonics',issn:'1749-4893',rss:'https://www.nature.com/nphoton.rss',homepage:'https://www.nature.com/nphoton/',topicFilter:true,initialDays:7,publisherName:'Springer Nature',feedCoverage:'光电器件、探测与成像；按研究主题筛选',verifiedAt:'2026-10-02'},
+ {id:'nature-nanotechnology',publisher:'Nature',name:'Nature Nanotechnology',issn:'1748-3395',rss:'https://www.nature.com/nnano.rss',homepage:'https://www.nature.com/nnano/',topicFilter:true,initialDays:7,publisherName:'Springer Nature',feedCoverage:'纳米器件与制造；排除无关方向',verifiedAt:'2026-10-02'},
+ {id:'nature-materials',publisher:'Nature',name:'Nature Materials',issn:'1476-4660',rss:'https://www.nature.com/nmat.rss',homepage:'https://www.nature.com/nmat/',topicFilter:true,initialDays:7,publisherName:'Springer Nature',feedCoverage:'界面、介电、铁电与输运；按研究主题筛选',verifiedAt:'2026-10-02'},
+ {id:'nature-communications',publisher:'Nature',name:'Nature Communications',issn:'2041-1723',rss:'https://www.nature.com/ncomms.rss',homepage:'https://www.nature.com/ncomms/',topicFilter:true,initialDays:7,publisherName:'Springer Nature',feedCoverage:'综合期刊；滚动 RSS 很短，以注册元数据增量为主',verifiedAt:'2026-10-02'},
+ {id:'science',publisher:'Science',name:'Science',issn:'1095-9203',rss:'https://feeds.science.org/rss/science-aop.xml',homepage:'https://www.science.org/journal/science',topicFilter:true,initialDays:7,publisherName:'AAAS',feedCoverage:'First Release 仅含部分提前发表论文，非完整目录',verifiedAt:'2026-10-02'},
+ {id:'science-advances',publisher:'Science',name:'Science Advances',issn:'2375-2548',rss:'https://feeds.science.org/rss/science-advances.xml',homepage:'https://www.science.org/journal/sciadv',topicFilter:true,initialDays:7,publisherName:'AAAS',feedCoverage:'综合期刊；TOC RSS 与注册元数据互补',verifiedAt:'2026-10-02'},
 ];
 export const TOPICS=[
  {id:'cis',label:'图像传感器 / CIS / PPD',weight:55,pattern:/\b(?:image sensors?|CMOS imag(?:e|ing)|pinned photodiodes?|single.photon avalanche|SPAD|event.based (?:vision|sensor)|pixel (?:noise|sensor))\b/i},

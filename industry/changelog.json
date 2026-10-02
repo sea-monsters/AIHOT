@@ -1,8 +1,27 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-02T11:34:37Z",
+  "latestVersion": "2026-10-02T11:59:00Z",
   "releases": [
+    {
+      "id": "nature-science-paper-ingestion-2026-10-02",
+      "at": "2026-10-02T11:59:00Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "扩展 Nature 与 Science 论文来源，完善采集字段与限流处理",
+      "body": [
+        "新增 Nature、Nature Electronics、Nature Photonics、Nature Nanotechnology、Nature Materials、Nature Communications、Science 和 Science Advances，合计 17 本已配置期刊。新增来源按现有半导体主题保守筛选，并接入论文库、日报、研究进展、热点与助手检索。",
+        "Nature 与 Science First Release 导读独立标注；Science Advances 只提取明确的 Abstract 区段。保留真实作者、单位、DOI、日期精度与字段来源，缺失字段不生成替代内容。新增来源首次仅检查近 7 天索引记录。",
+        "跨来源共享 OpenAlex 限流退避，长 Retry-After 不提前重试；分页、源失败与筛除数量分别记录。每轮采集有页数上限，不自动使用已保存的学术检索密钥或调用付费模型。",
+        "设置与论文库共用已核实的调度状态；期望间隔不会创建任务。每 12 小时自动运行仍须以实际关联任务的启用状态为准，不以页面配置代替调度。"
+      ],
+      "sources": [
+        {
+          "label": "期刊来源、字段与后台更新说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-ingestion.md"
+        }
+      ]
+    },
     {
       "id": "surface-calendar-navigation-2026-10-02",
       "at": "2026-10-02T11:34:37Z",

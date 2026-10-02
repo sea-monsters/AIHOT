@@ -10,5 +10,6 @@ if(input.schedule){console.log(JSON.stringify({schedule:await call('/api/site/re
 const before=await call('/api/site/research/status');
 if(input.readOnly){console.log(JSON.stringify(before));process.exit(0)}
 const ids=input.sourceIds||before.sources.map(s=>s.id);const results=[];
-for(const sourceId of ids){let result;do{result=await call('/api/site/research/sync',{sourceId,maxPages:1});results.push(result);console.log(JSON.stringify(result));if(result.status==='error'||result.status==='busy')break;}while(input.drain&&result.pending)}
+const pageLimit=Math.min(2,Math.max(1,Number(input.maxPagesPerSource)||1));
+for(const sourceId of ids){for(let page=0;page<pageLimit;page++){let result;try{result=await call('/api/site/research/sync',{sourceId,maxPages:1})}catch(e){result={sourceId,status:'error',error:String(e.message).slice(0,160)}}results.push(result);console.log(JSON.stringify(result));if(result.status==='error'||result.status==='busy'||!result.pending)break;}}
 const after=await call('/api/site/research/status');console.log(JSON.stringify({verification:{total:after.total,counts:after.counts,sources:after.sources,schedule:after.schedule},runs:results.length}));

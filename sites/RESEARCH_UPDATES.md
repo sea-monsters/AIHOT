@@ -1,6 +1,6 @@
 # HKIS scholarly update operations
 
-This is a private, owner-only scholarly discovery database. It currently monitors nine core journals from IEEE, Wiley and Elsevier, not their entire catalogs. No paid model or publisher API is enabled.
+This is a private, owner-only scholarly discovery database. It currently monitors 17 configured journals from IEEE, Wiley, Elsevier, Nature Portfolio (Springer Nature) and Science (AAAS), not their entire catalogs. No paid model or publisher API is enabled.
 
 ## Sources and field semantics
 
@@ -35,12 +35,12 @@ The owner-private Site's existing platform service access is the supported write
 
 1. Read this same Site using the native Sites `get_site` operation. Confirm active, published and still owner-private. Obtain its current live URL and existing service credential from that result. Never generate/rotate a credential, save one to source or logs, or send it anywhere except the exact returned Site origin.
 2. GET `/api/site/research/status` using `OAI-Sites-Authorization: Bearer <current service credential>`. Inspect the configured source IDs and current source errors.
-3. Serially POST `/api/site/research/sync` with JSON `{"sourceId":"<configured id>","maxPages":1}` for each of the nine sources. Use the same service header only to this Site. Do not follow redirects with credentials.
-4. For results with `pending=true`, continue the same source until pending becomes false. Each request is bounded to one Crossref page. Cursor windows are persisted after successful pages; no watermark advances past unread records. HTTP/source failures preserve good data and are retryable. One transient request failure may be retried after backoff. If still failing, leave the cursor and report the actionable failure; do not endlessly retry denied publisher channels.
+3. Serially POST `/api/site/research/sync` with JSON `{"sourceId":"<configured id>","maxPages":1}` for each configured source. Use the same service header only to this Site. Do not follow redirects with credentials.
+4. For results with `pending=true`, make at most one additional request for that source in the same scheduled run (maximum two pages per source per run). Each request is bounded to one Crossref page. Leave any remaining cursor for the next run; do not drain an unbounded backfill. Cursor windows are persisted after successful pages; no watermark advances past unread records. HTTP/source failures preserve good data and are retryable. One transient request failure may be retried after backoff. If still failing, leave the cursor and report the actionable failure; do not endlessly retry denied publisher channels.
 5. GET status again. Verify source `last_success`, row counts, per-field coverage, and terminal run states through this data path or native Sites database readback. A completed request is not evidence of a complete catalog.
 6. Routine data updates do not rebuild or republish the Site and do not push runtime data or credentials to GitHub. Notify the owner only for new actionable collection failures, missing supported access, or an enabled schedule that cannot run. Known Wiley/Elsevier RSS restrictions are expected when Crossref still succeeds; do not send repeat alerts for those warnings.
 
-`refresh-research.mjs` is an optional bounded orchestrator for steps 2–5. It takes one JSON object on hidden stdin and never writes credentials. Pass the verified baseUrl/token, optional sourceIds, and `drain:true` for the initial backfill. For scheduled updates, the same setting consumes pending pages while the fetch succeeds. No local authoring files are needed when making the equivalent HTTP calls directly.
+`refresh-research.mjs` is an optional bounded orchestrator for steps 2–5. It takes one JSON object on hidden stdin and never writes credentials. Pass the verified baseUrl/token, optional sourceIds, and `maxPagesPerSource` (1–2, default 1). Initial validation uses one page per source. Scheduled updates may use two pages per source and preserve remaining pagination for the next run. The obsolete `drain` option no longer enables an unbounded loop. No local authoring files are needed when making the equivalent HTTP calls directly.
 
 ## Scheduling truth
 
@@ -78,3 +78,25 @@ September 30 validation note: full project typecheck, all 14 research/weekly dom
 - No schema/data migration, paid provider request, schedule change or destructive operation is part of this update.
 
 Validation adds nine domain tests covering dates/midnight, latest-record default, future/imprecise dates, missingness/provenance, grounded extracts, topic scope, consistent filters and pagination. Worker integration checks actual stored fixtures through `/all` and `/daily`, archive/detail routes, empty dates, exact links, two responsive entry controls and one dialog. Existing model tests remain mocked.
+
+
+## Nature / Science metadata expansion (2026-10-02)
+
+Eight journal sources were added to the nine existing ones. Exact current online ISSNs, verified publisher homepages and feeds are in `research-config.ts`; all eight have an initial seven-day index lookback, the existing 90-day publication bound, and conservative deterministic title/abstract/author-keyword screening against the user's existing semiconductor topics. No model is called. Original sources keep their previous initial 45-day index window. Unmatched new-source records are counted as filtered, not stored; missing abstracts can cause relevant papers with vague titles to be missed. This is not comprehensive literature coverage, nor proof that a deposited `journal-article` record is original research (editorials also use that registry type).
+
+- Nature, Nature Electronics, Nature Photonics, Nature Nanotechnology, Nature Materials, Nature Communications: their official homepages link `https://www.nature.com/{nature,natelectron,nphoton,nnano,nmat,ncomms}.rss`. Nature's RDF feeds provide repeated `dc:creator`, `dc:date`, DOI and an HTML bibliographic header plus a publisher summary. The summary is kept as `provenance.publisherSummary` and displayed separately; it never becomes an abstract or conclusion. The feeds sampled on October 2 contain 75 items for Nature and only 8 each for the other titles. Crossref is the incremental discovery channel.
+- Science, ISSN 1095-9203: `https://feeds.science.org/rss/science-aop.xml` is the verified Science First Release feed and links to the official journal. It covers selected ahead-of-print papers only. Its description is a teaser, not an abstract. The similarly named `science.xml` is a news feed and is deliberately excluded.
+- Science Advances, ISSN 2375-2548: `https://feeds.science.org/rss/science-advances.xml` is the verified journal TOC feed. Only an explicit `section id="abstract"` in its content is accepted as an RSS abstract; its truncated description remains a separate summary. Both Science feeds carry DOI in the article URL and dates in `pubDate`; author/affiliation fields are supplemented only when present in DOI-matched public metadata.
+- Crossref stores deposited authors/author-affiliations/actual JATS abstract where supplied. OpenAlex anonymous public metadata remains optional exact-DOI enrichment. A 429 now sets a shared cooldown; long Retry-After values are not retried early. Stored Semantic Scholar/OpenAlex user keys, AnySearch, DeepSeek and other paid model configuration are not used or changed by this pipeline.
+- Publication precision is retained. An RSS `updated` timestamp alone is not a publication date. Invalid calendar days stay missing. Publisher identity, raw record type, feed summary provenance and author order are retained; missing affiliations, author keywords and corresponding-author flags remain explicit.
+- New publisher filters are supported in the paper library, daily/progress/weekly views and existing AI paper lookup. New-journal JIF remains unverified until an explicitly dated official metric is researched; no prestige-based value is invented.
+
+Operational checks: publisher RSS failure and Crossref failure remain separate; result details record channel state and filtered/received counts. Watermarks advance only after the current query window completes, and full pages must return an advancing cursor. Crossref changed cursor semantics on 24 August 2026: cursors no longer expire, but the result set can change on reindexing. Keep every query parameter and fixed upper index date identical across pages, use overlap/deduplication, and do not claim an immutable or exhaustive snapshot. Reference: https://community.crossref.org/t/changes-to-cursors-filtering-and-sorting-in-the-rest-api/16246
+
+Primary source verification:
+- https://www.nature.com/ ; https://www.nature.com/natelectron/journal-information ; https://www.nature.com/nphoton/ ; https://www.nature.com/nnano/ ; https://www.nature.com/nmat/ ; https://www.nature.com/ncomms/
+- https://www.nature.com/articles/s41928-026-01705-1 (demonstrates RSS summary vs actual Abstract)
+- https://www.science.org/journal/science ; https://www.science.org/journal/sciadv ; https://promo.aaas.org/images/sitelic/Cataloging_AAAS_e-Resources_2015.pdf
+- https://api.crossref.org/journals/1095-9203/works?rows=1 ; https://api.crossref.org/journals/2375-2548/works?rows=1
+
+Scheduling remains a separate, verified native Sites operation. The settings and collection views read the same saved schedule receipt. They cannot create or enable a scheduler by changing an interval or by opening a page. The existing service-authenticated writer is verified independently, and only a real linked enabled task with its ID/timing/readback may be mirrored as enabled.

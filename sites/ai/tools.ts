@@ -1,6 +1,7 @@
+import {researchSchedule} from '../research-schedule.ts';
 import {search as searchWeb} from '../anysearch/provider.ts';
 import {validateQuery,validateLimit} from '../anysearch/domain.ts';
-import {RESEARCH_SOURCES} from '../research-config.ts';
+import {PUBLISHERS,RESEARCH_SOURCES} from '../research-config.ts';
 import {AIError} from './security.ts';
 import {stamp} from './settings.ts';
 export const EMPTY_PREFS={keywords:[] as string[],excludedKeywords:[] as string[],sourceIntervals:{} as Record<string,number>};
@@ -12,13 +13,13 @@ export function cleanPreferences(value:any){
  const sourceIntervals:Record<string,number>={};for(const [key,hours] of Object.entries(intervals)){if(!RESEARCH_SOURCES.some(s=>s.id===key)||!Number.isInteger(hours)||Number(hours)<1||Number(hours)>168)throw new AIError('invalid_interval',400,'只能设置已配置期刊，间隔为 1–168 小时');sourceIntervals[key]=Number(hours)}
  return {keywords:keywords(value.keywords),excludedKeywords:keywords(value.excludedKeywords),sourceIntervals};
 }
-export async function preferenceStatus(db:any,id:string){return {...await preferences(db,id),sources:RESEARCH_SOURCES.map(s=>({id:s.id,name:s.name})),scheduler:{enabled:false,status:'unavailable',message:'期望间隔只保存配置。当前自动调度未连接；每 12 小时目标尚未启用，保存不会启动或改变实际调度。'}}}
+export async function preferenceStatus(db:any,id:string){return {...await preferences(db,id),sources:RESEARCH_SOURCES.map(s=>({id:s.id,name:s.name})),scheduler:await researchSchedule(db)}}
 export async function propose(db:any,id:string,after:any){
  const prefs=await preferences(db,id),value=cleanPreferences(after);if(JSON.stringify(value)===JSON.stringify(prefs.value))throw new AIError('no_changes',400,'配置没有变化');
  const pid=crypto.randomUUID(),createdAt=stamp(),expiresAt=new Date(Date.now()+15*60000).toISOString();
  await db.prepare('INSERT OR IGNORE INTO ai_preferences(owner_id,value_json,revision) VALUES(?,?,0)').bind(id,JSON.stringify(EMPTY_PREFS)).run();
  await db.prepare("INSERT INTO ai_proposals(id,owner_id,before_json,after_json,revision,status,created_at,expires_at) VALUES(?,?,?,?,?,'pending',?,?)").bind(pid,id,JSON.stringify(prefs.value),JSON.stringify(value),prefs.revision,createdAt,expiresAt).run();
- return {id:pid,before:prefs.value,after:value,status:'pending',expiresAt,schedulerNotice:'采集间隔为期望值，实际自动调度未启用。'};
+ return {id:pid,before:prefs.value,after:value,status:'pending',expiresAt,schedulerNotice:'采集间隔为期望值，保存不会创建或修改外部定时任务；实际状态以采集状态为准。'};
 }
 export async function resolveProposal(db:any,id:string,pid:string,action:string){
  if(!['confirm','cancel'].includes(action))throw new AIError('invalid_action',400,'请选择确认或取消');
@@ -42,7 +43,7 @@ export function normalizeToolArgs(name:string,args:any):Record<string,any>{
  if(name==='search_web'){if(!object(args,['query','maxResults']))bad();return {query:validateQuery(args.query),maxResults:validateLimit(args.maxResults)}}
  if(name==='read_preferences'){if(!object(args,[]))bad();return {}}
  if(name==='search_papers'){
-  if(!object(args,['q','publisher','useKeywords'])||typeof args.q!=='string'||args.q.length>200||!['','IEEE','Wiley','Elsevier'].includes(args.publisher)||typeof args.useKeywords!=='boolean')bad();
+  if(!object(args,['q','publisher','useKeywords'])||typeof args.q!=='string'||args.q.length>200||!['',...PUBLISHERS].includes(args.publisher)||typeof args.useKeywords!=='boolean')bad();
   return {q:args.q.trim(),publisher:args.publisher,useKeywords:args.useKeywords};
  }
  if(name==='paper_details'){
@@ -64,7 +65,7 @@ export async function searchPapers(db:any,id:string,args:any){
  if(terms.length){where+=' AND ('+terms.map(()=>field+" LIKE ? ESCAPE '\\'").join(' OR ')+')';binds.push(...terms.map(escapeLike))}
  if(args.useKeywords===true&&prefs.keywords.length){where+=' AND ('+prefs.keywords.map(()=>field+" LIKE ? ESCAPE '\\'").join(' OR ')+')';binds.push(...prefs.keywords.map(escapeLike))}
  for(const k of prefs.excludedKeywords){where+=' AND '+field+" NOT LIKE ? ESCAPE '\\'";binds.push(escapeLike(k))}
- if(args.publisher&&['IEEE','Wiley','Elsevier'].includes(args.publisher)){where+=' AND publisher=?';binds.push(args.publisher)}
+ if(args.publisher&&PUBLISHERS.includes(args.publisher)){where+=' AND publisher=?';binds.push(args.publisher)}
  const total=await db.prepare('SELECT count(*) n FROM research_papers WHERE '+where).bind(...binds).first();
  const rows=await db.prepare('SELECT * FROM research_papers WHERE '+where+' ORDER BY priority DESC,coalesce(published_at,first_seen) DESC LIMIT 8').bind(...binds).all();
  return {total:total.n,shown:rows.results.length,papers:rows.results.map(evidencePaper),notice:'最多返回 8 篇；基础排序为现有规则分；搜索词为 OR 匹配；关注词可选、排除词始终应用'};
