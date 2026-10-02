@@ -1,8 +1,24 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-02T15:42:00Z",
+  "latestVersion": "2026-10-02T15:59:00Z",
   "releases": [
+    {
+      "id": "reading-search-breakpoint-2026-10-02",
+      "at": "2026-10-02T15:59:00Z",
+      "basis": "record",
+      "kind": "fix",
+      "title": "统一桌面与手机检索框切换宽度",
+      "body": [
+        "实际窄桌面检查发现，961–1023px 宽度下侧栏与手机检索框会同时出现。现统一为侧栏的 961px 切换点，避免重复入口挤占阅读区域；检索行为和配额不变。"
+      ],
+      "sources": [
+        {
+          "label": "阅读主题与验证范围",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/reading-design.md"
+        }
+      ]
+    },
     {
       "id": "warm-paper-reading-2026-10-02",
       "at": "2026-10-02T15:42:00Z",
