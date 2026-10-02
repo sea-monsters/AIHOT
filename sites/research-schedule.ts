@@ -7,7 +7,7 @@ export function validateScheduleMirror(body:any,verifiedAt:string){
  if(dtzone&&dtzone!==timezone)throw Error('timezone_mismatch');
  if(body.enabled&&(!id||!schedule.includes('BEGIN:VEVENT')||!schedule.includes('RRULE:')))throw Error('invalid_schedule');
  if(body.nextRun!=null&&(typeof body.nextRun!=='string'||!Number.isFinite(Date.parse(body.nextRun))))throw Error('invalid_next_run');
- return {enabled:body.enabled,id,schedule,timezone,intervalHours:12,nextRun:body.nextRun||null,status:body.enabled?'enabled':String(body.status||'not_configured'),verifiedAt};
+ return {daily:{enabled:body.dailyEnabled===true,time:'08:00',timezone,contractVersion:body.dailyContractVersion==='hkis-daily-v1'?'hkis-daily-v1':null},enabled:body.enabled,id,schedule,timezone,intervalHours:12,nextRun:body.nextRun||null,status:body.enabled?'enabled':String(body.status||'not_configured'),verifiedAt};
 }
 // Readback only. DTSTART TZID is authoritative for legacy records whose timezone was hardcoded incorrectly.
 export async function researchSchedule(db:any){
