@@ -9,11 +9,12 @@ const mf=new Miniflare(convertV4MiniflareOptions({outboundService,modules:true,s
 const db=await mf.getD1Database('DB');for(const f of (await readdir('drizzle')).filter(f=>f.endsWith('.sql')).sort()){const migration=await readFile('drizzle/'+f,'utf8');for(const s of migration.split('--> statement-breakpoint').map(s=>s.trim()).filter(Boolean))await db.prepare(s).run();}
 for(const path of ['/','/all','/hot','/daily','/topics','/about','/api/site/status','/research','/api/site/research/status','/api/site/research/weekly','/settings','/daily/archive','/daily/2026-09-30','/api/site/research/daily','/api/site/research/feed','/changelog','/api/site/changelog','/api/site/meta']){const r=await mf.dispatchFetch('https://local.test'+path);assert.equal(r.status,200,path+':'+await r.clone().text());console.log('WORKER OK',path);}
 const changes=await (await mf.dispatchFetch('https://local.test/api/site/changelog')).json();
-assert.ok(changes.releases.length>=16);assert.equal(changes.releases.find(r=>r.kind==='upstream').upstream.commits.length,12);
+assert.ok(changes.releases.length>=16);assert.equal(changes.releases.find(r=>r.at==='2026-10-01T02:27:00Z').upstream.commits.length,12);
+assert.equal(changes.releases.find(r=>r.id==='upstream-selective-reliability-2026-10-04').upstream.commits.length,11);
 const changeHtml=await (await mf.dispatchFetch('https://local.test/changelog')).text();
 assert.ok(changeHtml.includes('id="d-2026-10-01"'));assert.ok(changeHtml.includes('id="d-2026-09-30"'));assert.ok(changeHtml.includes('UTC+08'));assert.ok(changeHtml.includes('/settings#diagnostics'));assert.ok(changeHtml.includes('ed0cf9a24790602902b6350bb2d2d18a6168a4e7'));
 assert.equal((await (await mf.dispatchFetch('https://local.test/api/site/meta')).json()).changelogVersion,changes.latestVersion);
-assert.equal(networkProbes,0);console.log('CHANGELOG WORKER OK: daily SSR, twelve upstream commits, source links, unread version, no provider calls');
+assert.equal(networkProbes,0);console.log('CHANGELOG WORKER OK: daily SSR, historical twelve and selective eleven reviewed upstream commits, source links, unread version, no provider calls');
 const pool=await (await mf.dispatchFetch('https://local.test/api/site/pool')).json();assert.ok(pool.total>=8);const item=await mf.dispatchFetch('https://local.test/items/'+pool.items[0].id);assert.equal(item.status,200);console.log('D1 bootstrap and item OK',pool.total);
 const empty=await (await mf.dispatchFetch('https://local.test/api/site/research/weekly')).json();assert.equal(empty.coverage.shown,0);
 const fixture={doi:'10.9999/test-only-weekly',title:'Ferroelectric MOSFET device simulation test fixture',url:'https://example.org/fixture',publisher:'Elsevier',journal:'Solid-State Electronics',sourceId:'elsevier-sse',issn:'0038-1101',publishedAt:weekWindow().endDate,datePrecision:'day',authors:[],affiliations:[],abstract:null,keywords:[],provenance:{},sourceIndexedAt:null,discovery:'crossref'};
