@@ -1,9 +1,9 @@
 import {useEffect,useState} from 'react';
 import {ServiceRow} from './ServiceRow';
 import {scholarlyRequest} from '../lib/scholarly-client';
-export function ScholarlySettings(){
- const [data,setData]=useState<any>(null),[error,setError]=useState('');
- useEffect(()=>{scholarlyRequest('settings').then(setData).catch(e=>setError(e.message))},[]);
+export function ScholarlySettings({initialData}:{initialData?:any}){
+ const [data,setData]=useState<any>(initialData??null),[error,setError]=useState('');
+ useEffect(()=>{if(initialData)return;scholarlyRequest('settings').then(setData).catch(e=>setError(e.message))},[]);
  if(error)return <p className="ai-error" role="alert">{error}</p>;if(!data)return <p className="ai-muted">正在读取学术服务配置…</p>;
  return <>{data.services.map((s:any)=><ScholarlyService key={s.service} service={s} encryptionReady={data.encryptionReady} onSaved={setData}/>)}</>;
 }

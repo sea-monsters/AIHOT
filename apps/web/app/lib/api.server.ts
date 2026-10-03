@@ -77,3 +77,8 @@ export function releaseBoundCache(refreshAt: string | null, maxSeconds: number, 
     "X-Accel-Expires": seconds > 0 ? `@${deadline}` : "0",
   };
 }
+
+// Content revision is captured around the real loader, never inferred from navigation or render time.
+import {readPageUpdate} from './page-update-load.ts';
+import type {PageRevision,UpdatePageKey} from '@aihot/contracts/navigation-updates';
+export function withPageUpdate<T extends object>(key:UpdatePageKey|null,read:()=>Promise<T>){return readPageUpdate(key,read,key=>apiGet<PageRevision>('/api/site/navigation-updates/content?key='+key))}

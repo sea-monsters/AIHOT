@@ -233,7 +233,9 @@ export const THEME_BOOT_SCRIPT = `(function(){try{var t=localStorage.getItem('${
 // --- changelog red dot ---
 export function getChangelogSeen(): string | null {
   const v = readRaw(KEYS.changelogSeen);
-  return v && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v) ? v : null;
+  if(!v||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{3})?Z)?$/.test(v))return null;
+  const normalized=v.length===16?v+':00Z':v;
+  return Number.isFinite(Date.parse(normalized))&&new Date(normalized).toISOString().slice(0,19)===normalized.slice(0,19)?new Date(normalized).toISOString():null;
 }
 
 export function setChangelogSeen(version: string) {

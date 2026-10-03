@@ -66,3 +66,8 @@ test("valid dates and existing bookmarks survive import unchanged", async () => 
   assert.equal(saved!.savedAt, item.savedAt);
   assert.equal(saved!.publishedAt, item.publishedAt);
 });
+
+test('changelog legacy and full ISO timestamps roundtrip; corrupt or impossible values stay unknown',async()=>{
+ const {state,values}=await reader();for(const value of ['2026-10-03T12:34:56Z','2026-10-03T12:34:56.000Z','2026-10-03T12:34']){state.setChangelogSeen(value);assert.ok(state.getChangelogSeen(),value)}
+ for(const value of ['broken','2026-02-30T12:34:56Z','{"version":1}']){values.set(state.KEYS.changelogSeen,value);assert.equal(state.getChangelogSeen(),null)}
+});

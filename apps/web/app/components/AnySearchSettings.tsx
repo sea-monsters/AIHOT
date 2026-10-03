@@ -1,9 +1,9 @@
 import {useEffect,useState} from 'react';
 import {ServiceRow} from './ServiceRow';
 import {anysearchRequest} from '../lib/anysearch-client';
-export function AnySearchSettings(){
- const [s,setS]=useState<any>(null),[key,setKey]=useState(''),[remove,setRemove]=useState(false),[enabled,setEnabled]=useState(false),[consent,setConsent]=useState(false),[busy,setBusy]=useState(''),[error,setError]=useState(''),[message,setMessage]=useState('');
- useEffect(()=>{anysearchRequest('settings').then(s=>{setS(s);setEnabled(s.enabled)}).catch(e=>setError(e.message))},[]);
+export function AnySearchSettings({initialData}:{initialData?:any}){
+ const [s,setS]=useState<any>(initialData??null),[key,setKey]=useState(''),[remove,setRemove]=useState(false),[enabled,setEnabled]=useState(!!initialData?.enabled),[consent,setConsent]=useState(false),[busy,setBusy]=useState(''),[error,setError]=useState(''),[message,setMessage]=useState('');
+ useEffect(()=>{if(initialData)return;anysearchRequest('settings').then(s=>{setS(s);setEnabled(s.enabled)}).catch(e=>setError(e.message))},[]);
  const dirty=!!key||remove||enabled!==s?.enabled;
  async function save(e:React.FormEvent){e.preventDefault();setBusy('save');setError('');setMessage('');try{const result=await anysearchRequest('settings',{endpoint:s.endpoint,revision:s.revision,enabled,apiKey:key||undefined,removeKey:remove,confirmedDestination:consent?s.endpoint:null});setS(result);setEnabled(result.enabled);setKey('');setRemove(false);setConsent(false);setMessage('AnySearch 设置已保存，保存本身不会发起搜索。')}catch(e){setError((e as Error).message)}finally{setBusy('')}}
  async function test(){setBusy('test');setError('');setMessage('');try{setMessage((await anysearchRequest('test',{revision:s.revision})).message)}catch(e){setError((e as Error).message)}finally{try{setS(await anysearchRequest('settings'))}catch{}setBusy('')}}

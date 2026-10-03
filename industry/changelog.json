@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-03T13:04:00Z",
+  "latestVersion": "2026-10-03T16:00:02Z",
   "releases": [
+    {
+      "id": "navigation-content-updates-2026-10-04",
+      "at": "2026-10-03T16:00:02Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "所有导航页面支持更新提示，阅读后清除并按账户同步",
+      "body": [
+        "桌面侧栏与手机对应入口统一使用暖橙更新点，网站设置可逐页开关；初次启用从当前内容建立安静基线。论文、日报、收藏、设置与静态说明按各自真实内容版本判断，不把轮询或页面计算当作新内容。",
+        "成功加载并前台可见后，只确认这次实际读到的版本；预加载、后台、失败、历史日报与筛选结果不误清除最新概览。已读版本单调保存，旧标签页晚到不会覆盖新状态，页面提示不改变单篇论文已读或收藏。",
+        "修复更新日志已读时间格式校验导致橙点不消除的问题；最新条目展开且进入视口后消点。手机“更多”补齐论文情报入口，保留关键词全量散点图与现有采集、模型及访问权限。"
+      ],
+      "sources": [
+        {
+          "label": "页面更新提示说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/navigation-updates.md"
+        }
+      ]
+    },
     {
       "id": "keyword-scatter-full-window-2026-10-03",
       "at": "2026-10-03T13:04:00Z",

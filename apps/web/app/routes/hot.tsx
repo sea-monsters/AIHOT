@@ -1,13 +1,15 @@
+import {usePageRead} from '../components/NavigationUpdates';
+import {isPageOverview} from '@aihot/contracts/navigation-updates';
 import {useMemo,useState} from 'react';
-import {Form,Link,useLoaderData,useRevalidator,type LoaderFunctionArgs} from 'react-router';
+import {Form,Link,useLoaderData,useLocation,useRevalidator,type LoaderFunctionArgs} from 'react-router';
 import {ControlReadingLayout} from '../components/ui/ControlReadingLayout';
 import {PaperSelection,PaperBulkToolbar,PaperCardState,PaperSourceLink} from '../components/PaperReader';
 import {PUBLISHERS} from '../../../../sites/research-config.ts';
 import type {KeywordMap} from '../../../../sites/keyword-map.ts';
-import {loadOr404} from '../lib/api.server';
+import {loadOr404,withPageUpdate} from '../lib/api.server';
 import {SITE} from '@aihot/industry/site';
 type Keyword=KeywordMap['keywords'][number];
-export async function loader({request}:LoaderFunctionArgs){return loadOr404<KeywordMap>('/api/site/research/keyword-map'+new URL(request.url).search,{signal:request.signal});}
+export async function loader({request}:LoaderFunctionArgs){return withPageUpdate('hot',()=>loadOr404<KeywordMap>('/api/site/research/keyword-map'+new URL(request.url).search,{signal:request.signal}));}
 export const headers=()=>({'Cache-Control':'no-store'});
 export function meta(){return [{title:`关键词热点分布 · ${SITE.name}`},{name:'description',content:'近七日更新论文的关键词数量、阅读优先级与逐篇分数分布。全量统计，悬停联动。'},{name:'robots',content:'noindex, nofollow'}];}
 const num=(n:number|null)=>n===null?'未评分':Number.isInteger(n)?String(n):n.toFixed(1);
@@ -62,4 +64,4 @@ export function KeywordExplorer({d}:{d:KeywordMap}){
  <details className="research-panel keyword-method"><summary>统计依据与覆盖边界</summary><p>{d.window.dateSemantics}。窗口从 {time(d.window.startAt)} 到计算时刻 {time(d.window.endAt)}（UTC+08）。发表日模式使用来源明确的年月日，优先在线发表日，不以入库时间代替；缺失日期不进入发表日窗口。</p><p>统计读取窗口内的全部已入库记录，不受论文列表页码、分数、摘要或 JIF 完整度限制。本窗口去重前排除 {d.coverage.excludedNonResearch} 条标记为非研究内容的审计记录；合并重复身份 {d.coverage.duplicates} 条。全窗口 {d.coverage.windowUnique} 篇，当前筛选 {d.coverage.shown} 篇、{d.coverage.journals} 本期刊。不是全领域的发表普查。</p><p>DOI 优先，其次规范原文 URL 去重；同一论文内同义词只计一次。仅合并明确同义名，铁电与 FeFET、忆阻器与 RRAM 等仍分别保留。关键词来源分为作者（{d.coverage.withAuthorKeywords} 篇有提供）、当前有效 AI 摘要提取和可解释规则提取；没有关键词的 {d.coverage.unclassified} 篇保留“未分类”。规则词典未覆盖的方向可能落入未分类。</p><p>{d.metric.description} AI 模式有效覆盖 {d.coverage.withAI}/{d.coverage.shown}，其余留在未评分区。规则 0 分表示未命中现有阅读优先规则，不表示论文没有价值。两种评分不混用；JIF 只在逐篇参考资料中展示，不参与本图坐标。AI 评分基于摘要，尚未核查全文，不能视为已证实的影响力。</p><p>纵轴固定 0–100，点为组内已评分论文中位数，竖线为第 25–75 百分位；悬停显示全范围、已评分分母与缺失数。重叠坐标可用关键词列表或数据表逐一选择。下方直方图按唯一论文计数；柱顶是篇数，柱高是各自分母的占比，避免全库数量压扁少量关键词的分布。全部数据无分页参与聚合。</p><p>内容最近实质更新：{time(d.contentRevision)} UTC+08。页面计算：{time(d.window.generatedAt)} UTC+08 · {d.version}。打开、筛选与重算仅读取已有数据，不调用模型或启动采集。</p></details>
  </ControlReadingLayout></main></PaperSelection>;
 }
-export default function Hot(){const d=useLoaderData<typeof loader>(),r=useRevalidator();return <><KeywordExplorer key={JSON.stringify(d.filters)+d.contentRevision} d={d}/><button className="keyword-recompute research-back" disabled={r.state!=='idle'} onClick={()=>r.revalidate()}>{r.state!=='idle'?'重算中…':'重算当前分布'}</button></>;}
+export default function Hot(){const d=useLoaderData<typeof loader>(),r=useRevalidator();usePageRead(d.pageUpdate,isPageOverview('hot',useLocation().search));return <><KeywordExplorer key={JSON.stringify(d.filters)+d.contentRevision} d={d}/><button className="keyword-recompute research-back" disabled={r.state!=='idle'} onClick={()=>r.revalidate()}>{r.state!=='idle'?'重算中…':'重算当前分布'}</button></>;}

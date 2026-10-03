@@ -38,3 +38,7 @@
 - 手机“更多”补充网站设置直达链接。原 `/agent` 仍是版本说明，导航更正为“运行说明”；真正的 Agent 对话沿用已有固定助手入口。
 - 本次不调整模型、密钥、论文、共享权限或采集调度。没有为视觉检查提交收费模型或联网搜索请求；检索结果与异常状态由离线组件/Worker 测试验证。
 - 回归：`node --test sites/surface-calendar.test.mjs sites/anysearch/ui.test.mjs sites/changelog.test.ts`，以及 Sites 相关域测试、typecheck、build 和隔离 Worker/D1 烟测。
+
+## 日志已读与其他页面提示
+
+日志已读已纳入 [统一页面更新提示](navigation-updates.md)。旧本机时间读取支持完整 ISO，避免保存成功却始终被判未读；最新条目进入视口并展开后确认该次加载版本。每次改动静态页面内容时，同时检查统一注册表中对应页面的内容版本，不给无关页面递增。

@@ -1,1 +1,1 @@
-export {default,meta} from "./sites-info";
+export {default,meta,loader} from "./sites-info";

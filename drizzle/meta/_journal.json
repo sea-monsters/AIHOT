@@ -71,6 +71,13 @@
       "when": 1791032226267,
       "tag": "0009_workable_callisto",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1791042014725,
+      "tag": "0010_greedy_hitman",
+      "breakpoints": true
     }
   ]
 }

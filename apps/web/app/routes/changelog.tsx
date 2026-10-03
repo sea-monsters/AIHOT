@@ -1,12 +1,12 @@
+import {usePageRead} from '../components/NavigationUpdates';
 import {ControlReadingLayout} from '../components/ui/ControlReadingLayout';
 import { SITE } from "@aihot/industry/site";
 import { changelogDays, type Changelog, type ChangeKind, type ChangeRelease } from "@aihot/contracts/changelog";
 import { beijingDate, beijingTime } from "@aihot/contracts/time";
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { Link, useLoaderData, useLocation, useNavigate } from "react-router";
-import { apiGet } from "../lib/api.server";
+import { apiGet, withPageUpdate } from "../lib/api.server";
 import { pageMeta } from "../lib/seo";
-import { setChangelogSeen } from "../lib/local-state";
 import { AsideCard } from "../components/ui/Page";
 import {ChangelogCalendar} from '../features/changelog/Calendar';
 import {calendarToday,updateDays} from '../features/changelog/calendar-domain';
@@ -17,8 +17,8 @@ export function headers() {
   return { "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=600" };
 }
 export async function loader({ request }: { request: Request }) {
-  const data = await apiGet<Changelog>("/api/site/changelog", { signal: request.signal });
-  return {...data, calendarToday: calendarToday()};
+  return withPageUpdate('changelog',async()=>{const data = await apiGet<Changelog>("/api/site/changelog", { signal: request.signal });
+  return {...data, calendarToday: calendarToday()};});
 }
 export function meta() {
   return pageMeta({ title: "更新日志", description: `${SITE.name} 按日整理的功能更新、问题修复与 GitHub 上游同步记录。`, path: "/changelog", image: "/og/pages/changelog.png" });
@@ -60,12 +60,15 @@ export function Entry({ entry, open, onToggle }: { entry: ChangeRelease; open:bo
 
 export default function ChangelogPage() {
   const data = useLoaderData<typeof loader>();
-  useEffect(() => setChangelogSeen(data.latestVersion), [data.latestVersion]);
   const [kind, setKind] = useState<ChangeKind | null>(null);
   const [expanded,setExpanded]=useState<Record<string,boolean>>(()=>({[data.releases[0]?.id]:true}));
   const location=useLocation(),navigate=useNavigate();
   const [today,setToday]=useState(data.calendarToday),[month,setMonth]=useState(data.calendarToday.slice(0,7));
   const [target,setTarget]=useState<{hash:string;sequence:number}|null>(null);
+  const latest=data.releases[0];const [latestVisible,setLatestVisible]=useState(false);
+  useEffect(()=>{setLatestVisible(false);if(!latest||kind&&kind!==latest.kind||!expanded[latest.id])return;const target=document.getElementById('change-'+latest.id);if(!target)return;const observer=new IntersectionObserver(entries=>setLatestVisible(entries.some(e=>e.isIntersecting)),{threshold:0.15});observer.observe(target);return()=>observer.disconnect()},[latest?.id,kind,expanded]);
+  const latestHash=!location.hash||location.hash==='#change-'+latest?.id||location.hash==='#d-'+beijingDate(latest.at);
+  usePageRead(data.pageUpdate,latestVisible&&latestHash);
   const calendarDays=useMemo(()=>updateDays(data.releases),[data.releases]);
   useEffect(()=>{const current=calendarToday();setToday(current);setMonth(value=>value===data.calendarToday.slice(0,7)?current.slice(0,7):value)},[data.calendarToday]);
   function reveal(hash:string){const ids=anchorEntries(hash,data.releases);if(ids.length){setKind(null);setExpanded(v=>({...v,...Object.fromEntries(ids.map(id=>[id,true]))}));setTarget(v=>({hash,sequence:(v?.sequence??0)+1}))}}

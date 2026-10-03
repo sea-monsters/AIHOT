@@ -1,30 +1,21 @@
 import {QuickSearch} from "../WebSearch";
 import {AssistantEntry} from "../AssistantEntry";
 import { SITE } from "@aihot/industry/site";
-import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { Wordmark } from "../Logo";
-import { useChangelogSeen } from "../../lib/local-state";
+import {UpdateDot,useNavigationUpdates} from "../NavigationUpdates";
+import {updatePageForPath,updatePageDestination} from "@aihot/contracts/navigation-updates";
 import { SIDEBAR, tabIsActive, type NavItem } from "./nav";
 import { ThemeSwitch } from "./ThemeSwitch";
 
-/** True while the changelog has an entry newer than the one this reader last opened. */
-export function useChangelogDot(latestVersion: string | null): boolean {
-  const seen = useChangelogSeen();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted || !latestVersion) return false;
-  return !seen || seen < latestVersion;
-}
-
-function SideLink({ item, dot }: { item: NavItem; dot: boolean }) {
-  const { pathname } = useLocation();
+function SideLink({ item }: { item: NavItem }) {
+  const { pathname } = useLocation();const {pages}=useNavigationUpdates();
   // Weekly and monthly reports belong to the daily report entry, as the phone tab bar has it.
   const isActive = tabIsActive(item, pathname);
   const Icon = item.icon;
   return (
     <Link
-      to={item.to}
+      to={updatePageDestination(item.to,pages)}
       prefetch="intent"
       aria-current={isActive ? "page" : undefined}
       className={`flex h-9 items-center gap-2 rounded-control px-2.5 text-[14px] transition-colors duration-150 ${
@@ -35,13 +26,12 @@ function SideLink({ item, dot }: { item: NavItem; dot: boolean }) {
         <Icon size={17} />
       </span>
       <span className="min-w-0 truncate">{item.label}</span>
-      {dot && item.changelog && <span className="ml-auto size-1.5 shrink-0 rounded-full bg-hot" aria-label="有新的更新" />}
+      <UpdateDot page={updatePageForPath(item.to)} className="ml-auto"/>
     </Link>
   );
 }
 
 export function Sidebar({ changelogVersion }: { changelogVersion: string | null }) {
-  const dot = useChangelogDot(changelogVersion);
   return (
     <aside className="sticky top-0 hidden h-dvh w-[180px] shrink-0 flex-col border-r border-line bg-sidebar px-3 pb-3 pt-4 lg:flex">
       <Link to="/" className="mb-2 flex min-h-[56px] flex-col items-start justify-center gap-2 px-1 text-ink" aria-label={`${SITE.name} 首页`}>
@@ -55,7 +45,7 @@ export function Sidebar({ changelogVersion }: { changelogVersion: string | null 
             <h2 className="sr-only">{section.title}</h2>
             <div className="flex flex-col gap-0.5">
               {section.items.map((item) => (
-                <SideLink key={item.to} item={item} dot={dot} />
+                <SideLink key={item.to} item={item} />
               ))}
             </div>
           </section>

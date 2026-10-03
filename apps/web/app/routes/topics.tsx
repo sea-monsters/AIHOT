@@ -1,5 +1,6 @@
+import {usePageRead} from '../components/NavigationUpdates';
 import { Link, useLoaderData } from "react-router";
-import { apiGet } from "../lib/api.server";
+import { apiGet, withPageUpdate } from "../lib/api.server";
 import { pageMeta } from "../lib/seo";
 
 interface TopicSummary {
@@ -14,7 +15,7 @@ interface TopicSummary {
 }
 
 export async function loader({ request }: { request: Request }) {
-  return apiGet<{ topics: TopicSummary[] }>("/api/site/topics", { signal: request.signal });
+  return withPageUpdate('topics',()=>apiGet<{ topics: TopicSummary[] }>("/api/site/topics", { signal: request.signal }));
 }
 
 export function meta() {
@@ -32,7 +33,7 @@ const GROUPS = [
 ] as const;
 
 export default function TopicsPage() {
-  const { topics } = useLoaderData<typeof loader>();
+  const data = useLoaderData<typeof loader>();const {topics}=data;usePageRead(data.pageUpdate);
   return (
     <div className="pb-10">
       <header className="pb-2 pt-5 lg:pt-1">

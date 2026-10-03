@@ -1,3 +1,5 @@
+import {usePageRead} from '../components/NavigationUpdates';
+import {isPageOverview} from '@aihot/contracts/navigation-updates';
 import {ControlReadingLayout} from '../components/ui/ControlReadingLayout';
 import {PaperSelection,PaperBulkToolbar,PaperCardState,PaperSourceLink} from '../components/PaperReader';
 import {AssessmentBadge} from '../components/PaperAssessment';
@@ -5,14 +7,14 @@ import {PUBLISHERS} from '../../../../sites/research-config.ts';
 import {ScholarlySearch} from '../components/ScholarlySearch';
 import {useEffect,useState} from 'react';
 import {Form,Link,useLoaderData,useRevalidator,useLocation,type LoaderFunctionArgs} from 'react-router';
-import {apiGet} from '../lib/api.server';
+import {apiGet,withPageUpdate} from '../lib/api.server';
 import {openAI} from '../lib/ai-client';
 import {SITE} from '@aihot/industry/site';
 export const headers=()=>({'Cache-Control':'no-store'});
 export function meta(){return [{title:`论文情报 · ${SITE.name}`},{name:'robots',content:'noindex, nofollow'}]}
-export async function loader({request}:LoaderFunctionArgs){const q=new URL(request.url).search;const [feed,status]=await Promise.all([apiGet<any>('/api/site/research/papers'+q),apiGet<any>('/api/site/research/status')]);return {feed,status};}
+export async function loader({request}:LoaderFunctionArgs){const u=new URL(request.url),q=u.search;return withPageUpdate(u.pathname==='/'?'home':'research',async()=>{const [feed,status]=await Promise.all([apiGet<any>('/api/site/research/papers'+q),apiGet<any>('/api/site/research/status')]);return {feed,status};});}
 const time=(value:any,timezone='Asia/Singapore')=>value?new Date(value).toLocaleString('zh-CN',{timeZone:timezone,hour12:false})+' '+timezone:'调度器尚未返回';
-export default function Research(){const {feed,status}=useLoaderData<typeof loader>();const [busy,setBusy]=useState(false),[message,setMessage]=useState('');const revalidator=useRevalidator();
+export default function Research(){const data=useLoaderData<typeof loader>(),{feed,status}=data;const readLocation=useLocation();usePageRead(data.pageUpdate,isPageOverview(readLocation.pathname==='/'?'home':'research',readLocation.search));const [busy,setBusy]=useState(false),[message,setMessage]=useState('');const revalidator=useRevalidator();
  async function sync(){setBusy(true);let added=0,errors=0;for(const [i,s] of status.sources.entries()){setMessage(`正在读取 ${i+1}/${status.sources.length} · ${s.name}`);try{const r=await fetch('/api/site/research/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sourceId:s.id,maxPages:1})});const d=await r.json();added+=d.added||0;if(!r.ok||d.status==='error')errors++;}catch{errors++;}}let analysisMessage='';try{const r=await fetch('/api/site/research/process',{method:'POST',headers:{'Content-Type':'application/json','X-HKIS-Request':'1'},body:JSON.stringify({maxPapers:3})});const d=await r.json();analysisMessage=d.blocked?`；AI 暂缓：${d.blocked}`:`；AI 已保存 ${d.completed||0} 篇，待处理 ${d.remainingQueued||0} 篇`;}catch{analysisMessage='；AI 处理状态暂不可用'}setMessage(`本轮新增 ${added} 篇${errors?`；${errors} 个来源失败，已保留原数据`:''}${analysisMessage}。未读完的当月分页留到下轮。`);setBusy(false);revalidator.revalidate();}
  useEffect(()=>{const mc=(document as any).modelContext;if(!mc)return;const ac=new AbortController();Promise.resolve(mc.registerTool({name:'research_status',description:'Read scholarly-source coverage, missing metadata, collection runs and saved schedule state.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:true},async execute(){return (await fetch('/api/site/research/status')).json()}},{signal:ac.signal})).catch(()=>{});return()=>ac.abort()},[]);
  const location=useLocation();const filters=feed.filters;const paging=(n:number)=>{const q=new URLSearchParams();for(const [k,v] of Object.entries(filters))if(v!==''&&v!=null)q.set(k,String(v));q.set('page',String(n));return '?'+q};
