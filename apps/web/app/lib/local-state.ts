@@ -1,6 +1,6 @@
 // Reader state kept only in this browser; nothing about a reader leaves it. Storage failures degrade
 // silently. Keep the keys and formats once readers have data under them.
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { beijingDate } from "@aihot/contracts/time";
 
 export const KEYS = {
@@ -100,6 +100,19 @@ function invalidate(key: string) {
   emit(key);
 }
 
+// Another tab may have written before its storage event reaches this tab.
+// Keep the synchronous interface; this avoids stale cached writes, not simultaneous-write transactions.
+function editLocalData<T>(change: () => T): T {
+  cache.clear();
+  return change();
+}
+
+function starredUnreadable(): boolean {
+  const raw = readRaw(KEYS.starred);
+  if (raw === null) return false;
+  try { return !Array.isArray(JSON.parse(raw)); } catch { return true; }
+}
+
 // --- starred ---
 function isStarredItem(v: unknown): v is LocalStarredItem {
   if (!v || typeof v !== "object") return false;
@@ -156,17 +169,23 @@ export function isStarred(id: string): boolean {
 }
 
 export function toggleStar(item: Omit<LocalStarredItem, "savedAt">): boolean {
-  const list = getStarred();
-  const exists = list.some((s) => s.id === item.id);
-  const next = exists ? list.filter((s) => s.id !== item.id) : [{ ...item, savedAt: new Date().toISOString() }, ...list].slice(0, STARRED_LIMIT);
-  writeRaw(KEYS.starred, JSON.stringify(next));
-  invalidate(KEYS.starred);
-  return !exists;
+  return editLocalData(() => {
+    if (starredUnreadable()) return false;
+    const list = getStarred();
+    const exists = list.some((s) => s.id === item.id);
+    const next = exists ? list.filter((s) => s.id !== item.id) : [{ ...item, savedAt: new Date().toISOString() }, ...list].slice(0, STARRED_LIMIT);
+    const saved = writeRaw(KEYS.starred, JSON.stringify(next));
+    invalidate(KEYS.starred);
+    return saved && !exists;
+  });
 }
 
 export function removeStar(id: string) {
-  writeRaw(KEYS.starred, JSON.stringify(getStarred().filter((s) => s.id !== id)));
-  invalidate(KEYS.starred);
+  return editLocalData(() => {
+    if (starredUnreadable()) return;
+    writeRaw(KEYS.starred, JSON.stringify(getStarred().filter((s) => s.id !== id)));
+    invalidate(KEYS.starred);
+  });
 }
 
 // --- read items (LRU, newest first) ---
@@ -194,12 +213,14 @@ export function getReadSet(): Set<string> {
 }
 
 export function markRead(id: string) {
-  if (!ID_PATTERN.test(id)) return;
-  const ids = getReadIds();
-  if (ids[0] === id) return;
-  const next = [id, ...ids.filter((v) => v !== id)].slice(0, READ_LIMIT);
-  writeRaw(KEYS.read, JSON.stringify(next));
-  invalidate(KEYS.read);
+  return editLocalData(() => {
+    if (!ID_PATTERN.test(id)) return;
+    const ids = getReadIds();
+    if (ids[0] === id) return;
+    const next = [id, ...ids.filter((v) => v !== id)].slice(0, READ_LIMIT);
+    writeRaw(KEYS.read, JSON.stringify(next));
+    invalidate(KEYS.read);
+  });
 }
 
 // --- theme ---
@@ -227,8 +248,37 @@ export function resolvedTheme(pref: ThemePreference = getThemePreference()): "li
   }
 }
 
-/** Inline script run before paint so the first frame already has the reader's theme. */
-export const THEME_BOOT_SCRIPT = `(function(){try{var t=localStorage.getItem('${KEYS.theme}');if(t==='"light"'||t==='"dark"')t=JSON.parse(t);if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.setAttribute('data-theme',t)}catch(e){document.documentElement.setAttribute('data-theme','light')}})();`;
+export const THEME_COLOR = { light: "#f7f1df", dark: "#1b1815" } as const;
+
+export function applyTheme(theme: "light" | "dark", followsSystem: boolean) {
+  document.documentElement.setAttribute("data-theme", theme);
+  for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
+    const scheme = meta.media.includes("dark") ? "dark" : "light";
+    meta.content = followsSystem ? THEME_COLOR[scheme] : THEME_COLOR[theme];
+  }
+}
+
+/** Sync system changes and other tabs without replacing an explicit preference. */
+export function syncThemePreference(): () => void {
+  const update = () => {
+    const current = getThemePreference();
+    applyTheme(resolvedTheme(current), current === null);
+  };
+  update();
+  let query: MediaQueryList;
+  try { query = window.matchMedia("(prefers-color-scheme: dark)"); } catch { return () => {}; }
+  // Read fresh on every event: an explicit choice can arrive before React processes a storage event.
+  query.addEventListener("change", update);
+  return () => query.removeEventListener("change", update);
+}
+
+export function useThemeSync() {
+  const pref = useThemePreference();
+  useEffect(syncThemePreference, [pref]);
+}
+
+/** The first frame and browser chrome use the same saved appearance. */
+export const THEME_BOOT_SCRIPT = `(function(){try{var t=localStorage.getItem('${KEYS.theme}');if(t==='"light"'||t==='"dark"')t=JSON.parse(t);if(t==='light'||t==='dark'){var c=t==='dark'?'${THEME_COLOR.dark}':'${THEME_COLOR.light}';document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.content=c})}else{t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.setAttribute('data-theme',t)}catch(e){document.documentElement.setAttribute('data-theme','light')}})();`;
 
 // --- changelog red dot ---
 export function getChangelogSeen(): string | null {
@@ -285,44 +335,47 @@ export function importBundle(text: string): ImportReport {
 }
 
 export function mergeLocalData(incoming: { starred: unknown[]; read: unknown[]; theme: unknown }): ImportReport {
-  const current = getStarred();
-  const have = new Set(current.map((s) => s.id));
-  const additions: LocalStarredItem[] = [];
-  let starredSkipped = 0;
-  for (const s of incoming.starred) {
-    if (!isStarredItem(s)) { starredSkipped++; continue; }
-    if (have.has(s.id)) continue;
-    have.add(s.id);
-    additions.push(normalizeStarred(s as unknown as Record<string, unknown>));
-  }
-  const room = Math.max(0, STARRED_LIMIT - current.length);
-  const accepted = additions.slice(0, room);
-  starredSkipped += additions.length - accepted.length;
-  const mergedStarred = [...current, ...accepted].sort((a, b) => Date.parse(b.savedAt) - Date.parse(a.savedAt));
-  // An import is reported only after it was written; a failure here leaves the browser as it was.
-  if (!writeRaw(KEYS.starred, JSON.stringify(mergedStarred))) throw new Error("浏览器存储已满或不可用，这次没有导入任何内容。");
+  return editLocalData(() => {
+    if (starredUnreadable()) throw new Error("这台设备上已有的收藏数据无法读取，为避免覆盖，这次没有导入。");
+    const current = getStarred();
+    const have = new Set(current.map((s) => s.id));
+    const additions: LocalStarredItem[] = [];
+    let starredSkipped = 0;
+    for (const s of incoming.starred) {
+      if (!isStarredItem(s)) { starredSkipped++; continue; }
+      if (have.has(s.id)) continue;
+      have.add(s.id);
+      additions.push(normalizeStarred(s as unknown as Record<string, unknown>));
+    }
+    const room = Math.max(0, STARRED_LIMIT - current.length);
+    const accepted = additions.slice(0, room);
+    starredSkipped += additions.length - accepted.length;
+    const mergedStarred = [...current, ...accepted].sort((a, b) => Date.parse(b.savedAt) - Date.parse(a.savedAt));
+    // An import is reported only after it was written; a failure here leaves the browser as it was.
+    if (!writeRaw(KEYS.starred, JSON.stringify(mergedStarred))) throw new Error("浏览器存储已满或不可用，这次没有导入任何内容。");
 
-  const readIds = getReadIds();
-  const readHave = new Set(readIds);
-  const readAdditions: string[] = [];
-  let readSkipped = 0;
-  for (const id of incoming.read) {
-    if (typeof id !== "string" || !ID_PATTERN.test(id)) { readSkipped++; continue; }
-    if (readHave.has(id)) continue;
-    readHave.add(id);
-    readAdditions.push(id);
-  }
-  const readRoom = Math.max(0, READ_LIMIT - readIds.length);
-  readSkipped += Math.max(0, readAdditions.length - readRoom);
-  const readFailed = !writeRaw(KEYS.read, JSON.stringify([...readIds, ...readAdditions.slice(0, readRoom)]));
+    const readIds = getReadIds();
+    const readHave = new Set(readIds);
+    const readAdditions: string[] = [];
+    let readSkipped = 0;
+    for (const id of incoming.read) {
+      if (typeof id !== "string" || !ID_PATTERN.test(id)) { readSkipped++; continue; }
+      if (readHave.has(id)) continue;
+      readHave.add(id);
+      readAdditions.push(id);
+    }
+    const readRoom = Math.max(0, READ_LIMIT - readIds.length);
+    readSkipped += Math.max(0, readAdditions.length - readRoom);
+    const readFailed = !writeRaw(KEYS.read, JSON.stringify([...readIds, ...readAdditions.slice(0, readRoom)]));
 
-  let themeApplied = false;
-  if (!getThemePreference() && (incoming.theme === "light" || incoming.theme === "dark")) {
-    themeApplied = writeRaw(KEYS.theme, incoming.theme);
-  }
-  cache.clear();
-  emit();
-  return { starredAdded: accepted.length, starredSkipped, readAdded: readFailed ? 0 : Math.min(readAdditions.length, readRoom), readSkipped, themeApplied, readFailed };
+    let themeApplied = false;
+    if (!getThemePreference() && (incoming.theme === "light" || incoming.theme === "dark")) {
+      themeApplied = writeRaw(KEYS.theme, incoming.theme);
+    }
+    cache.clear();
+    emit();
+    return { starredAdded: accepted.length, starredSkipped, readAdded: readFailed ? 0 : Math.min(readAdditions.length, readRoom), readSkipped, themeApplied, readFailed };
+  });
 }
 
 // --- React hooks ---

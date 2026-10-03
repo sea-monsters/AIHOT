@@ -1,3 +1,4 @@
+import {atomLink} from './atom-link.ts';
 import {XMLParser} from 'fast-xml-parser';
 import {clean} from './rss.ts';
 import {TOPICS,RULE_VERSION,type JournalSource} from './research-config.ts';
@@ -27,12 +28,12 @@ function feedDate(raw:string){
  if(exact){const [,year,month,day]=exact;const date=[year,month,day].filter(Boolean).join('-');if(month&&(Number(month)<1||Number(month)>12))return {date:null,precision:null};if(day&&(!Number.isFinite(Date.parse(date+'T00:00:00Z'))||new Date(date+'T00:00:00Z').toISOString().slice(0,10)!==date))return {date:null,precision:null};return {date,precision:day?'day':month?'month':'year'};}
  const n=Date.parse(raw);return Number.isFinite(n)?{date:new Date(n).toISOString().slice(0,10),precision:'day'}:{date:null,precision:null};
 }
-export function parsePublisherRSS(xml:string,s:JournalSource):Paper[]{
+export function parsePublisherRSS(xml:string,s:JournalSource,documentUrl=s.rss):Paper[]{
  if(/<!DOCTYPE|<!ENTITY/i.test(xml))throw Error('RSS entity declarations rejected');
  const d=new XMLParser({ignoreAttributes:false,attributeNamePrefix:'@',textNodeName:'#text',processEntities:true,htmlEntities:true}).parse(xml);
  if(!d.rss&&!d.feed&&!d['rdf:RDF'])throw Error('RSS endpoint returned non-feed content');
  return arr(d.rss?.channel?.item??d.feed?.entry??d['rdf:RDF']?.item).flatMap(e=>{
-  const title=clean(e.title??e['dc:title']),url=canonicalURL(val(e.link)||arr(e.link).find(l=>!l['@rel']||l['@rel']==='alternate')?.['@href']||val(e['prism:url']));if(!title||!url)return [];
+  const title=clean(e.title??e['dc:title']),url=canonicalURL(d.feed?(atomLink(d.feed,e,documentUrl)||''):(val(e.link)||val(e['prism:url'])));if(!title||!url)return [];
   if(/(?:table of contents|front cover|back cover|editorial board|list of reviewers|information for authors|publication information|^issue information$)/i.test(title))return [];
   const raw=val(e['content:encoded']??e.content??e.description??e.summary);let abstract=clean(raw)||null;
   const creatorValues=arr(e['dc:creator']??e.author??e.authors).map(a=>clean(a?.name??a)).filter(Boolean);

@@ -8,7 +8,8 @@ import {
   isRouteErrorResponse, Link, Links, Meta, Outlet, Scripts, ScrollRestoration, useLoaderData, useLocation, useNavigation, useRouteError, useRouteLoaderData,
   type ShouldRevalidateFunction,
 } from "react-router";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
+import { noteRecoveryNavigation } from "./lib/render-recovery.ts";
 import type { Route } from "./+types/root";
 import "./app.css";
 import { Sidebar } from "./components/shell/Sidebar";
@@ -16,7 +17,7 @@ import { MobileTabBar } from "./components/shell/MobileTabBar";
 import { BackToTop, NavigationProgress } from "./components/shell/Chrome";
 import { RingMark, Wordmark } from "./components/Logo";
 import { buttonClass } from "./components/ui/Controls";
-import { THEME_BOOT_SCRIPT } from "./lib/local-state";
+import { THEME_BOOT_SCRIPT, useThemeSync } from "./lib/local-state";
 import { apiGet } from "./lib/api.server";
 import { useHydratedFlag } from "./lib/hydration";
 
@@ -73,6 +74,7 @@ export function meta({ error }: Route.MetaArgs) {
 /** Sidebar, main column and phone tab bar around a page (or an error). */
 function SiteShell({ changelogVersion, children }: { changelogVersion: string | null; children: ReactNode }) {
   const navigation = useNavigation();
+  useEffect(() => { if (navigation.state !== "idle") noteRecoveryNavigation(); }, [navigation.state, navigation.location?.key]);
   return (
     <div className="flex min-h-dvh">
       <NavigationProgress active={navigation.state === "loading"} />
@@ -103,7 +105,9 @@ function SiteShell({ changelogVersion, children }: { changelogVersion: string | 
 export default function App() {
   const meta = useLoaderData<typeof loader>();
   useHydratedFlag();
-  const { pathname } = useLocation();
+  useThemeSync();
+  const { pathname, key } = useLocation();
+  useEffect(() => noteRecoveryNavigation(key), [key]);
   // The admin has its own chrome.
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return <Outlet />;
   return (
@@ -114,9 +118,11 @@ export default function App() {
 }
 
 export function ErrorBoundary() {
+  useThemeSync();
   const error = useRouteError();
   const site = useRouteLoaderData<typeof loader>("root");
-  const { pathname } = useLocation();
+  const { pathname, search, hash, key } = useLocation();
+  useEffect(() => noteRecoveryNavigation(key), [key]);
   const status = isRouteErrorResponse(error) ? error.status : 500;
   const notFound = status === 404;
   const body = (
@@ -126,13 +132,14 @@ export function ErrorBoundary() {
         <div className="mono text-[12px] text-ink-4">{status}</div>
         <h1 className="mt-1.5 text-[20px] font-bold text-ink">{notFound ? "这里没有内容" : "暂时无法加载"}</h1>
         <p className="mt-2 text-[13.5px] leading-relaxed text-ink-3">
-          {notFound ? "你访问的页面不存在，或内容已不再公开。" : "服务暂时繁忙，请稍后再试。已经加载过的内容不受影响。"}
+          {notFound ? "你访问的页面不存在，或内容已不再公开。" : "页面暂时无法显示。请确认没有未保存的输入，再重新加载。"}
         </p>
-        <div className="mt-6 flex justify-center gap-2.5">
-          <Link to="/" className={buttonClass("primary")}>
+        <div className="mt-6 flex flex-wrap justify-center gap-2.5">
+          {!notFound && <Link reloadDocument to={pathname + search + hash} className={buttonClass("primary")}>重新加载</Link>}
+          <Link reloadDocument to="/" className={buttonClass(notFound ? "primary" : "secondary")}>
             回到精选
           </Link>
-          <Link to="/all" className={buttonClass("secondary")}>
+          <Link reloadDocument to="/all" className={buttonClass("secondary")}>
             浏览全部动态
           </Link>
         </div>

@@ -71,3 +71,35 @@ test('changelog legacy and full ISO timestamps roundtrip; corrupt or impossible 
  const {state,values}=await reader();for(const value of ['2026-10-03T12:34:56Z','2026-10-03T12:34:56.000Z','2026-10-03T12:34']){state.setChangelogSeen(value);assert.ok(state.getChangelogSeen(),value)}
  for(const value of ['broken','2026-02-30T12:34:56Z','{"version":1}']){values.set(state.KEYS.changelogSeen,value);assert.equal(state.getChangelogSeen(),null)}
 });
+
+test("cached local edits preserve newer bookmarks and read marks from another tab", async () => {
+  const {state,values}=await reader([{id:'old',title:'Old'}]);
+  state.getStarred();state.getReadIds();
+  values.set(state.KEYS.starred,JSON.stringify([{id:'other',title:'Other'},{id:'old',title:'Old'}]));
+  values.set(state.KEYS.read,JSON.stringify(['other']));
+  const item={id:'new',title:'New',summary:null,sourceName:'',publishedAt:null,score:null,aiSelected:false};
+  assert.equal(state.toggleStar(item),true);state.markRead('new');
+  assert.deepEqual(state.getStarred().map(s=>s.id),['new','other','old']);
+  assert.deepEqual(state.getReadIds(),['new','other']);
+  values.set(state.KEYS.starred,JSON.stringify([...state.getStarred(),{id:'latest',title:'Latest'}]));
+  state.removeStar('old');assert.deepEqual(state.getStarred().map(s=>s.id),['new','other','latest']);
+  values.set(state.KEYS.read,JSON.stringify(['last','new','other']));
+  state.importBundle(JSON.stringify({version:1,starred:[],read:['imported']}));
+  assert.deepEqual(state.getReadIds(),['last','new','other','imported']);
+});
+
+test("unreadable bookmarks survive toggle, removal and import; failed writes do not report success", async () => {
+  const {state,values}=await reader();
+  const item={id:'new',title:'New',summary:null,sourceName:'',publishedAt:null,score:null,aiSelected:false};
+  for(const damaged of ['damaged original','{}','null','']) {
+    values.set(state.KEYS.starred,damaged);
+    assert.equal(state.toggleStar(item),false);state.removeStar('new');
+    assert.throws(()=>state.importBundle(JSON.stringify({version:1,starred:[item]})),/无法读取/);
+    assert.equal(values.get(state.KEYS.starred),damaged);
+  }
+  values.set(state.KEYS.starred,'[]');
+  window.localStorage.setItem=()=>{throw Error('quota');};
+  assert.equal(state.toggleStar(item),false);
+  assert.deepEqual(state.getStarred(),[]);
+  assert.throws(()=>state.importBundle(JSON.stringify({version:1,starred:[item]})),/存储/);
+});

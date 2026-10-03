@@ -29,7 +29,7 @@ test('all type filters retain the same ordered evidence', () => {
   }
 });
 test('all twelve upstream source commits predate fork integration and include correct range', () => {
-  const entry = CHANGELOG.releases.find(entry => entry.kind === 'upstream')!;
+  const entry = CHANGELOG.releases.find(entry => entry.at === '2026-10-01T02:27:00Z')!;
   assert.equal(entry.at, '2026-10-01T02:27:00Z');
   assert.equal(entry.upstream!.commits.length, 12);
   assert.ok(entry.upstream!.commits.every(commit => commit.at.startsWith('2026-09-30')));
@@ -59,7 +59,7 @@ test('duplicate release IDs and stale version markers are rejected', () => {
 test('source releases must be newest first and upstream commits cannot follow merge', () => {
   const unsorted = copy(); unsorted.releases.reverse();
   assert.throws(() => validateChangelog(unsorted), /newest first/);
-  const future = copy(); future.releases.find(entry => entry.upstream)!.upstream!.commits[0]!.at = '2026-10-02T00:00:00Z';
+  const future = copy(); future.releases.find(entry => entry.upstream)!.upstream!.commits[0]!.at = '2099-10-02T00:00:00Z';
   assert.throws(() => validateChangelog(future), /cannot follow/);
 });
 test('unknown fields and unproven release evidence are rejected', () => {

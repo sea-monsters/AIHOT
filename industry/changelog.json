@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-03T16:00:02Z",
+  "latestVersion": "2026-10-03T16:28:00Z",
   "releases": [
+    {
+      "id": "upstream-selective-reliability-2026-10-04",
+      "at": "2026-10-03T16:28:00Z",
+      "basis": "record",
+      "kind": "fix",
+      "title": "择取上游的恢复、外观、收藏保护与 Atom 链接修复",
+      "body": [
+        "本轮审查上游 11 个提交，选择性移植旧页面错误恢复、主题跨标签/系统同步、本机 RSS 收藏保护和 Atom 相对链接修复。未整合 v3/v4 破坏性接口、模块删除或数据库迁移。",
+        "旧构建最多每标签页自动恢复一次；设置/反馈/管理页及输入过内容的页面保留手动重载。暖橙纸张风格、论文账户阅读/收藏、页面更新提示、模型与调度保持现有规则。",
+        "原始上游提交日期与逐项采用/未采用理由见同步说明；不把上游日期写成本站上线日期。"
+      ],
+      "sources": [
+        {
+          "label": "上游选择性同步说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/upstream-sync.md"
+        }
+      ]
+    },
     {
       "id": "navigation-content-updates-2026-10-04",
       "at": "2026-10-03T16:00:02Z",
