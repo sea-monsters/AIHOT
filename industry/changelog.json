@@ -1,8 +1,24 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-03T02:04:00Z",
+  "latestVersion": "2026-10-03T02:17:00Z",
   "releases": [
+    {
+      "id": "compact-service-touch-target-2026-10-03",
+      "at": "2026-10-03T02:17:00Z",
+      "basis": "record",
+      "kind": "fix",
+      "title": "补齐紧凑服务按钮的手机触控高度",
+      "body": [
+        "实测窄屏时发现旧样式仍把服务行按钮限制为 40px。现统一为桌面至少 42px、手机至少 44px，保留简洁行布局、字段边界与配置折叠。"
+      ],
+      "sources": [
+        {
+          "label": "阅读设计与实际验证",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/reading-design.md"
+        }
+      ]
+    },
     {
       "id": "flat-editorial-reading-2026-10-03",
       "at": "2026-10-03T02:04:00Z",

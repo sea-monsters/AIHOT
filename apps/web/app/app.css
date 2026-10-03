@@ -874,6 +874,7 @@
 .ai-sources label:focus-within{background:var(--bg-sunk)}
 .research-primary,.ai-secondary{display:inline-flex;align-items:center;justify-content:center;min-height:42px;line-height:1.5;font-size:.875rem;font-weight:600;border-radius:var(--radius-control);padding:.55rem .85rem}
 .research-primary{font-weight:650}
+.service-row-actions .ai-secondary{min-height:42px}
 .research-primary:hover:not(:disabled){background:var(--accent-ink)}
 .ai-secondary:hover:not(:disabled){background:var(--bg-sunk)}
 .research-pagination{align-items:center;flex-wrap:wrap;font-size:.875rem;gap:.75rem 1.5rem}
@@ -888,6 +889,7 @@
  .research-stats>div:nth-child(odd){padding-inline-start:0}
  .research-stats>div:nth-child(even){border-inline-end:0}
  .research-primary,.ai-secondary,.research-pagination :is(a,button){min-height:44px}
+ .service-row-actions .ai-secondary{min-height:44px}
  .research-panel>summary,.research-panel[open]>summary,.progress-provenance summary,.scholarly-discovery>summary{min-height:44px}
  .weekly-group,.daily-keyword-group,.research-detail>section{padding:1rem 0}
  .changelog-entry{padding:1rem .55rem}
