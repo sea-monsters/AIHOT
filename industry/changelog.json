@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-03T16:28:00Z",
+  "latestVersion": "2026-10-03T16:33:47Z",
   "releases": [
     {
       "id": "upstream-selective-reliability-2026-10-04",
-      "at": "2026-10-03T16:28:00Z",
-      "basis": "record",
-      "kind": "fix",
+      "at": "2026-10-03T16:33:47Z",
+      "basis": "integration",
+      "kind": "upstream",
       "title": "择取上游的恢复、外观、收藏保护与 Atom 链接修复",
       "body": [
         "本轮审查上游 11 个提交，选择性移植旧页面错误恢复、主题跨标签/系统同步、本机 RSS 收藏保护和 Atom 相对链接修复。未整合 v3/v4 破坏性接口、模块删除或数据库迁移。",
@@ -16,10 +16,88 @@
       ],
       "sources": [
         {
+          "label": "本次四项择取适配的 fork 提交",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/65ad76f90c158024fe2ee37754930a0111e7f98d"
+        },
+        {
           "label": "上游选择性同步说明",
           "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/upstream-sync.md"
         }
-      ]
+      ],
+      "upstream": {
+        "repository": "KKKKhazix/AIHOT",
+        "base": "cf8f8d07d68dfa9079becc72b0717a45b33485f3",
+        "head": "1ca5d6dd97ca876ade8fba593da9e4f93228918f",
+        "compareUrl": "https://github.com/KKKKhazix/AIHOT/compare/cf8f8d07d68dfa9079becc72b0717a45b33485f3...1ca5d6dd97ca876ade8fba593da9e4f93228918f",
+        "commits": [
+          {
+            "sha": "1ca5d6dd97ca876ade8fba593da9e4f93228918f",
+            "at": "2026-10-03T15:35:27Z",
+            "title": "仅审查，未采用：4.0 引擎替换、模块与数据表删除；Sites 没有其新的 health/release 协议",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/1ca5d6dd97ca876ade8fba593da9e4f93228918f"
+          },
+          {
+            "sha": "cc66cceb1dc7a0bc147e942e49ff94c9cee418c6",
+            "at": "2026-10-03T09:44:07Z",
+            "title": "未采用：原 PostgreSQL 模型榜价格日期列删除，与本站期刊 JIF 无关",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/cc66cceb1dc7a0bc147e942e49ff94c9cee418c6"
+          },
+          {
+            "sha": "4ed5e7603962e8589adee4e1cd23abff6fae106b",
+            "at": "2026-10-03T09:23:30Z",
+            "title": "未采用：原模型榜评估测试计时变更，本站未运行该功能",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/4ed5e7603962e8589adee4e1cd23abff6fae106b"
+          },
+          {
+            "sha": "57943276cfb93e3ef200332340bc04140887dfbc",
+            "at": "2026-10-03T09:12:35Z",
+            "title": "择取：主题同步及旧构建恢复；不采用 v3 接口、手机壳、模型榜和删除迁移",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/57943276cfb93e3ef200332340bc04140887dfbc"
+          },
+          {
+            "sha": "0484607276a8afbf26cc7ff17661bbcdf81a4e32",
+            "at": "2026-10-03T06:59:25Z",
+            "title": "未采用：原 AI 站来源文案，本站有独立论文来源说明",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/0484607276a8afbf26cc7ff17661bbcdf81a4e32"
+          },
+          {
+            "sha": "3343fe2b20db4be7269113752d82d3992fc52b6b",
+            "at": "2026-10-02T06:23:03Z",
+            "title": "未采用：原事件进展排序，本站研究进展与关键词图为独立实现",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/3343fe2b20db4be7269113752d82d3992fc52b6b"
+          },
+          {
+            "sha": "39281f689492cf52a672f2cb099adcc35c0c14c0",
+            "at": "2026-10-02T06:13:46Z",
+            "title": "未采用：Node 自托管 SITE_URL 启动说明；本站使用 Sites 部署流程",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/39281f689492cf52a672f2cb099adcc35c0c14c0"
+          },
+          {
+            "sha": "b5e2a09a6b794eef09c5cb973e340e9bb1ad319a",
+            "at": "2026-10-02T06:02:17Z",
+            "title": "未采用：原 X 搜索付费回执；本站不运行该采集器",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/b5e2a09a6b794eef09c5cb973e340e9bb1ad319a"
+          },
+          {
+            "sha": "ddf1c19ef2302863748dce51e4fdcd60d4415fc0",
+            "at": "2026-10-01T17:58:37Z",
+            "title": "未采用：原 embedding 付费回执；本站无此批次流程",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/ddf1c19ef2302863748dce51e4fdcd60d4415fc0"
+          },
+          {
+            "sha": "035f7b7f6e26cf203562ddd6065ff7adc1bb0c07",
+            "at": "2026-10-01T15:03:25Z",
+            "title": "择取：Atom XML Base / 相对链接修复，移植至两套 Sites 解析器",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/035f7b7f6e26cf203562ddd6065ff7adc1bb0c07"
+          },
+          {
+            "sha": "8d5a39bb47c917616798a3fdd71688a80f6c9b6c",
+            "at": "2026-10-01T05:28:17Z",
+            "title": "择取：旧 RSS 本机收藏的新鲜读取与损坏数据保护；不导入原后端恢复迁移",
+            "url": "https://github.com/KKKKhazix/AIHOT/commit/8d5a39bb47c917616798a3fdd71688a80f6c9b6c"
+          }
+        ]
+      }
     },
     {
       "id": "navigation-content-updates-2026-10-04",

@@ -89,3 +89,15 @@ test('runtime diagnostics remain separate and source has no demo claims or crede
   assert.match(route,/\/settings#diagnostics/);
   assert.doesNotMatch(route,/api\/site\/logs|dangerouslySetInnerHTML/);
 });
+
+test('selective upstream record distinguishes the reviewed range from the adopted patches',()=>{
+ const entry=CHANGELOG.releases.find(e=>e.id==='upstream-selective-reliability-2026-10-04')!;
+ assert.equal(entry.kind,'upstream');assert.equal(entry.basis,'integration');
+ assert.equal(entry.at,'2026-10-03T16:33:47Z');
+ assert.equal(changelogDays([entry])[0]!.date,'2026-10-04');
+ assert.equal(entry.upstream!.commits.length,11);
+ assert.equal(entry.upstream!.head,'1ca5d6dd97ca876ade8fba593da9e4f93228918f');
+ assert.equal(entry.upstream!.commits.filter(c=>c.title.startsWith('择取：')).length,3);
+ assert.ok(entry.body.some(s=>s.includes('未整合 v3/v4')));
+ assert.ok(entry.sources.some(s=>s.url.endsWith('/65ad76f90c158024fe2ee37754930a0111e7f98d')));
+});
