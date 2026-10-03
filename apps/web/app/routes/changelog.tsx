@@ -92,11 +92,11 @@ export default function ChangelogPage() {
     </AsideCard>
   </>;
   return <div className="research-page changelog-page">
-    <header className="pb-5">
+    <header className="research-heading"><div>
       <h1 className="text-2xl font-semibold leading-snug text-ink">更新日志</h1>
       <p className="mt-2 text-sm leading-relaxed text-ink-3">网站变更与 GitHub 上游同步，按日记录，最新在前</p>
       <p className="mt-1 text-xs text-ink-3">UTC+08 · 按提交 / 合入 / 维护日期归档，非精确上线时间</p>
-    </header>
+    </div></header>
     <ControlReadingLayout label="更新日期与筛选" summary={`${selected || month} · ${kind ? LABELS[kind] : '全部类型'}`} rail={aside}>
     <p className="mb-4 text-xs text-ink-3" aria-live="polite">{days.length} 天 · {count} 条变更</p>
     <div className="space-y-4" data-changelog-timeline>

@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-02T19:41:00Z",
+  "latestVersion": "2026-10-03T02:04:00Z",
   "releases": [
+    {
+      "id": "flat-editorial-reading-2026-10-03",
+      "at": "2026-10-03T02:04:00Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "正文改用细线分隔，统一关键页面阅读与操作层级",
+      "body": [
+        "论文库、研究进展、热点、收藏与日报引用采用连续文本条目，减少整块圆角卡片、重复底色标题和嵌套边框；鼠标悬停或键盘进入条目时轻微加深背景，勾选条目保留独立强调。",
+        "详情、日报段落、更新日志和设置分组改以标题、留白与分割线组织。统一题名、正文、元信息和主次操作样式；表单仍有清楚的输入边界、校验与焦点，收藏及已读状态继续可辨。",
+        "保留暖橙纸张与深色配色、无阴影设计；右栏仍在宽桌面吸顶，窄屏默认折叠。不改变采集、日报、模型、密钥、论文或账户阅读数据。"
+      ],
+      "sources": [
+        {
+          "label": "阅读设计与验证范围",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/reading-design.md"
+        }
+      ]
+    },
     {
       "id": "sticky-rail-bottom-boundary-2026-10-03",
       "at": "2026-10-02T19:41:00Z",
