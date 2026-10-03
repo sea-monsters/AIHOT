@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-03T02:17:00Z",
+  "latestVersion": "2026-10-03T13:04:00Z",
   "releases": [
+    {
+      "id": "keyword-scatter-full-window-2026-10-03",
+      "at": "2026-10-03T13:04:00Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "热点榜改为关键词数量与重要性分布",
+      "body": [
+        "按近七个 UTC+08 自然日的首次入库或实质元数据更新统计全部论文，以关键词散点与逐篇分数直方图展示数量、中位数与分布；悬停联动高亮，点击或键盘固定，完整关键词与论文可核对，无分页截断统计。",
+        "默认采用明确标注的规则阅读优先级，AI 摘要重要性独立切换；未分类、未评分与真实发表数单独说明，期刊 JIF 不作为单篇影响力。保留作者、AI 与规则关键词来源，并对 DOI、原文 URL 和窄义别名去重。"
+      ],
+      "sources": [
+        {
+          "label": "热点分布口径与验证",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/keyword-hotspots.md"
+        }
+      ]
+    },
     {
       "id": "compact-service-touch-target-2026-10-03",
       "at": "2026-10-03T02:17:00Z",

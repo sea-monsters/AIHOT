@@ -6,6 +6,7 @@ import {monthWindow,inUpdateWindow,PIPELINE_VERSION,ANALYSIS_SCHEMA,digest,metad
 import {validateScheduleMirror,researchSchedule} from './research-schedule.ts';
 import {writeLog} from './runtime-logs.ts';
 import {buildResearchView} from './research-views.ts';
+import {readKeywordMap} from './keyword-map.ts';
 import {buildWeeklyDigest} from './weekly.ts';
 import {PUBLISHERS,RESEARCH_SOURCES,TOPICS,RULE_VERSION,type JournalSource} from './research-config.ts';
 import {fromCrossref,parsePublisherRSS,sourceAccepts,fromOpenAlex,enrichPaper,evaluate,normalizedTitle,canonicalURL,type Paper} from './research-domain.ts';
@@ -135,6 +136,7 @@ export async function researchApi(request:Request,env:any){const db=env.DB;if(!d
   const rows=(await db.prepare('SELECT * FROM research_papers WHERE priority>=0').all()).results;
   return json(buildResearchView(rows.map(rowPaper),u.searchParams,'feed'));
  }
+ if(path==='/api/site/research/keyword-map')return json(await readKeywordMap(db,u.searchParams));
  if(path==='/api/site/research/weekly'){
   const rows=(await db.prepare('SELECT * FROM research_papers WHERE priority>=0').all()).results;
   const latest=await db.prepare('SELECT max(last_success) t FROM research_sources').first();
