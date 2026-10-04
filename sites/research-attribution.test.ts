@@ -93,3 +93,6 @@ test('API batch validation and slot budget use one captured request start across
  const response=await researchApi(new Request('https://local.test/api/site/research/sync',{method:'POST',body:JSON.stringify({sourceId:RESEARCH_SOURCES[0]!.id,maxPages:1,batchKey:'2026-10-04/08'})}),{DB:f.db});const result=await response.json();
  assert.equal(response.status,200);assert.equal(result.startedAt,'2026-10-04T11:59:59.999Z');assert.equal(result.batchKey,'2026-10-04/08');assert.equal(result.crossref.cycle.key,'2026-10-04/08');assert.equal(crossed,true);
 }finally{t.mock.timers.reset();globalThis.fetch=original;f.sql.close()}});
+test('consumed one-shot maintenance endpoint is absent from the final application',async()=>{const f=fixture();try{
+ const env={DB:f.db,HKIS_OWNER_EMAIL:'owner@example.org'};for(const method of ['GET','POST']){const r=await researchApi(new Request('https://local.test/api/site/research/attribution/repair-once',{method,headers:{origin:'https://local.test','oai-authenticated-user-id':'owner','oai-authenticated-user-email':'owner@example.org','content-type':'application/json'},...(method==='POST'?{body:'{}'}:{})}),env);assert.equal(r.status,404)}
+}finally{f.sql.close()}});
