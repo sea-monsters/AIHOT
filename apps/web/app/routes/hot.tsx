@@ -2,6 +2,7 @@ import {usePageRead} from '../components/NavigationUpdates';
 import {isPageOverview} from '@aihot/contracts/navigation-updates';
 import {useMemo,useState} from 'react';
 import {Form,Link,useLoaderData,useLocation,useRevalidator,type LoaderFunctionArgs} from 'react-router';
+import {RailDisclosure} from '../components/ui/AdaptiveRail';
 import {ControlReadingLayout} from '../components/ui/ControlReadingLayout';
 import {PaperSelection,PaperBulkToolbar,PaperCardState,PaperSourceLink} from '../components/PaperReader';
 import {PUBLISHERS} from '../../../../sites/research-config.ts';
@@ -27,6 +28,7 @@ export function KeywordExplorer({d}:{d:KeywordMap}){
  const x=(n:number)=>70+scale(n)*640,y=(n:number|null)=>n===null?316:270-n*2.2;
  const ticks=linear?[0,Math.round(maxCount/4),Math.round(maxCount/2),Math.round(maxCount*3/4),maxCount]:[1,2,5,10,20,50,100,200,500,1000,2000,5000,10000].filter(n=>n<=maxCount);
  const pin=(id:string)=>setPinned(p=>p===id?null:id),reset=()=>{setPinned(null);setHover(null)};
+ const matchingKeywords=d.keywords.filter(k=>k.label.toLowerCase().includes(search.toLowerCase()));
  const keywordEvents=(id:string)=>({onMouseEnter:()=>setHover(id),onMouseLeave:()=>setHover(null),onFocus:()=>setHover(id),onBlur:()=>setHover(null),onClick:()=>pin(id)});
  return <PaperSelection ids={drillPapers.map(p=>p.id)} scopeKey={JSON.stringify(d.filters)+String(pinned)}><main className="research-page keyword-page" onKeyDown={e=>{if(e.key==='Escape')reset()}}>
  <header className="research-heading"><div><p className="research-eyebrow">HKIS / KEYWORD OBSERVATORY</p><h1>关键词热点分布</h1><p>{d.window.startDate} 至 {d.window.endDate} · UTC+08 · 近 7 个自然日</p></div><Link className="research-back" to="/research">论文库 ↗</Link></header>
@@ -38,7 +40,7 @@ export function KeywordExplorer({d}:{d:KeywordMap}){
  <label>研究方向<select name="topic" defaultValue={d.filters.topic}><option value="">全部方向（含未分类）</option>{d.topics.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></label>
  <label>出版商<select name="publisher" defaultValue={d.filters.publisher}><option value="">全部出版商</option>{PUBLISHERS.map(p=><option key={p}>{p}</option>)}</select></label>
  <button className="research-primary" type="submit">应用口径</button><Link className="research-back" to="/hot">清除筛选</Link></Form></details>
- <section className="keyword-legend"><div className="keyword-legend-heading"><h2>全部关键词</h2><button type="button" onClick={reset} disabled={!active}>重置</button></div><label className="keyword-search">查找关键词<input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="例如 TCAD / DRAM"/></label><p>悬停高亮 · 点击固定 · Esc 重置<br/>查找只缩小列表，不改变统计</p><div className="keyword-legend-list">{d.keywords.filter(k=>k.label.toLowerCase().includes(search.toLowerCase())).map(k=><button type="button" key={k.id} {...keywordEvents(k.id)} aria-pressed={pinned===k.id} aria-label={keywordSummary(k)} className={active===k.id?'is-active':''}><span>{k.label}</span><b>{k.count}</b></button>)}{!d.keywords.some(k=>k.label.toLowerCase().includes(search.toLowerCase()))&&<p>没有匹配关键词</p>}</div></section>
+ <section className="keyword-legend"><div className="keyword-legend-heading"><h2>全部关键词</h2><button type="button" onClick={reset} disabled={!active}>重置</button></div><label className="keyword-search">查找关键词<input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="例如 TCAD / DRAM"/></label><p>悬停高亮 · 点击固定 · Esc 重置<br/>查找只缩小列表，不改变统计</p><div className="keyword-legend-list">{matchingKeywords.slice(0,5).map(k=><button type="button" key={k.id} {...keywordEvents(k.id)} aria-pressed={pinned===k.id} aria-label={keywordSummary(k)} className={active===k.id?'is-active':''}><span>{k.label}</span><b>{k.count}</b></button>)}</div>{matchingKeywords.length>5&&<RailDisclosure title={`其余关键词 · ${matchingKeywords.length-5}`}><div className="keyword-legend-list">{matchingKeywords.slice(5).map(k=><button type="button" key={k.id} {...keywordEvents(k.id)} aria-pressed={pinned===k.id} aria-label={keywordSummary(k)} className={active===k.id?'is-active':''}><span>{k.label}</span><b>{k.count}</b></button>)}</div></RailDisclosure>}{!matchingKeywords.length&&<p>没有匹配关键词</p>}</section>
  </>}>
  <section className="keyword-overview" aria-labelledby="keyword-scatter-title"><div className="keyword-section-heading"><h2 id="keyword-scatter-title">数量 × {d.metric.label}</h2><label className="keyword-scale"><input type="checkbox" checked={linear} onChange={e=>setLinear(e.target.checked)}/>线性数量轴</label></div>
  <p className="keyword-caption">每点一个关键词 · 纵轴为已评分论文的中位数 · 竖线为中间 50% 区间</p>

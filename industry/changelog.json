@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-04T01:26:55Z",
+  "latestVersion": "2026-10-04T12:10:00Z",
   "releases": [
+    {
+      "id": "single-scroll-right-rails-2026-10-04",
+      "at": "2026-10-04T12:10:00Z",
+      "basis": "record",
+      "kind": "fix",
+      "title": "全站右栏默认精简，展开后只随页面滚动",
+      "body": [
+        "更新日志的记录口径与运行排查、日报生成说明、论文与进展的高级筛选默认折叠；常用日期与筛选优先显示。热点先列五个关键词，其余可展开或搜索，完整数据不删减。",
+        "移除右栏及关键词列表的独立纵向滚动区。内容能放下时保持侧栏吸附；展开过高、较矮窗口或放大阅读时恢复自然文档流。旧订阅详情的补充资料也可折叠，窄屏保留访问入口。"
+      ],
+      "sources": [
+        {
+          "label": "右栏阅读与无障碍说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/right-rails.md"
+        }
+      ]
+    },
     {
       "id": "latest-first-paper-ingestion-2026-10-04",
       "at": "2026-10-04T01:26:55Z",

@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { Link, useLoaderData, useLocation, useNavigate } from "react-router";
 import { apiGet, withPageUpdate } from "../lib/api.server";
 import { pageMeta } from "../lib/seo";
-import { AsideCard } from "../components/ui/Page";
+import {RailDisclosure} from "../components/ui/AdaptiveRail";
 import {ChangelogCalendar} from '../features/changelog/Calendar';
 import {calendarToday,updateDays} from '../features/changelog/calendar-domain';
 import {anchorEntries,toggleEntry} from "../features/changelog/disclosure";
@@ -85,14 +85,14 @@ export default function ChangelogPage() {
       {[null, ...KINDS].map(value => <button key={value ?? 'all'} type="button" onClick={() => setKind(value)} aria-pressed={kind === value} className={`rounded-full border px-3 py-2 text-sm transition-colors ${kind === value ? 'border-accent bg-selected text-accent-ink' : 'border-line bg-surface text-ink-2 hover:bg-bg-sunk'}`}>{value ? LABELS[value] : '全部'} <span className="ml-1 text-xs">{value ? data.releases.filter(entry => entry.kind === value).length : data.releases.length}</span></button>)}
     </div>
 </section>
-    <AsideCard title="记录口径">
+    <RailDisclosure title="记录口径">
       <p className="text-sm leading-relaxed text-ink-3">所有日期统一为 UTC+08。历史条目按代码提交或上游合入日期归档；本页维护记为「维护记录」，不推测精确上线时间。</p>
       <p className="mt-2 text-xs leading-relaxed text-ink-3">每条记录附代码来源。上游更新只有合入本站 fork 后才进入主时间线。</p>
-    </AsideCard>
-    <AsideCard title="运行问题排查">
+    </RailDisclosure>
+    <RailDisclosure title="运行问题排查">
       <p className="text-sm leading-relaxed text-ink-3">采集、模型请求的 warning / error 仍在所有者专用诊断页查看。</p>
       <Link to="/settings#diagnostics" className="mt-3 inline-block text-sm text-accent underline underline-offset-4">查看运行日志</Link>
-    </AsideCard>
+    </RailDisclosure>
   </>;
   return <div className="research-page changelog-page">
     <header className="research-heading"><div>

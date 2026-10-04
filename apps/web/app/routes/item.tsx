@@ -10,6 +10,7 @@ import { markRead } from "../lib/local-state";
 import { SelectedBadge } from "../components/ui/Badge";
 import { ScoreLabel } from "../components/ui/Score";
 import { PillTabs } from "../components/ui/Tabs";
+import {RailDisclosure} from "../components/ui/AdaptiveRail";
 import { ArticleLayout, RailSection } from "../components/ui/Page";
 import { Menu, MenuItem } from "../components/ui/Menu";
 import { StarButton } from "../features/feed/parts";
@@ -274,9 +275,11 @@ export default function ItemPage() {
         }
         right={
           <>
-            {actions}
-            {notes}
-            <div className="space-y-8 2xl:hidden">{outline}</div>
+            <div className="hidden lg:block">{actions}</div>
+            <RailDisclosure title="阅读补充与目录">
+              {notes}
+              <div className="space-y-4 2xl:hidden">{outline}</div>
+            </RailDisclosure>
           </>
         }
       >
