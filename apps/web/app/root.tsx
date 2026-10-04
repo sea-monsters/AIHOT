@@ -1,3 +1,4 @@
+import {ReadingContinuity} from './components/ReadingContinuity';
 import {NavigationUpdatesProvider} from './components/NavigationUpdates';
 import {PaperReaderProvider} from './components/PaperReader';
 import { QuickSearch, WebSearch } from "./components/WebSearch";
@@ -112,7 +113,7 @@ export default function App() {
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return <Outlet />;
   return (
     <NavigationUpdatesProvider><PaperReaderProvider><SiteShell changelogVersion={meta.changelogVersion}>
-      <Outlet />
+      <ReadingContinuity><Outlet /></ReadingContinuity>
     </SiteShell></PaperReaderProvider></NavigationUpdatesProvider>
   );
 }

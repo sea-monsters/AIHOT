@@ -1,3 +1,4 @@
+import {SectionLink} from '../ReadingContinuity';
 import {QuickSearch} from "../WebSearch";
 import {AssistantEntry} from "../AssistantEntry";
 import { SITE } from "@aihot/industry/site";
@@ -14,7 +15,7 @@ function SideLink({ item }: { item: NavItem }) {
   const isActive = tabIsActive(item, pathname);
   const Icon = item.icon;
   return (
-    <Link
+    <SectionLink
       to={updatePageDestination(item.to,pages)}
       prefetch="intent"
       aria-current={isActive ? "page" : undefined}
@@ -27,7 +28,7 @@ function SideLink({ item }: { item: NavItem }) {
       </span>
       <span className="min-w-0 truncate">{item.label}</span>
       <UpdateDot page={updatePageForPath(item.to)} className="ml-auto"/>
-    </Link>
+    </SectionLink>
   );
 }
 

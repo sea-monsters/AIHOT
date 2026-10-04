@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-04T13:45:08Z",
+  "latestVersion": "2026-10-04T14:09:38Z",
   "releases": [
+    {
+      "id": "partial-reading-navigation-2026-10-04",
+      "at": "2026-10-04T14:09:38Z",
+      "basis": "record",
+      "kind": "fix",
+      "title": "栏目与月历按需局部读取，保留阅读位置",
+      "body": [
+        "减少栏目切换和筛选时的重复初始化，正文使用有上限的标签页短期缓存；切换月历月份只读取归档概要，当前日报继续可读。",
+        "已提交筛选、展开和阅读位置可在返回栏目时恢复，显式刷新及内容更新使缓存失效；更新提示点、论文已读和收藏仍按实际阅读及原有账户规则处理。未增加采集或模型请求。"
+      ],
+      "sources": [
+        {
+          "label": "局部导航与验证边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/partial-navigation.md"
+        }
+      ]
+    },
     {
       "id": "shared-paper-daily-cohort-2026-10-04",
       "at": "2026-10-04T13:45:08Z",

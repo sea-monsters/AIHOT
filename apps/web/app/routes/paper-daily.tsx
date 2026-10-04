@@ -1,3 +1,5 @@
+import {cachedRouteLoader} from '../lib/reading-cache';
+export const clientLoader=cachedRouteLoader;
 import {usePageRead} from '../components/NavigationUpdates';
 import {isPageOverview} from '@aihot/contracts/navigation-updates';
 import {useLoaderData,useLocation,type LoaderFunctionArgs} from 'react-router';
@@ -8,3 +10,9 @@ export async function loader({request,params}:LoaderFunctionArgs){const q=new UR
 export const headers=()=>({'Cache-Control':'no-store'});
 export const meta=()=>[{title:`论文日报 · ${SITE.name}`},{name:'robots',content:'noindex, nofollow'}];
 export default function DailyRoute(){const d=useLoaderData<typeof loader>();usePageRead(d.pageUpdate,!!d.report&&d.date===d.pageUpdate?.latestDate&&isPageOverview('daily',useLocation().search));return <PaperDaily d={d}/>}
+
+/** Changing the calendar month doesn't change the selected report. Explicit refresh still revalidates. */
+export function shouldRevalidate({currentUrl,nextUrl,defaultShouldRevalidate,formMethod}:{currentUrl:URL;nextUrl:URL;defaultShouldRevalidate:boolean;formMethod?:string}){
+ const a=new URL(currentUrl),b=new URL(nextUrl);const changed=a.searchParams.get('month')!==b.searchParams.get('month');a.searchParams.delete('month');b.searchParams.delete('month');
+ return !formMethod&&changed&&a.href===b.href?false:defaultShouldRevalidate;
+}

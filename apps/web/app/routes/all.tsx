@@ -1,3 +1,5 @@
+import {cachedRouteLoader} from '../lib/reading-cache';
+export const clientLoader=cachedRouteLoader;
 import {usePageRead} from '../components/NavigationUpdates';
 import {isPageOverview} from '@aihot/contracts/navigation-updates';
 import {useLoaderData,useLocation,type LoaderFunctionArgs} from 'react-router';

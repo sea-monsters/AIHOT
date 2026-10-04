@@ -76,10 +76,15 @@ export async function generateDaily(db:any,env:any,body:any={},request?:Request,
  }finally{await db.prepare("DELETE FROM research_settings WHERE key='daily_generation_lock' AND value=?").bind(expires).run();}
 }
 function publicGroup(r:any){const input=parse(r.input_json),config=parse(r.config_json,null);return {id:r.id,keyword:r.keyword,status:r.status,result:parse(r.result_json,null),config,errorCode:r.error_code,contentHash:r.content_hash,updatedAt:r.updated_at,papers:(input.papers||[]).map((p:any)=>({id:p.id,title:p.title,url:p.doi?'https://doi.org/'+encodeURI(p.doi):p.url,doi:p.doi,journal:p.journal,publisher:p.publisher,authors:p.authors,firstSeen:p.firstSeen,readingScore:p.readingScore,abstractSource:p.provenance?.abstract||null,contentHash:p.contentHash}))};}
-export async function dailyRead(db:any,params:URLSearchParams,at=new Date()){
- const today=collectedDay(at.toISOString())!,requested=params.get('date')||today,invalidDate=!validDay(requested),date=invalidDate?today:requested;
+export async function dailyCalendarRead(db:any,params:URLSearchParams,at=new Date()){
+ const today=collectedDay(at.toISOString())!;
  const inputMonth=params.get('month')||today.slice(0,7),month=/^(?:19\d{2}|[2-9]\d{3})-(?:0[1-9]|1[0-2])$/.test(inputMonth)?inputMonth:today.slice(0,7);
  const days=(await db.prepare('SELECT date,status,selection_json,updated_at FROM research_daily WHERE date>=? AND date<=? ORDER BY date').bind(month+'-01',month+'-31').all()).results.map((r:any)=>({date:r.date,status:r.status,count:parse(r.selection_json).eligible||0,updatedAt:r.updated_at}));
+ return {today,month,days};
+}
+export async function dailyRead(db:any,params:URLSearchParams,at=new Date()){
+ const today=collectedDay(at.toISOString())!,requested=params.get('date')||today,invalidDate=!validDay(requested),date=invalidDate?today:requested;
+ const {month,days}=await dailyCalendarRead(db,params,at);
  const row=invalidDate?null:await db.prepare('SELECT * FROM research_daily WHERE date=?').bind(date).first();
  const groups=row?(await db.prepare('SELECT * FROM research_daily_groups WHERE date=? ORDER BY ordinal').bind(date).all()).results.map(publicGroup):[];
  const report=row?{date:row.date,sourceDate:row.source_date,cutoff:row.cutoff,status:row.status,coverage:parse(row.coverage_json),selection:parse(row.selection_json),paperIds:parse(row.paper_ids_json,[]),contentHash:row.content_hash,schema:row.schema_version,prompt:row.prompt_version,revision:row.revision,createdAt:row.created_at,updatedAt:row.updated_at,finishedAt:row.finished_at,groups}:null;

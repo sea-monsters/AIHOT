@@ -1,3 +1,4 @@
+import {SectionLink} from '../ReadingContinuity';
 import {AssistantEntry} from "../AssistantEntry";
 import { Link, useLocation } from "react-router";
 import { TABBAR, tabIsActive } from "./nav";
@@ -14,7 +15,7 @@ export function MobileTabBar({ changelogVersion }: { changelogVersion: string | 
           const active = tabIsActive(t, pathname);
           const Icon = t.icon;
           return (
-            <Link
+            <SectionLink
               key={t.to}
               to={updatePageDestination(t.to,pages)}
               prefetch="intent"
@@ -24,7 +25,7 @@ export function MobileTabBar({ changelogVersion }: { changelogVersion: string | 
               <Icon size={21} />
               <span>{t.label}</span>
               <UpdateDot page={updatePageForPath(t.to)} more={t.to==='/more'} className="navigation-mobile-dot"/>
-            </Link>
+            </SectionLink>
           );
         })}
         <AssistantEntry mobile />

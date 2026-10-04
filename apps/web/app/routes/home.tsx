@@ -1,1 +1,1 @@
-export {loader,meta,headers,default} from "./research";
+export {clientLoader,loader,meta,headers,default} from "./research";
