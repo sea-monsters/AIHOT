@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-04T12:10:00Z",
+  "latestVersion": "2026-10-04T13:45:08Z",
   "releases": [
+    {
+      "id": "shared-paper-daily-cohort-2026-10-04",
+      "at": "2026-10-04T13:45:08Z",
+      "basis": "record",
+      "kind": "fix",
+      "title": "网页新增论文纳入同日日报候选，保留真实采集来源",
+      "body": [
+        "网页检查先发现的新论文现在归入首见当天的日报候选分组，定时批次与调用入口独立记录；跨午夜、重复与并发发现不覆盖原始首见归属，网页补充也不会冒充定时采集完成。",
+        "共享抓取上限、模型额度、评分门槛及已存日报保持不变。旧无归属记录不全量回填；已确认的单条缺口通过严格限定、留有审计的补救修复。"
+      ],
+      "sources": [
+        {
+          "label": "论文采集与归属边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-ingestion.md"
+        }
+      ]
+    },
     {
       "id": "single-scroll-right-rails-2026-10-04",
       "at": "2026-10-04T12:10:00Z",

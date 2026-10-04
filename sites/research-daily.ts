@@ -1,3 +1,4 @@
+import {cohortExpression} from './research-attribution.ts';
 import {AIError,KIMI_CODE_ENDPOINT,encryptionReady} from './ai/security.ts';
 import {providerCall} from './ai/provider.ts';
 import {processingConfig} from './research-processing.ts';
@@ -13,7 +14,7 @@ function block(c:any,env:any){return !c.enabled?'ai_disabled':!c.key_ciphertext|
 export async function prepareDaily(db:any,date:string,at=new Date()){
  const existing=await db.prepare('SELECT * FROM research_daily WHERE date=?').bind(date).first();if(existing)return existing;
  const coverage=await previousCoverage(db,date),w=dailyWindow(at,date);
- const where='batch_key IN (?,?) AND first_seen>=? AND first_seen<? AND snapshot_at<?',args=[...w.batchKeys,w.start,w.cutoff,w.cutoff];
+ const where=cohortExpression+' IN (?,?) AND first_seen>=? AND first_seen<? AND snapshot_at<?',args=[...w.batchKeys,w.start,w.cutoff,w.cutoff];
  const aggregate=await db.prepare(`SELECT count(*) total,sum(CASE WHEN json_type(snapshot_json,'$.priority') IN ('integer','real') AND json_extract(snapshot_json,'$.priority')>75 THEN 1 ELSE 0 END) eligible,sum(CASE WHEN json_type(snapshot_json,'$.priority') NOT IN ('integer','real') OR json_type(snapshot_json,'$.priority') IS NULL THEN 1 ELSE 0 END) unresolved FROM research_batch_members WHERE ${where}`).bind(...args).first();
  const rows=(await db.prepare(`SELECT snapshot_json FROM research_batch_members WHERE ${where} AND json_extract(snapshot_json,'$.priority')>75 ORDER BY json_extract(snapshot_json,'$.priority') DESC,paper_id LIMIT ?`).bind(...args,DAILY_LIMITS.papersPerDay).all()).results;
  const prepared=prepareDailyPapers(rows.map((r:any)=>parse(r.snapshot_json,null)).filter(Boolean));

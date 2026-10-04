@@ -1,5 +1,7 @@
 # HKIS scholarly update operations
 
+**2026-10-04 attribution correction:** webpage and scheduled discoveries share independent daily candidate cohorts, not scheduled-run lifecycle. Keep explicit scheduled `batchKey` exactly as before; webpage calls remain unbatched, record their entry path, and are included by first-seen UTC+08 day. No budget, schedule, AI or frozen-report changes. See [cohort boundaries](../docs/research-ingestion.md#网页补充与日报归属2026-10-04).
+
 This is a private, owner-only scholarly discovery database. It currently monitors 17 configured journals from IEEE, Wiley, Elsevier, Nature Portfolio (Springer Nature) and Science (AAAS), not their entire catalogs. Public metadata collection is deterministic. The owner has authorized selective difficult-paper assessments using their currently saved, enabled and connection-tested AI configuration; public metadata collection does not use paid publisher APIs.
 
 ## Current pipeline contract (2026-10-02, supersedes historical windows below)

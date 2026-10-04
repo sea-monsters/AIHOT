@@ -51,3 +51,7 @@ D1 新增 research_batches、research_batch_members、research_daily 和 researc
 - sites/daily-ui.test.mjs：单日SSR、月历空月/年份/月份、引用归属、读/收藏控制、正常/排队/空日状态
 - sites/test-daily-worker.mjs：隔离真实 Worker/D1、mock provider、当前模型/配额/回执、真实归档 SSR，无生产写入
 - 完整 typecheck/build 与既有 Sites 回归；原6项公共缓存基线失败单列，不作为本功能引入。没有运行付费历史回填
+
+### 网页补充候选（2026-10-04）
+
+日报候选读取独立 `daily_cohort_key`，旧非空 `batch_key` 兼容。按首见 UTC+08 自然日，00:00–19:59 放入当日08补充分组，20:00–23:59放入当日20分组；凌晨补充不代表08定时任务已发生。实际运行ID/批次/入口仍独立保留，网页补充不改变定时覆盖率。跨午夜的在途请求按每篇实际首见日入组。`research_daily.date` 是生成/归档日，`source_date` 是被汇总的前一天；已存源日归档不得因回填改写。详见[归属和预算边界](research-ingestion.md#网页补充与日报归属2026-10-04)。

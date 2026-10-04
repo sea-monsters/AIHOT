@@ -1,3 +1,5 @@
+import {collectionCycle} from './research-crossref.ts';
+import {cohortExpression} from './research-attribution.ts';
 import {RESEARCH_SOURCES} from './research-config.ts';
 import {collectedDay} from './research-views.ts';
 import {dailyWindow,localHour} from './daily-domain.ts';
@@ -12,7 +14,7 @@ export async function startBatch(db:any,slot:number,at=new Date()){
 export async function validateBatch(db:any,key:any,at=new Date()){
  if(key===undefined||key===null)return null;
  if(typeof key!=='string'||!/^\d{4}-\d{2}-\d{2}\/(08|20)$/.test(key))throw new AIError('invalid_batch',400,'无效采集批次');
- const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();if(!row||row.date!==collectedDay(at.toISOString())||row.status!=='running')throw new AIError('batch_closed',409,'采集批次不存在、已结束或已过期');return key;
+ const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();if(!row||row.date!==collectedDay(at.toISOString())||row.status!=='running'||key!==collectionCycle(at.toISOString(),null))throw new AIError('batch_closed',409,'采集批次不存在、已结束或已过期');return key;
 }
 export async function finishBatch(db:any,key:any,at=new Date()){
  if(typeof key!=='string')throw new AIError('invalid_batch',400,'无效采集批次');const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();if(!row)throw new AIError('invalid_batch',404,'采集批次不存在');
@@ -20,10 +22,10 @@ export async function finishBatch(db:any,key:any,at=new Date()){
 }
 export async function batchCoverage(db:any,key:string,cutoff:string){
  const batch=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();const expected=parse(batch?.sources_json,RESEARCH_SOURCES.map(s=>s.id));
- const rows=(await db.prepare('SELECT id,source_id,started_at,finished_at,status,details_json FROM research_runs WHERE batch_key=? AND started_at<? ORDER BY started_at,id').bind(key,cutoff).all()).results;
+ const rows=(await db.prepare('SELECT id,source_id,started_at,finished_at,status,entry_point,details_json FROM research_runs WHERE batch_key=? AND started_at<? ORDER BY started_at,id').bind(key,cutoff).all()).results;
  const last=new Map<string,any>();for(const r of rows)last.set(r.source_id,r);const missing=expected.filter((id:string)=>!last.has(id));
  const completeSources=expected.filter((id:string)=>{const r=last.get(id),d=parse(r?.details_json,{});return r&&r.status==='ok'&&r.finished_at&&r.finished_at<cutoff&&d.rssStatus==='ok'});
  const complete=!!batch&&batch.status==='finished'&&batch.finished_at&&batch.finished_at<cutoff&&completeSources.length===expected.length;
- return {key,recorded:!!batch,status:complete?'complete':batch?'partial':'missing',startedAt:batch?.started_at||null,finishedAt:batch?.finished_at||null,expectedSources:expected.length,attemptedSources:last.size,completeSources:completeSources.length,missingSources:missing,runs:rows.map((r:any)=>({id:r.id,sourceId:r.source_id,status:r.status,startedAt:r.started_at,finishedAt:r.finished_at,channels:parse(r.details_json,{}).channels||null}))};
+ return {key,recorded:!!batch,status:complete?'complete':batch?'partial':'missing',startedAt:batch?.started_at||null,finishedAt:batch?.finished_at||null,expectedSources:expected.length,attemptedSources:last.size,completeSources:completeSources.length,missingSources:missing,runs:rows.map((r:any)=>({id:r.id,sourceId:r.source_id,entryPoint:r.entry_point||'legacy_unknown',status:r.status,startedAt:r.started_at,finishedAt:r.finished_at,channels:parse(r.details_json,{}).channels||null}))};
 }
-export async function previousCoverage(db:any,date:string){const w=dailyWindow(new Date(),date),batches=[];for(const key of w.batchKeys)batches.push(await batchCoverage(db,key,w.cutoff));const untracked=await db.prepare('SELECT count(*) n FROM research_papers p WHERE p.first_seen>=? AND p.first_seen<? AND NOT EXISTS(SELECT 1 FROM research_batch_members m WHERE m.paper_id=p.id AND m.batch_key IN (?,?))').bind(w.start,w.cutoff,...w.batchKeys).first();return {...w,batches,complete:batches.every(b=>b.status==='complete'),untrackedNewPapers:Number(untracked?.n||0)};}
+export async function previousCoverage(db:any,date:string){const w=dailyWindow(new Date(),date),batches=[];for(const key of w.batchKeys)batches.push(await batchCoverage(db,key,w.cutoff));const untracked=await db.prepare('SELECT count(*) n FROM research_papers p WHERE p.first_seen>=? AND p.first_seen<? AND NOT EXISTS(SELECT 1 FROM research_batch_members m WHERE m.paper_id=p.id AND '+cohortExpression+' IN (?,?))').bind(w.start,w.cutoff,...w.batchKeys).first();return {...w,batches,complete:batches.every(b=>b.status==='complete'),untrackedNewPapers:Number(untracked?.n||0)};}
