@@ -2,7 +2,7 @@
 import { startTransition, StrictMode } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { HydratedRouter } from "react-router/dom";
-import { createEditGuard, createRenderErrorHandler, noteRecoveryNavigation } from "./lib/render-recovery.ts";
+import { caughtRenderRecovery, createEditGuard, createRenderErrorHandler, noteRecoveryNavigation } from "./lib/render-recovery.ts";
 
 // Capture once before hydration: the build this document was rendered from (its route manifest file).
 // The development server has no build to replace.
@@ -17,5 +17,6 @@ startTransition(() => {
     <StrictMode>
       <HydratedRouter onError={onError} />
     </StrictMode>,
+    { onCaughtError: caughtRenderRecovery(onError) },
   );
 });

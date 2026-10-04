@@ -1,3 +1,4 @@
+import {handleError} from './errors.server.ts';
 import { siteContext } from '../../../../sites/context.ts';
 import { siteApi } from '../../../../sites/api.ts';
 // Server-side HTTP client for route loaders. The web process never touches the database;
@@ -20,6 +21,7 @@ export class ApiError extends Error {
 
 export async function apiGet<T>(path: string, init?: { signal?: AbortSignal; headers?: Record<string, string>; responseHeaders?: Headers }): Promise<T> {
   const ctx = siteContext.getStore();
+  try {
   const res = ctx ? await siteApi(new Request(`https://site.internal${path}`), ctx.env) : await fetch(`${API_BASE}${path}`, {
     headers: { accept: "application/json", "x-aihot-ssr": "1", ...init?.headers },
     signal: init?.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
@@ -36,6 +38,12 @@ export async function apiGet<T>(path: string, init?: { signal?: AbortSignal; hea
   }
   res.headers.forEach((value, name) => init?.responseHeaders?.set(name, value));
   return (await res.json()) as T;
+  } catch (error) {
+    if (!init?.signal?.aborted && (!(error instanceof ApiError) || error.status >= 500)) {
+      await handleError(error, { request: ctx?.request ?? new Request('https://site.internal/') });
+    }
+    throw error;
+  }
 }
 
 /** Maps API failures to route responses: real 404s, search-busy page, otherwise 503. */

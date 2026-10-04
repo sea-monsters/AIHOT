@@ -54,3 +54,16 @@ export function createEditGuard(target: EventTarget): () => boolean {
   target.addEventListener("change", mark, { capture: true });
   return () => !edited;
 }
+
+/** React's document boundary also catches <Meta>/<Links> failures outside route elements. */
+export function caughtRenderRecovery(recover: ReturnType<typeof createRenderErrorHandler>) {
+  return (error: unknown, info: { componentStack?: string | null }) => {
+    if (!info.componentStack || isRouteErrorResponse(error)) return;
+    const url = new URL(window.location.href);
+    const key = window.history?.state?.key ?? "default";
+    return recover(error, {
+      location: { pathname: url.pathname, search: url.search, hash: url.hash, state: null, key },
+      params: {}, pattern: url.pathname, errorInfo: info,
+    });
+  };
+}

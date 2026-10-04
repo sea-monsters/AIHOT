@@ -50,6 +50,13 @@ assert.equal(networkProbes,0);
 const net=await mf.dispatchFetch('https://local.test/api/site/ai/network',{method:'POST',headers:writeHeaders,body:networkBody});assert.equal(net.status,200);const netResult=await net.json();assert.equal(netResult.httpStatus,401);assert.equal(netResult.noCredential,true);assert.equal(networkProbes,1);assert.equal((await db.prepare('SELECT count(*) n FROM ai_receipts').first()).n,0);
 assert.equal((await mf.dispatchFetch('https://local.test/api/site/ai/network',{method:'POST',headers:writeHeaders,body:networkBody})).status,429);assert.equal(networkProbes,1);
 console.log('NETWORK DIAGNOSTIC WORKER OK: actual runtime sends empty body without auth/cookie, no credential decrypt, mocked upstream only, no paid receipts/retry');
+for(const [path,method] of [['/about.data','GET'],['/about.data','HEAD'],['/research/missing.data','GET']]){const response=await mf.dispatchFetch('https://local.test'+path,{method});assert.equal(response.headers.get('Content-Type'),'text/plain; charset=utf-8',path);assert.equal(response.headers.get('Content-Disposition'),null);if(method==='HEAD')assert.equal(await response.text(),'');else assert.ok((await response.text()).length>0);}
+console.log('NAVIGATION MIME OK: real Worker GET, HEAD and missing data responses; no downloads');
+// Force a loader DB failure only in this isolated test database; SSR must report a safe marker.
+await db.prepare('DROP TABLE site_sources').run();
+const broken=await mf.dispatchFetch('https://local.test/items/missing?api_key=SSR_SECRET_SENTINEL',{headers:{Authorization:'Bearer SSR_SECRET_SENTINEL'}});await broken.text();
+const renderLogs=await db.prepare("SELECT * FROM runtime_logs WHERE component='server'").all();assert.ok(renderLogs.results.length>0);assert.ok(!JSON.stringify(renderLogs).includes('SSR_SECRET_SENTINEL'));assert.ok(!JSON.stringify(renderLogs).includes('SELECT'));assert.ok(!JSON.stringify(renderLogs).includes('stack'));
+console.log('SSR LOGGING OK: actual loader failure records a fixed safe marker in isolated D1');
 await mf.dispose();
 // Real workerd Request construction: Node fetch mocks do not enforce this runtime enum.
 const transport=new Miniflare(convertV4MiniflareOptions({modules:true,script:`export default {async fetch(){ const request=new Request('https://example.org/responses',{method:'POST',redirect:'manual'});return Response.json({redirect:request.redirect});}}`,compatibilityDate:'2026-09-01'}));

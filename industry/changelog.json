@@ -1,8 +1,29 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-04T14:09:38Z",
+  "latestVersion": "2026-10-04T14:24:45Z",
   "releases": [
+    {
+      "id": "upstream-navigation-safety-2026-10-04",
+      "at": "2026-10-04T14:24:45Z",
+      "basis": "record",
+      "kind": "fix",
+      "title": "选择性适配新一轮上游导航与安全修复",
+      "body": [
+        "审查上游新增12个提交，选取文档渲染失败的受限旧构建恢复、导航响应类型兼容、旧RSS请求目标保护及服务端渲染日志脱敏。仅旧构建确认丢失且没有未保存输入时允许一次恢复。",
+        "保留局部导航、独立月历、已读收藏、17学术信源、现有采集预算及不可变日报；未整体迁入新版引擎、PostgreSQL迁移或公开缓存。选择性审查截至2908224，最后完整合并基线仍为cf8f8d0。"
+      ],
+      "sources": [
+        {
+          "label": "逐项审查与适配说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/upstream-sync.md"
+        },
+        {
+          "label": "12项上游提交比较",
+          "url": "https://github.com/KKKKhazix/AIHOT/compare/1ca5d6dd97ca876ade8fba593da9e4f93228918f...290822424c0bd30841ac771ff74774041bbb842b"
+        }
+      ]
+    },
     {
       "id": "partial-reading-navigation-2026-10-04",
       "at": "2026-10-04T14:09:38Z",

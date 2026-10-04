@@ -17,6 +17,7 @@ export function parseFeed(xml:string,base:string){
 export async function fetchFeed(url:string){
  let current=new URL(url); const host=current.hostname.replace(/^www\./,''); for(let n=0;n<4;n++){
   if(current.hostname.replace(/^www\./,'')!==host)throw new Error('来源跨域重定向需审核');
+  if(current.username||current.password||current.port||current.hostname.endsWith('.')||!/^([a-z0-9-]+\.)+[a-z]{2,}$/i.test(current.hostname)||/(^|\.)(localhost|local|internal|invalid)$/.test(current.hostname))throw new Error('不安全的订阅地址');
   if(current.protocol!=='https:'||/^(localhost|127\.|10\.|192\.168\.|169\.254\.|\[|0\.)/.test(current.hostname)||/^172\.(1[6-9]|2\d|3[01])\./.test(current.hostname))throw new Error('不安全的订阅地址');
   const r=await fetch(current,{redirect:'manual',headers:{accept:'application/rss+xml, application/atom+xml, application/xml, text/xml','user-agent':`${SITE.crawlerName}/1.0 (RSS reader)`},signal:AbortSignal.timeout(15000)});
   if(r.status>=300&&r.status<400&&r.headers.get('location')){current=new URL(r.headers.get('location')!,current);continue;}

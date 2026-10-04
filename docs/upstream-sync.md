@@ -1,5 +1,41 @@
 # 上游同步记录
 
+## 2026-10-04 · 第二轮定向安全与导航适配
+
+本轮在 GitHub 只读核实新增 **12** 个提交，从上次选择性审查截至 `1ca5d6dd97ca876ade8fba593da9e4f93228918f` 到 `290822424c0bd30841ac771ff74774041bbb842b`。 [比较范围](https://github.com/KKKKhazix/AIHOT/compare/1ca5d6dd97ca876ade8fba593da9e4f93228918f...290822424c0bd30841ac771ff74774041bbb842b)。当前选择性审查截至 **2908224**；最后完整 merge 基线仍为 **cf8f8d0**。没有添加虚假的上游第二父提交，未采用项目仍须结合本记录逐项判断。
+
+### 本站实际适配
+
+- 文档 Meta/Links 渲染失败进入同一受限旧构建恢复器：仅同站 manifest HEAD 返回 404 时可恢复；当前构建、普通请求失败、离线、未知回调、隐藏标签页、设置/反馈/管理页、输入/修改与新导航均不自动重载。每标签页最多一次，不更换健康检查协议。
+- 仅 .data 导航流原有 text/x-script 改成 text/plain，防下载管理器误接管；保留响应字节、状态、缓存及 cookie，HTML/JSON/真正下载不改。
+- 旧 RSS 只请求公开域名形态的 HTTPS 地址，拒绝所有 IP 字面量（含保留IPv4、映射IPv6）、本地名、凭据与非标准端口；重定向仍限同域并每跳重检。不扩大来源名单，不改变17论文源请求路径或预算。此语法检查不声称自行执行 DNS/connect-time 验证。
+- SSR 只记录 server/unexpected_exception 等固定枚举及 500 状态；不记录异常字符串、堆栈、cause、URL/path/query、API key、header 或正文。预期4xx和取消不记录，同一请求去重；通过既有安全日志服务入库，日志失败不影响原响应。
+
+### 逐提交判定（上游原始 UTC 提交时间）
+
+- [`d5d9645`](https://github.com/KKKKhazix/AIHOT/commit/d5d964570e8a69eae5fb2843350aa0ab14ae98c7) · 2026-10-03T21:26:13Z · 未采用：site/modules 搬迁及 Node 代理/图片预算；本站保留 Sites/D1 与 industry 定制，不进行目录或模块重构。
+- [`9848e93`](https://github.com/KKKKhazix/AIHOT/commit/9848e936106db037d99a304887c36aad3fd0fad4) · 2026-10-03T22:24:22Z · 择取：React document caught-error 覆盖 Meta/Links 渲染错误；沿用本站 manifest 404、一次上限、输入与导航取消，未采用 health 协议、Docker/任务队列清理。
+- [`04978ba`](https://github.com/KKKKhazix/AIHOT/commit/04978ba78d3e9ed50d877ad545c5544ca33f1d3c) · 2026-10-04T06:59:49Z · 择取：.data turbo-stream 的 text/plain MIME；热点头像/YouTube/旧 PostgreSQL 发布流程未采用。
+- [`85a550f`](https://github.com/KKKKhazix/AIHOT/commit/85a550f2b2c121e0a9f53f93f96150380b29f936) · 2026-10-04T07:11:21Z · 择取：旧 RSS 抓取目标边界进一步收紧，拒绝 IP 字面量（含 IPv4 映射/IPv6）、凭据和非标准端口，各次重定向仍检查；本站请求体上限与日志枚举保护已有，未采用通用代理/正文提取。
+- [`50b562b`](https://github.com/KKKKhazix/AIHOT/commit/50b562b4cdbe595386adda969b70e045d7ecca35) · 2026-10-04T07:39:39Z · 已有或不适用：本站近期月、最新头优先、每源2页/全局20页和已配置输出上限保留；不导入首次加入前48小时策略、未知日期隐藏、出刊时间配置或右栏内滚动。
+- [`ec42ff7`](https://github.com/KKKKhazix/AIHOT/commit/ec42ff717b9775bb0a4013cc8fb44a9d68948e54) · 2026-10-04T08:02:42Z · 择取：SSR 异常记录脱敏，复用本站固定安全日志字段，禁止异常原文/stack/cause/URL/headers；不导入公开缓存、撤回/更正的 PostgreSQL 发布层或改写冻结日报。
+- [`0dfc07c`](https://github.com/KKKKhazix/AIHOT/commit/0dfc07cf1de45d462d82695e9bda3f651273e3f9) · 2026-10-04T08:19:30Z · 未采用：原全文、视频、X 编码及分享图预热，不适用于本站摘要/论文元数据路径；不额外抓原文。
+- [`6560d7f`](https://github.com/KKKKhazix/AIHOT/commit/6560d7fa9173d9fae9fccfd16e79ef140e9d32ad) · 2026-10-04T08:31:16Z · 已有或不适用：私有 API 使用 no-store；网页列表/JSON 的来源时区继承不适用于本站论文 date-parts 与精度语义，不用默认 +08 覆盖原始论文日期。
+- [`1d48ec1`](https://github.com/KKKKhazix/AIHOT/commit/1d48ec1d6dbbb0e397bd390fd5a2cc207ab6aa3d) · 2026-10-04T08:53:02Z · 未采用：PostgreSQL 查询/向量读取/索引迁移，与本站独立 D1 读取层不同；已发布的局部导航短缓存及初始化优化保留。
+- [`fd51bcf`](https://github.com/KKKKhazix/AIHOT/commit/fd51bcf38ab375131983e231acee544cc9c34098) · 2026-10-04T08:59:36Z · 未采用：原事件综述与付费评测/重写工具；本站关键词日报有独立证据和冻结规则，不触发重写或模型请求。
+- [`561b880`](https://github.com/KKKKhazix/AIHOT/commit/561b880def0438e63c6dc14b38ce68673c01b48c) · 2026-10-04T09:04:46Z · 未采用：原 PostgreSQL 历史日期人工更正工具；本站已有逐字段元数据审计，不批量回填历史日期或改变不可变日报。
+- [`2908224`](https://github.com/KKKKhazix/AIHOT/commit/290822424c0bd30841ac771ff74774041bbb842b) · 2026-10-04T10:31:56Z · 未采用：原站文案、site 目录、默认源及环境开关规则；本站已有独立17论文源/调度与严格显式配置，不覆盖行业/品牌。
+
+### 保留范围与验证
+
+保持 Sites Workers+D1、17来源、UTC+08 8/20调度、近期月/最新优先、20页/每源2页、真实run/cohort、冻结日报、阅读分严格>75、关键词图、账户已读收藏、加密配置、私有auth及阅读后更新点。保留此前已发布局部导航的版本初始化、短缓存/失效、独立月历和滚动恢复。没有依赖、数据库迁移、付费调用、生产数据改写或权限变化。
+
+验证：300 项 Sites 与相关缓存测试通过；web 41 项中 35 通过、6 项为既知公共/私有缓存契约差异。全量 typecheck、build 与 general/navigation/daily/reader/attribution 五套隔离 Worker/D1 通过。新增真实 .data GET/HEAD/404 响应类型、隔离数据库故障后的 SSR 安全日志验证；13 项专项覆盖恢复/导航/网络地址/日志泄漏边界。没有 PostgreSQL 测试库，该聚合测试未运行；没有 GitHub CI 结果可供通过证明。
+
+---
+
+
+
 ## 2026-10-04 · 选择性兼容适配
 
 上游仍是经过 GitHub fork parent 核实的 [KKKKhazix/AIHOT](https://github.com/KKKKhazix/AIHOT)。本轮核对从上次完整合并 `cf8f8d07d68dfa9079becc72b0717a45b33485f3` 到 `1ca5d6dd97ca876ade8fba593da9e4f93228918f` 的 11 个提交；[比较范围](https://github.com/KKKKhazix/AIHOT/compare/cf8f8d07d68dfa9079becc72b0717a45b33485f3...1ca5d6dd97ca876ade8fba593da9e4f93228918f)。原提交时间列于下方，本站适配日期按 UTC+08 记录，不能等同于原提交日或上线时刻。

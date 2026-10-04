@@ -150,3 +150,26 @@ test("concurrent errors share one check and newer navigation or edits cancel rec
     mock.restoreAll();
   }
 });
+
+test('React caught metadata render failures share bounded recovery, but unknown callbacks do nothing', async () => {
+  const {caughtRenderRecovery}=await import('../app/lib/render-recovery.ts');
+  const b=browser();const recover=createRenderErrorHandler(MANIFEST);const caught=caughtRenderRecovery(recover);
+  await caught(new Error('unknown'),{});assert.equal(b.fetch.mock.calls.length,0);
+  await caught({status:503,statusText:'Error',internal:false,data:{}},{componentStack:'at Meta'});assert.equal(b.fetch.mock.calls.length,0);
+  b.fetch.mock.mockImplementation(async()=>new Response(null,{status:200}));
+  await caught(new Error('ordinary current build failure'),{componentStack:'at Meta'});assert.equal(b.location.reload.mock.calls.length,0);
+  b.fetch.mock.mockImplementation(async()=>new Response(null,{status:404}));
+  await caught(new Error('obsolete Meta failure'),{componentStack:'at Meta'});assert.equal(b.location.reload.mock.calls.length,1);
+  await caught(new Error('again'),{componentStack:'at Meta'});assert.equal(b.location.reload.mock.calls.length,1);
+});
+
+test('metadata recovery keeps form, hidden-document and navigation cancellation guards',async()=>{
+ const {caughtRenderRecovery}=await import('../app/lib/render-recovery.ts');
+ for(const safe of [false,true]){
+  const b=browser();let resolve!:(value:Response)=>void;b.fetch.mock.mockImplementation(()=>new Promise<Response>(done=>resolve=done));
+  const target=new EventTarget();const unedited=createEditGuard(target);const caught=caughtRenderRecovery(createRenderErrorHandler(MANIFEST,()=>safe&&unedited()));
+  const pending=caught(new Error('Meta failure'),{componentStack:'at Meta'});
+  if(!safe){await pending;assert.equal(b.fetch.mock.calls.length,0)}else{target.dispatchEvent(new Event('change'));noteRecoveryNavigation();resolve(new Response(null,{status:404}));await pending;assert.equal(b.location.reload.mock.calls.length,0)}
+  mock.restoreAll();
+ }
+});
