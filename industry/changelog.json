@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-03T16:33:47Z",
+  "latestVersion": "2026-10-04T01:26:55Z",
   "releases": [
+    {
+      "id": "latest-first-paper-ingestion-2026-10-04",
+      "at": "2026-10-04T01:26:55Z",
+      "basis": "record",
+      "kind": "fix",
+      "title": "论文采集先查最新，再用剩余额度补扫月内记录",
+      "body": [
+        "每批先检查最新索引论文；旧分页与最新检查独立，避免历史积压阻塞新论文。各来源先查一页，再在既有总额度内轮转补页。",
+        "保留失败重试、字段校对与去重，增加分页覆盖和过期缺口记录；滚动月窗、每天08/20调度、请求与模型预算均不提高。高吞吐来源仍可能存在补扫延迟，不承诺实时完整覆盖。"
+      ],
+      "sources": [
+        {
+          "label": "采集边界、覆盖记录与回滚说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-ingestion.md"
+        }
+      ]
+    },
     {
       "id": "upstream-selective-reliability-2026-10-04",
       "at": "2026-10-03T16:33:47Z",
