@@ -34,7 +34,7 @@ function SideLink({ item }: { item: NavItem }) {
 
 export function Sidebar({ changelogVersion }: { changelogVersion: string | null }) {
   return (
-    <aside className="sticky top-0 hidden h-dvh w-[180px] shrink-0 flex-col border-r border-line bg-sidebar px-3 pb-3 pt-4 lg:flex">
+    <aside className="site-sidebar sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-line bg-sidebar lg:flex">
       <Link to="/" className="mb-2 flex min-h-[56px] flex-col items-start justify-center gap-2 px-1 text-ink" aria-label={`${SITE.name} 首页`}>
         <Wordmark size={24} />
         <span className="text-[14px] font-semibold leading-5">{SITE.name}</span>

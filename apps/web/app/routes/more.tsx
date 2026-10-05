@@ -1,3 +1,4 @@
+import {PageHeader} from '../components/ui/PageFrame';
 import { SITE } from "@aihot/industry/site";
 import { FEATURES } from "@aihot/industry/features";
 import type { ReactNode } from "react";
@@ -59,8 +60,8 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 
 export default function MorePage() {
   return (
-    <div className="mx-auto max-w-[var(--page-max-reading)] pb-8">
-      <h1 className="pb-4 pt-5 text-[22px] font-bold text-ink lg:pt-1">更多</h1>
+    <div className="research-page more-page">
+      <PageHeader><div><p className="research-eyebrow">HKIS / NAVIGATION</p><h1>更多</h1></div></PageHeader>
       <div className="space-y-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0 2xl:grid-cols-3">
         {GROUPS.map((g) => (
           <Group key={g.title} title={g.title}>

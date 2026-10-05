@@ -7,7 +7,7 @@ export function AdaptiveRail({children,className='',label,as:Tag='aside'}:{child
   useEffect(()=>{
     const rail=ref.current;if(!rail)return;
     const measure=()=>{
-      const gap=parseFloat(getComputedStyle(document.documentElement).fontSize)*1.5;
+      const gap=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--site-sticky-top'))||24;
       const height=Math.min(window.innerHeight,window.visualViewport?.height??window.innerHeight);
       const next=rail.getBoundingClientRect().height<=height-gap*2;
       if(next===lastFits.current)return;

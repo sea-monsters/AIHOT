@@ -1,3 +1,4 @@
+import {PageGrid} from './PageFrame';
 import {AdaptiveRail} from "./AdaptiveRail";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
@@ -12,11 +13,11 @@ import { IconChevronRight } from "../icons";
  */
 export function ReadingLayout({ children, aside, footer, className = "", asideClassName = "" }: { children: ReactNode; aside?: ReactNode; footer?: ReactNode; className?: string; asideClassName?: string }) {
   return (
-    <div className={`mx-auto grid max-w-[var(--page-max-reading)] gap-8 pb-14 pt-5 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-10 lg:pt-0 2xl:grid-cols-[minmax(0,1fr)_340px] ${className}`}>
-      <div className="min-w-0">{children}</div>
+    <PageGrid variant={aside?'article':'single'} className={className}>
+      <div className="reading-primary-content">{children}</div>
       {aside && <AdaptiveRail className={`reading-secondary-rail min-w-0 space-y-3 ${asideClassName}`}>{aside}</AdaptiveRail>}
-      {footer && <div className="min-w-0 lg:col-span-2">{footer}</div>}
-    </div>
+      {footer && <div className="page-grid-footer">{footer}</div>}
+    </PageGrid>
   );
 }
 
@@ -29,17 +30,15 @@ export function ReadingLayout({ children, aside, footer, className = "", asideCl
  */
 export function ArticleLayout({ children, left, right, railTop = "top-6" }: { children: ReactNode; left?: ReactNode; right?: ReactNode; railTop?: string }) {
   return (
-    <div className="mx-auto grid max-w-[var(--page-max-reading)] grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_240px] lg:gap-x-12 2xl:grid-cols-[minmax(200px,1fr)_minmax(0,760px)_minmax(200px,1fr)] 2xl:gap-x-12">
-      <aside className="hidden 2xl:block">
-        <div className={`sticky ${railTop} max-w-[260px] space-y-8`}>{left}</div>
-      </aside>
-      <div className="min-w-0">
-        <div className="mx-auto max-w-[760px]">{children}</div>
+    <PageGrid variant={right?'article':'single'}>
+      <div className="reading-primary-content">
+        {left && <aside className="article-facts">{left}</aside>}
+        <div className="article-prose">{children}</div>
       </div>
-      <aside className="article-right-rail min-w-0">
-        <AdaptiveRail as="div" className={`article-secondary-rail ${railTop} ml-auto max-w-[260px] space-y-5`}>{right}</AdaptiveRail>
-      </aside>
-    </div>
+      {right && <aside className="article-right-rail min-w-0">
+        <AdaptiveRail as="div" className="article-secondary-rail space-y-5">{right}</AdaptiveRail>
+      </aside>}
+    </PageGrid>
   );
 }
 

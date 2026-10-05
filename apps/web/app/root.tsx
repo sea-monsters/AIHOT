@@ -1,3 +1,4 @@
+import {PageFrame,PageGrid} from './components/ui/PageFrame';
 import {ReadingContinuity} from './components/ReadingContinuity';
 import {NavigationUpdatesProvider} from './components/NavigationUpdates';
 import {PaperReaderProvider} from './components/PaperReader';
@@ -86,15 +87,15 @@ function SiteShell({ changelogVersion, children }: { changelogVersion: string | 
       <Sidebar changelogVersion={changelogVersion} />
       {/* Mobile shell (≤ 960px): one centred column, the tab bar below. Desktop: the page fills the main area
           up to the list width (--page-max-wide), centred beyond it. */}
-      <main id="main" className="min-w-0 flex-1 pb-[calc(72px+env(safe-area-inset-bottom))] lg:px-7 lg:pb-[72px] lg:pt-6">
-        <div className="mx-auto w-full max-w-[640px] px-4 lg:max-w-[var(--page-max-wide)] lg:px-0">
+      <main id="main" className="site-main">
+        <PageFrame>
           <Link to="/" className="flex flex-wrap items-center gap-x-3 gap-y-1 pb-1 pt-4 text-ink lg:hidden" aria-label={`${SITE.name} 首页`}>
             <Wordmark size={22} />
             <span className="text-[14px] font-semibold leading-5">{SITE.name}</span>
           </Link>
           <QuickSearch mobile />
-          <div className={home?"home-reading-layout":"site-reading-layout"}><div className="site-reading-content">{children}</div><AIAssistant home={home}/></div>
-        </div>
+          <PageGrid variant={home?"assistant":"single"} className={home?"home-reading-layout":"site-reading-layout"}><div className="site-reading-content">{children}</div><AIAssistant home={home}/></PageGrid>
+        </PageFrame>
       </main>
       <MobileTabBar changelogVersion={changelogVersion} />
       <BackToTop />

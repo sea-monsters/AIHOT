@@ -264,28 +264,21 @@ export default function ItemPage() {
         {moreMenu}
       </div>
 
-      {/* The text on the page in one column; back and the facts in the left rail, actions and notes in the right. */}
+      {/* One text column and one rail; source details and the outline stay in the disclosure. */}
       <ArticleLayout
-        left={
-          <>
-            {backButton}
-            {facts}
-            {outline}
-          </>
-        }
         right={
           <>
             <div className="hidden lg:block">{actions}</div>
             <RailDisclosure title="阅读补充与目录">
               {notes}
-              <div className="space-y-4 2xl:hidden">{outline}</div>
+              <div className="space-y-4">{facts}{outline}</div>
             </RailDisclosure>
           </>
         }
       >
-        <div className="hidden lg:block 2xl:hidden">{backButton}</div>
+        <div className="hidden lg:block">{backButton}</div>
         <article className="pb-6 pt-6 lg:pt-2 2xl:pt-1">
-          <div className={`flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] text-ink-3 2xl:hidden ${isX ? "" : "mb-3"}`}>
+          <div className={`flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] text-ink-3 ${isX ? "" : "mb-3"}`}>
             <span className="font-semibold text-ink-2">{isX ? item.x!.authorName : item.source.name}</span>
             {isX && <span>· @{item.x!.handle} · X</span>}
             {item.author && !isX && <span>· {item.author}</span>}

@@ -1,3 +1,4 @@
+import {PageHeader} from '../components/ui/PageFrame';
 import {NavigationUpdateSettings,usePageRead} from '../components/NavigationUpdates';
 import {readClientPage} from '../lib/page-update-load';
 import {scholarlyRequest} from '../lib/scholarly-client';
@@ -30,7 +31,7 @@ export default function AISettings(){
  async function test(){setBusy('test');setError('');setMessage('');try{const r=await aiRequest('test',{requestId:crypto.randomUUID()});setMessage(r.message)}catch(e){setError((e as Error).message)}finally{try{const c=await aiRequest('settings');setConfig(c);setSaved(c)}catch{}setBusy('')}}
  async function diagnoseNetwork(){setBusy('network');setError('');setNetwork(null);try{setNetwork(await aiRequest('network',{requestId:crypto.randomUUID()}))}catch(e){setError((e as Error).message)}finally{setBusy('')}}
  async function proposeChanges(){setBusy('prefs');setError('');try{const split=(s:string)=>s.split(/\n|,|，/).map(x=>x.trim()).filter(Boolean);const r=await aiRequest('preferences/propose',{value:{keywords:split(included),excludedKeywords:split(excluded),sourceIntervals:intervals}});setProposal(r.proposal)}catch(e){setError((e as Error).message)}finally{setBusy('')}}
- return <div className="research-page ai-settings"><header className="research-heading"><div><p className="research-eyebrow">HKIS / SETTINGS</p><h1>网站设置</h1><p>模型、学术与联网检索服务，个人研究偏好与运行诊断</p></div><Link to="/research" className="ai-secondary">返回论文</Link></header>
+ return <div className="research-page ai-settings"><PageHeader><div><p className="research-eyebrow">HKIS / SETTINGS</p><h1>网站设置</h1><p>模型、学术与联网检索服务，个人研究偏好与运行诊断</p></div><Link to="/research" className="ai-secondary">返回论文</Link></PageHeader>
  {error&&<p className="ai-error" role="alert">{error}</p>}{message&&<p className="research-notice" role="status">{message}</p>}
  {!loaded?<section className="research-panel"><p>{error?'设置未加载，请确认已使用站点所有者账号登录，再刷新重试。':'正在安全读取配置…'}</p><a href="/signin-with-chatgpt?return_to=%2Fsettings" target="_top">使用 ChatGPT 登录</a></section>:<>
  <div className="service-list"><ServiceRow testLabel="测试（调用模型）" name="LLM · 第三方模型" endpoint={saved.endpoint} hasKey={saved.hasKey} status={saved.testStatus} busy={!!busy} onTest={test} testDisabled={dirty||!saved.hasKey||!saved.encryptionReady}><form onSubmit={save} className="ai-form"><h2>第三方模型设置</h2><p className="ai-muted">只有站点所有者可以读写配置。API key 加密保存在服务端，模型、聊天记录和浏览器存储均无法读取它。</p>

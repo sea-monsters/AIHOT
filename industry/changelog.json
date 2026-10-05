@@ -1,8 +1,27 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-05T21:19:00Z",
+  "latestVersion": "2026-10-05T21:38:00Z",
   "releases": [
+    {
+      "id": "unified-page-framework-20261005",
+      "at": "2026-10-05T21:38:00Z",
+      "basis": "record",
+      "kind": "fix",
+      "title": "统一全站容器、标题和正文右栏对齐框架",
+      "body": [
+        "首页助手、论文筛选、日报月历、热点与更新日志共用相同轨宽、间距和顶部基线；单栏信息、详情、更多及旧报告空态同步规范。",
+        "标题字号、正文阅读长度、手机顺序和稳定滚动条占位统一；长标题与证据诊断可换行，修复收藏页重复主标题。",
+        "主题三章圆角网格、默认两行及逐次展开、聊天唯一实例、阅读连续性与更新提示语义保留；新增全注册路由覆盖矩阵和隔离SSR回归。",
+        "逐页核对1440与390 CSS宽度、真实200%缩放、短高及超宽布局；验收覆盖和动态/未迁移页面限制逐项记录，不声称未执行的手动测试通过。"
+      ],
+      "sources": [
+        {
+          "label": "全站排版规范与验收边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/page-layout.md"
+        }
+      ]
+    },
     {
       "id": "daily-pipeline-evidence-20261005",
       "at": "2026-10-05T21:19:00Z",

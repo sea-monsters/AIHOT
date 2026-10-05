@@ -1,3 +1,4 @@
+import {PageHeader,PageGrid} from '../../components/ui/PageFrame';
 import type { ReactNode } from "react";
 import type { ReportNavigationEntry, ReportKind } from "@aihot/contracts/site";
 import { ReportArchive, ReportPhoneNav } from "./ReportNav";
@@ -8,13 +9,11 @@ import { ReportArchive, ReportPhoneNav } from "./ReportNav";
  * on white in the light theme, up to 1160px.
  */
 export function ReportLayout({ kind, index, current, today, children }: { kind: ReportKind; index: ReportNavigationEntry[]; current: string | null; today: string; children: ReactNode }) {
-  return (
-    <div className="report-shell lg:-mx-7 lg:-mb-[72px] lg:-mt-6 lg:flex lg:min-h-dvh">
-      <ReportArchive kind={kind} index={index} current={current} />
-      <div className="min-w-0 flex-1 pb-6 lg:flex lg:flex-col lg:items-center lg:px-10 lg:pb-16 lg:pt-9">
-        <ReportPhoneNav kind={kind} index={index} current={current} today={today} />
-        <div className="w-full lg:max-w-[1160px]">{children}</div>
-      </div>
-    </div>
-  );
+  return <div className="research-page report-shell">
+    {!current&&<PageHeader><div><p className="research-eyebrow">HKIS / LEGACY REPORTS</p><h1>{kind==='weekly'?'原版周报':kind==='monthly'?'原版月报':'原版日报'}</h1></div></PageHeader>}
+    <PageGrid variant="article">
+      <div className="reading-primary-content"><ReportPhoneNav kind={kind} index={index} current={current} today={today} />{children}</div>
+      <div className="reading-secondary-rail"><ReportArchive kind={kind} index={index} current={current} /></div>
+    </PageGrid>
+  </div>;
 }

@@ -1,3 +1,4 @@
+import {PageHeader} from '../components/ui/PageFrame';
 import {usePageRead} from '../components/NavigationUpdates';
 import {ControlReadingLayout} from '../components/ui/ControlReadingLayout';
 import { SITE } from "@aihot/industry/site";
@@ -95,12 +96,11 @@ export default function ChangelogPage() {
     </RailDisclosure>
   </>;
   return <div className="research-page changelog-page">
-    <header className="research-heading"><div>
+    <ControlReadingLayout header={<> <PageHeader><div><p className="research-eyebrow">HKIS / CHANGELOG</p>
       <h1 className="text-2xl font-semibold leading-snug text-ink">更新日志</h1>
       <p className="mt-2 text-sm leading-relaxed text-ink-3">网站变更与 GitHub 上游同步，按日记录，最新在前</p>
       <p className="mt-1 text-xs text-ink-3">UTC+08 · 按提交 / 合入 / 维护日期归档，非精确上线时间</p>
-    </div></header>
-    <ControlReadingLayout label="更新日期与筛选" summary={`${selected || month} · ${kind ? LABELS[kind] : '全部类型'}`} rail={aside}>
+    </div></PageHeader> </>} label="更新日期与筛选" summary={`${selected || month} · ${kind ? LABELS[kind] : '全部类型'}`} rail={aside}>
     <p className="mb-4 text-xs text-ink-3" aria-live="polite">{days.length} 天 · {count} 条变更</p>
     <div className="space-y-4" data-changelog-timeline>
       {days.map(day => {
