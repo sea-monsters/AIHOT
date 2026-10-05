@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-05T20:29:28Z",
+  "latestVersion": "2026-10-05T20:54:00Z",
   "releases": [
+    {
+      "id": "daily-home-firedot-20261005",
+      "at": "2026-10-05T20:54:00Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "首页展示最新论文日报与常驻 firedot 对话",
+      "body": [
+        "首页默认读取最近已保存的日报，分别标明日报日期、来源日和归档时间；空精选、缺少批次与未完成状态照实展示，历史月历和论文情报入口保留。",
+        "使用用户指定的 firedot 头像，桌面右栏默认展开、手机输入框直接可见；与侧栏共用同一段对话与发送锁。",
+        "打开页面只读归档与模型配置，发送问题时才调用已有模型；日报上下文有明确上限，继续保留引用核验、调用预算、未知结果不重试与设置确认。"
+      ],
+      "sources": [
+        {
+          "label": "日报首页与助手边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/daily-home.md"
+        }
+      ]
+    },
     {
       "id": "institution-form-evidence-20261005",
       "at": "2026-10-05T20:29:28Z",

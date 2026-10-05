@@ -5,9 +5,9 @@ const json=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache
 const own=(key:UpdatePageKey)=>key==='settings'||key==='starred';
 function database(env:any){if(!env.DB)throw new AIError('database_unavailable',503,'更新提示暂不可用');return env.DB.withSession?env.DB.withSession('first-primary'):env.DB}
 export async function contentRevision(db:any,key:UpdatePageKey,ownerId=''):Promise<PageRevision>{
- const row=await db.prepare('SELECT revision FROM navigation_content WHERE scope=? AND page_key=?').bind(own(key)?ownerId:'',key).first();
+ const row=await db.prepare('SELECT revision FROM navigation_content WHERE scope=? AND page_key=?').bind(own(key)?ownerId:'',key==='home'?'daily':key).first();
  const version=key==='changelog'?Date.parse(CHANGELOG.latestVersion):UPDATE_PAGES.find(p=>p.key===key)!.version;
- return {key,revision:Number(row?.revision||0),version,...(key==='daily'?{latestDate:(await db.prepare('SELECT max(date) date FROM research_daily').first())?.date||null}:{})};
+ return {key,revision:Number(row?.revision||0),version,...(['home','daily'].includes(key)?{latestDate:(await db.prepare('SELECT max(date) date FROM research_daily').first())?.date||null}:{})};
 }
 async function pageList(db:any,id:string){
  const rows=(await db.prepare('SELECT page_key,seen_revision,seen_version,enabled FROM navigation_seen WHERE owner_id=?').bind(id).all()).results;
@@ -36,7 +36,7 @@ export async function navigationUpdatesApi(request:Request,env:any){try{
   const statements=[];
   for(const r of body.revisions as PageRevision[]){const current=await contentRevision(db,r.key,id);if(r.revision>current.revision||r.version>current.version)throw new AIError('unknown_update_revision',409,'页面版本已变化，请刷新后重试');
    // A stale tab may only acknowledge its loaded revision. It can never downgrade a newer acknowledgement.
-   statements.push(db.prepare('INSERT INTO navigation_seen(owner_id,page_key,seen_revision,seen_version,enabled) VALUES(?,?,?,?,1) ON CONFLICT(owner_id,page_key) '+(body.action==='initialize'?'DO NOTHING':'DO UPDATE SET seen_revision=max(navigation_seen.seen_revision,excluded.seen_revision),seen_version=max(navigation_seen.seen_version,excluded.seen_version)')).bind(id,r.key,r.revision,r.version));
+   statements.push(db.prepare('INSERT INTO navigation_seen(owner_id,page_key,seen_revision,seen_version,enabled) VALUES(?,?,?,?,1) ON CONFLICT(owner_id,page_key) '+(body.action==='initialize'?'DO NOTHING':'DO UPDATE SET seen_revision=CASE WHEN excluded.seen_version>navigation_seen.seen_version THEN excluded.seen_revision WHEN excluded.seen_version=navigation_seen.seen_version THEN max(navigation_seen.seen_revision,excluded.seen_revision) ELSE navigation_seen.seen_revision END,seen_version=max(navigation_seen.seen_version,excluded.seen_version)')).bind(id,r.key,r.revision,r.version));
   }
   await db.batch(statements);
  }else throw new AIError('invalid_update_state',400,'更新提示操作无效');

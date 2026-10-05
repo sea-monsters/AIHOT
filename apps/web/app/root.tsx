@@ -75,6 +75,7 @@ export function meta({ error }: Route.MetaArgs) {
 /** Sidebar, main column and phone tab bar around a page (or an error). */
 function SiteShell({ changelogVersion, children }: { changelogVersion: string | null; children: ReactNode }) {
   const navigation = useNavigation();
+  const home = useLocation().pathname === "/";
   useEffect(() => { if (navigation.state !== "idle") noteRecoveryNavigation(); }, [navigation.state, navigation.location?.key]);
   return (
     <div className="flex min-h-dvh">
@@ -92,12 +93,11 @@ function SiteShell({ changelogVersion, children }: { changelogVersion: string | 
             <span className="text-[14px] font-semibold leading-5">{SITE.name}</span>
           </Link>
           <QuickSearch mobile />
-          {children}
+          <div className={home?"home-reading-layout":"site-reading-layout"}><div className="site-reading-content">{children}</div><AIAssistant home={home}/></div>
         </div>
       </main>
       <MobileTabBar changelogVersion={changelogVersion} />
       <BackToTop />
-      <AIAssistant />
       <WebSearch />
     </div>
   );

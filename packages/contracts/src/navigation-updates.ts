@@ -1,6 +1,6 @@
 /** Stable page keys. Increment only a page's version when its actual content or interpretation changes. */
 export const UPDATE_PAGES = [
- {key:'home',path:'/',label:'首页',version:1},
+ {key:'home',path:'/',label:'首页',version:2},
  {key:'research',path:'/research',label:'论文情报',version:1},
  {key:'all',path:'/all',label:'研究进展',version:1},
  {key:'hot',path:'/hot',label:'热点榜',version:1},

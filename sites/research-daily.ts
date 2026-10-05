@@ -83,7 +83,9 @@ export async function dailyCalendarRead(db:any,params:URLSearchParams,at=new Dat
  return {today,month,days};
 }
 export async function dailyRead(db:any,params:URLSearchParams,at=new Date()){
- const today=collectedDay(at.toISOString())!,requested=params.get('date')||today,invalidDate=!validDay(requested),date=invalidDate?today:requested;
+ const today=collectedDay(at.toISOString())!;
+ const latest=params.get('latest')==='1'&&!params.has('date')?await db.prepare('SELECT date FROM research_daily WHERE date<=? ORDER BY date DESC LIMIT 1').bind(today).first():null;
+ const requested=params.get('date')||latest?.date||today,invalidDate=!validDay(requested),date=invalidDate?today:requested;
  const {month,days}=await dailyCalendarRead(db,params,at);
  const row=invalidDate?null:await db.prepare('SELECT * FROM research_daily WHERE date=?').bind(date).first();
  const groups=row?(await db.prepare('SELECT * FROM research_daily_groups WHERE date=? ORDER BY ordinal').bind(date).all()).results.map(publicGroup):[];
