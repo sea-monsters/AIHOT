@@ -36,7 +36,7 @@ RSS 使用 URL 查询参数；MCP `hkis_read` 使用同名 arguments。`hkis_cap
 - section 默认 papers；limit 默认25，范围1–50
 - cursor 为不透明的分页游标，只能配原有筛选和 limit 使用，不是认证凭据
 - date_since 为包含边界的 UTC ISO 时间，例如 `2026-10-05T00:00:00Z`，指内容实质更新，不是轮询 last_seen
-- papers / progress / reader 支持 id、q、topic、publisher、min；papers 另支持 keyword，对应近7天热点
+- papers / progress / reader 支持 id、q、topic、publisher、min；topic 接受研究主题ID或已声明别名；status提供三章节实际主题映射/计数；papers 另支持 keyword，按全库当前前三分类词筛选（不局限近7天）
 - progress 支持 date 与 basis=collection/publication，默认采集日；daily 的 date 是日报归档日期（UTC+08）
 - keywords 支持 keyword、topic、publisher、basis=updated/collection/publication、metric=rule/ai
 - reader 支持 state=favorite/read/unread/all，默认 favorite

@@ -47,3 +47,6 @@ export const navigationContent=sqliteTable('navigation_content',{scope:text('sco
 export const navigationSeen=sqliteTable('navigation_seen',{ownerId:text('owner_id').notNull(),pageKey:text('page_key').notNull(),seenRevision:integer('seen_revision').notNull().default(0),seenVersion:integer('seen_version').notNull().default(0),enabled:integer('enabled').notNull().default(1)},t=>[primaryKey({columns:[t.ownerId,t.pageKey]})]);
 
 export const researchAttributionRepairs=sqliteTable('research_attribution_repairs',{id:text('id').primaryKey(),paperId:text('paper_id').notNull(),runId:text('run_id').notNull(),previousCohort:text('previous_cohort'),dailyCohortKey:text('daily_cohort_key').notNull(),evidenceHash:text('evidence_hash').notNull(),ruleVersion:text('rule_version').notNull(),appliedAt:text('applied_at').notNull()});
+
+// One bounded keyword maintenance pass; separate from paper ingestion and daily cohorts.
+export const researchKeywordJobs=sqliteTable('research_keyword_jobs',{id:text('id').primaryKey(),ownerId:text('owner_id').notNull(),paperIds:text('paper_ids_json').notNull(),cursor:integer('cursor').notNull().default(0),requests:integer('requests').notNull().default(0),status:text('status').notNull(),leaseUntil:text('lease_until'),createdAt:text('created_at').notNull(),updatedAt:text('updated_at').notNull(),errorCode:text('error_code')});

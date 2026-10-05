@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-05T12:19:52Z",
+  "latestVersion": "2026-10-05T14:29:00Z",
   "releases": [
+    {
+      "id": "paper-keywords-research-themes-20261005",
+      "at": "2026-10-05T14:29:00Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "补齐论文前三分类词并重构研究主题",
+      "body": [
+        "作者关键词、供应商索引词与机器主题分别溯源；稳定去重取前三个有效分类词，热点、检索、详情及私有RSS/MCP共用。未分类默认单列避免压缩其他关键词，但保留所有论文。",
+        "主题分为公司/机构、领域方向、内容形态；从实际作者单位和论文证据生成真实多归属计数。关键词补全独立记录，不改变论文首次入库、阅读分数、已读收藏和历史日报。"
+      ],
+      "sources": [
+        {
+          "label": "分类方法与回填边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/paper-keywords.md"
+        }
+      ]
+    },
     {
       "id": "private-research-rss-mcp-2026-10-05",
       "at": "2026-10-05T12:19:52Z",

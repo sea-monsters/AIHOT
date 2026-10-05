@@ -1,3 +1,4 @@
+import {paperCategories} from './paper-keywords.ts';
 import {AIError,owner,KIMI_CODE_ENDPOINT,encryptionReady} from './ai/security.ts';
 import {providerCall} from './ai/provider.ts';
 import {writeLog} from './runtime-logs.ts';
@@ -37,8 +38,8 @@ export async function processingStatus(db:any,env:any){
 export async function attachAnalyses(db:any,papers:any[]){
  if(!papers.length)return papers;
  const activeKey=await currentAnalysisKey(db);
- const ids=papers.map(p=>p.id);const rows=(await db.prepare(`SELECT a.* FROM research_analyses a WHERE a.paper_id IN (${ids.map(()=>'?').join(',')}) AND a.id=(SELECT b.id FROM research_analyses b JOIN research_papers p ON p.id=b.paper_id WHERE b.paper_id=a.paper_id ORDER BY (b.content_hash=p.content_hash AND b.config_hash=? AND b.schema_version=?) DESC,b.updated_at DESC,b.id DESC LIMIT 1)`).bind(...ids,activeKey,ANALYSIS_SCHEMA).all()).results;
- return papers.map(p=>{const matching=rows.find((r:any)=>r.paper_id===p.id&&r.content_hash===p.contentHash&&r.config_hash===activeKey&&r.schema_version===ANALYSIS_SCHEMA);return {...p,analysis:matching?{id:matching.id,status:matching.status,gate:parse(matching.gate_json),result:parse(matching.result_json,null),config:parse(matching.config_json),schema:matching.schema_version,updatedAt:matching.updated_at,errorCode:matching.error_code}:null,analysisStale:!matching&&rows.some((r:any)=>r.paper_id===p.id)}});
+ const ids=papers.map(p=>p.id);const rows=(await db.prepare(`SELECT a.* FROM research_analyses a WHERE a.paper_id IN (SELECT value FROM json_each(?)) AND a.id=(SELECT b.id FROM research_analyses b JOIN research_papers p ON p.id=b.paper_id WHERE b.paper_id=a.paper_id ORDER BY (b.content_hash=p.content_hash AND b.config_hash=? AND b.schema_version=?) DESC,b.updated_at DESC,b.id DESC LIMIT 1)`).bind(JSON.stringify(ids),activeKey,ANALYSIS_SCHEMA).all()).results;
+ return papers.map(p=>{const matching=rows.find((r:any)=>r.paper_id===p.id&&r.content_hash===p.contentHash&&r.config_hash===activeKey&&r.schema_version===ANALYSIS_SCHEMA);const out={...p,analysis:matching?{id:matching.id,status:matching.status,gate:parse(matching.gate_json),result:parse(matching.result_json,null),config:parse(matching.config_json),schema:matching.schema_version,updatedAt:matching.updated_at,errorCode:matching.error_code}:null,analysisStale:!matching&&rows.some((r:any)=>r.paper_id===p.id)};return {...out,categories:paperCategories(out)}});
 }
 export async function processRecent(db:any,env:any,body:any={},request?:Request){
  const config=await processingConfig(db,env,request),blocked=eligibility(config,env);const window=monthWindow();

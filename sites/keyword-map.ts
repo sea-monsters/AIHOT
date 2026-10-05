@@ -1,3 +1,4 @@
+import {resolveResearchTheme,matchesResearchTheme} from './research-topics.ts';
 import {PUBLISHERS,TOPICS,RULE_VERSION} from './research-config.ts';
 import {normalizeDoi,canonicalURL,type Paper} from './research-domain.ts';
 import {publicationDay,weekWindow} from './weekly.ts';
@@ -5,52 +6,12 @@ import {journalMetric} from './journal-metrics.ts';
 import {ANALYSIS_SCHEMA,parseAssessment} from './research-pipeline.ts';
 import {currentAnalysisKey} from './research-processing.ts';
 import {rowPaper} from './research.ts';
-export const KEYWORD_MAP_VERSION='hkis-keywords-v1';
-type Source='author'|'ai'|'derived';
+export const KEYWORD_MAP_VERSION='hkis-keywords-v2';
+type Source=KeywordSource;
 type Stored=Paper&{id:string;firstSeen?:string;updatedAt?:string;lastSeen?:string;analysis?:any};
-// Only narrow synonyms are canonicalized. Materials, devices and mechanisms remain distinct.
-const TERMS:[string,string,string[],RegExp][]=[
- ['tcad','TCAD',['technology computer aided design','tcad simulation'],/\b(?:TCAD|technology computer.aided design)\b/i],
- ['gaa','GAA',['gate all around','gaafet','gaafets'],/\b(?:GAAFETs?|gate.all.around)\b/i],
- ['nanosheet','Nanosheet',['nanosheets'],/\bnanosheets?\b/i],
- ['finfet','FinFET',['finfets'],/\bFinFETs?\b/i],
- ['mosfet','MOSFET',['mosfets'],/\bMOSFETs?\b/i],
- ['dram','DRAM',['dynamic random access memory'],/\b(?:DRAM|dynamic random.access memory)\b/i],
- ['nand','NAND Flash',['nand','nand memory','nand flash memory','3d nand'],/\b(?:NAND|3D NAND)\b/i],
- ['fefet','FeFET',['fefets','ferroelectric field effect transistor'],/\bFeFETs?\b/i],
- ['ferroelectric','铁电',['ferroelectric','ferroelectricity','ferroelectrics'],/\bferroelectri\w*\b/i],
- ['rram','RRAM',['reram','resistive random access memory'],/\b(?:RRAM|ReRAM|resistive random.access memory)\b/i],
- ['memristor','忆阻器',['memristor','memristors','memristive'],/\bmemrist\w*\b/i],
- ['switching','阻变开关',['resistive switching'],/\bresistive switching\b/i],
- ['mram','MRAM',['magnetoresistive random access memory'],/\bMRAM\b/i],
- ['spintronics','自旋电子学',['spintronics','spintronic'],/\bspintronic\w*\b/i],
- ['2d','二维材料',['2d materials','two dimensional materials'],/\b(?:2D|two.dimensional)\b/i],
- ['mos2','MoS₂',['mos2','mos₂','molybdenum disulfide'],/\b(?:MoS2|molybdenum disulfide)\b|MoS₂/i],
- ['wse2','WSe₂',['wse2','wse₂','tungsten diselenide'],/\b(?:WSe2|tungsten diselenide)\b|WSe₂/i],
- ['cis','CMOS 图像传感器',['cmos image sensor','cmos image sensors'],/\bCMOS imag(?:e|ing)\b/i],
- ['ppd','PPD',['pinned photodiode','pinned photodiodes'],/\b(?:pinned photodiodes?|PPD)\b/i],
- ['spad','SPAD',['single photon avalanche diode','single photon avalanche diodes'],/\b(?:SPADs?|single.photon avalanche)\b/i],
- ['dark-current','暗电流',['dark current'],/\bdark current\b/i],
- ['rtn','RTN / RTS',['rtn','rts noise','random telegraph noise','random telegraph signal'],/\b(?:random telegraph|RTN|RTS noise)\b/i],
- ['interface-trap','界面陷阱',['interface trap','interface traps','interface states'],/\b(?:interface traps?|interface states?)\b/i],
- ['charge-trap','电荷陷阱',['charge trap','charge traps'],/\bcharge traps?\b/i],
- ['simulation','器件仿真',['device simulation'],/\bdevice simulation\b/i],
- ['reliability','可靠性',['reliability'],/\breliability\b/i],
- ['endurance','耐久性',['endurance'],/\bendurance\b/i],
- ['retention','保持特性',['retention'],/\bretention\b/i],
- ['contact','接触电阻',['contact resistance'],/\bcontact resistance\b/i],
- ['transport','载流子输运',['carrier transport','charge transport'],/\b(?:carrier|charge) transport\b/i],
- ['ald','ALD',['atomic layer deposition'],/\b(?:atomic.layer deposition|ALD)\b/i],
- ['epitaxy','外延',['epitaxy','epitaxial'],/\bepitax\w*\b/i],
- ['etching','刻蚀',['etching','etch'],/\betch(?:ing)?\b/i],
- ['lithography','光刻',['lithography','lithographic'],/\blithograph\w*\b/i],
-];
-const norm=(s:string)=>s.normalize('NFKC').toLowerCase().replace(/[‐‑–—_-]/g,' ').replace(/\s+/g,' ').trim();
-export function canonicalKeyword(raw:string){const label=raw.replace(/\s+/g,' ').trim();const n=norm(label);const term=TERMS.find(([id,l,aliases])=>[id,l,...aliases].some(a=>norm(a)===n));return term?{id:term[0],label:term[1]}:{id:'term:'+n,label};}
-export function keywordMembership(p:Stored){const members=new Map<string,{id:string;label:string;sources:Source[]}>();const add=(raw:string,source:Source)=>{if(typeof raw!=='string'||!raw.trim())return;const k=canonicalKeyword(raw),old=members.get(k.id);if(old){if(!old.sources.includes(source))old.sources.push(source);}else members.set(k.id,{...k,sources:[source]});};for(const k of p.keywords||[])add(k,'author');
- const analysis=validatedAnalysis(p);for(const k of analysis?.keywords||[])add(k,'ai');
- const text=[p.title,p.abstract||'',...(p.keywords||[])].join(' ');for(const [,label,,pattern] of TERMS)if(pattern.test(text))add(label,'derived');
- return [...members.values()];}
+export {canonicalKeyword} from './paper-keywords.ts';
+import {paperCategories,type KeywordSource} from './paper-keywords.ts';
+export function keywordMembership(p:Stored){return paperCategories({...p,analysis:validatedAnalysis(p)?p.analysis:null});}
 export function validatedAnalysis(p:Stored){if(p.analysis?.status!=='completed')return null;try{const a=parseAssessment(JSON.stringify(p.analysis.result),p);return a.decision==='assessed'?a:null}catch{return null}}
 export function mapWindow(params:URLSearchParams,at=new Date()){const w=weekWindow(at),basis=['publication','collection'].includes(params.get('basis')||'')?params.get('basis')!:'updated';return {...w,basis,startAt:new Date(w.startDate+'T00:00:00+08:00').toISOString(),endAt:at.toISOString(),dateSemantics:basis==='publication'?'来源明确发表日':basis==='collection'?'首次入库时间':'首次入库或实质元数据更新；不含轮询触达'};}
 function validTime(value?:string){return value&&Number.isFinite(Date.parse(value))?new Date(value).toISOString():null;}
@@ -58,18 +19,18 @@ function recentTime(p:Stored,at:Date){return [p.firstSeen,p.updatedAt].map(valid
 export function statistics(values:(number|null)[]){const sorted=values.filter((x):x is number=>x!==null&&Number.isFinite(x)).sort((a,b)=>a-b),n=sorted.length;const q=(p:number)=>{if(!n)return null;const i=(n-1)*p,a=Math.floor(i);return sorted[a]!+(sorted[Math.ceil(i)]!-sorted[a]!)*(i-a);};return {scored:n,unscored:values.length-n,mean:n?sorted.reduce((a,b)=>a+b,0)/n:null,median:q(.5),q1:q(.25),q3:q(.75),min:sorted[0]??null,max:sorted.at(-1)??null};}
 const validScore=(s:unknown)=>typeof s==='number'&&Number.isFinite(s)&&s>=0&&s<=100?s:null;
 export function buildKeywordMap(input:Stored[],params=new URLSearchParams(),at=new Date()){
- const window=mapWindow(params,at);const metric=params.get('metric')==='ai'?'ai':'rule',publisher=PUBLISHERS.includes(params.get('publisher')||'')?params.get('publisher')!:'',topic=TOPICS.some(t=>t.id===params.get('topic'))?params.get('topic')!:'';
+ const window=mapWindow(params,at);const metric=params.get('metric')==='ai'?'ai':'rule',publisher=PUBLISHERS.includes(params.get('publisher')||'')?params.get('publisher')!:'',topic=resolveResearchTheme(params.get('topic')||'')?.id||'';
  let excludedNonResearch=0,invalidDate=0,outsideWindow=0,duplicates=0;const byIdentity=new Map<string,Stored>();
  // Prefer a DOI identity. A DOI-less duplicate of a DOI record can still be joined by canonical URL.
  const doiByURL=new Map(input.filter(p=>normalizeDoi(p.doi)).map(p=>[canonicalURL(p.url),normalizeDoi(p.doi)]));
  for(const p of [...input].sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||'')||a.id.localeCompare(b.id))){if((p.priority??0)<0){excludedNonResearch++;continue;}const publication=publicationDay(p).date;const date=window.basis==='publication'?publication:window.basis==='collection'?validTime(p.firstSeen):recentTime(p,at);if(!date){invalidDate++;continue;}const within=window.basis==='publication'?date>=window.startDate&&date<=window.endDate:date>=window.startAt&&date<=window.endAt;if(!within){outsideWindow++;continue;}const url=canonicalURL(p.url);const key=normalizeDoi(p.doi)||doiByURL.get(url)||(url?'url:'+url:'id:'+p.id);if(byIdentity.has(key)){duplicates++;continue;}byIdentity.set(key,p);}
  const windowPapers=[...byIdentity.values()];
- const selected=windowPapers.filter(p=>(!publisher||p.publisher===publisher)&&(!topic||TOPICS.find(t=>t.id===topic)!.pattern.test([p.title,p.abstract||'',...(p.keywords||[])].join(' '))));
- const papers=selected.map(p=>{const keywords=keywordMembership(p),a=validatedAnalysis(p),publication=publicationDay(p),score=metric==='ai'?validScore(a?.importanceScore):validScore(p.priority);return {id:p.id,title:p.title,doi:normalizeDoi(p.doi)||null,url:p.doi?'https://doi.org/'+encodeURI(normalizeDoi(p.doi)):canonicalURL(p.url),detailUrl:'/research/'+p.id,journal:p.journal,publisher:p.publisher,sourceId:p.sourceId,publicationDate:publication.date,publicationBasis:publication.basis,firstSeen:p.firstSeen||null,updatedAt:recentTime(p,at),analysisUpdatedAt:p.analysis?.updatedAt||null,keywords,keywordIds:keywords.length?keywords.map(k=>k.id):['unclassified'],score,scoreSource:metric==='ai'?(a?'AI 摘要评估 · '+(p.analysis?.config?.model||'已保存模型'):'当前无有效 AI 评分'):'规则 '+(p.ruleVersion||RULE_VERSION),scoreReason:metric==='ai'?(a?.rubric.importance||null):(p.reasons||[]).join('；'),hasAbstract:!!p.abstract?.trim(),authorKeywords:(p.keywords||[]).length>0,aiScored:!!a,jif:journalMetric(p.sourceId)};}).sort((a,b)=>a.id.localeCompare(b.id));
+ const selected=windowPapers.filter(p=>(!publisher||p.publisher===publisher)&&(!topic||matchesResearchTheme(p,topic)));
+ const papers=selected.map(p=>{const keywords=keywordMembership(p),a=validatedAnalysis(p),publication=publicationDay(p),score=metric==='ai'?validScore(a?.importanceScore):validScore(p.priority);return {id:p.id,title:p.title,doi:normalizeDoi(p.doi)||null,url:p.doi?'https://doi.org/'+encodeURI(normalizeDoi(p.doi)):canonicalURL(p.url),detailUrl:'/research/'+p.id,journal:p.journal,publisher:p.publisher,sourceId:p.sourceId,publicationDate:publication.date,publicationBasis:publication.basis,firstSeen:p.firstSeen||null,updatedAt:recentTime(p,at),classificationUpdatedAt:p.provenance?.keywordEvidence?.updatedAt||null,analysisUpdatedAt:p.analysis?.updatedAt||null,keywords,keywordIds:keywords.length?keywords.map(k=>k.id):['unclassified'],score,scoreSource:metric==='ai'?(a?'AI 摘要评估 · '+(p.analysis?.config?.model||'已保存模型'):'当前无有效 AI 评分'):'规则 '+(p.ruleVersion||RULE_VERSION),scoreReason:metric==='ai'?(a?.rubric.importance||null):(p.reasons||[]).join('；'),hasAbstract:!!p.abstract?.trim(),authorKeywords:(p.keywords||[]).length>0,aiScored:!!a,jif:journalMetric(p.sourceId)};}).sort((a,b)=>a.id.localeCompare(b.id));
  const groups=new Map<string,{id:string;label:string;paperIds:string[];sources:Source[];publishedCount:number}>();
  for(const p of papers)for(const k of p.keywords.length?p.keywords:[{id:'unclassified',label:'未分类',sources:[] as Source[]}]){let g=groups.get(k.id);if(!g){g={id:k.id,label:k.label,paperIds:[],sources:[],publishedCount:0};groups.set(k.id,g);}g.paperIds.push(p.id);for(const s of k.sources)if(!g.sources.includes(s))g.sources.push(s);if(p.publicationDate&&p.publicationDate>=window.startDate&&p.publicationDate<=window.endDate)g.publishedCount++;}
  const paperById=new Map(papers.map(p=>[p.id,p]));const keywords=[...groups.values()].map(g=>({...g,count:g.paperIds.length,...statistics(g.paperIds.map(id=>paperById.get(id)!.score))})).sort((a,b)=>b.count-a.count||a.label.localeCompare(b.label));
- return {version:KEYWORD_MAP_VERSION,window,filters:{basis:window.basis,metric,publisher,topic},metric:{id:metric,label:metric==='ai'?'AI 重要性（摘要暂评）':'规则阅读优先级',description:metric==='ai'?'只使用与当前内容、模型配置和评估版本匹配的已保存摘要评估；不能证明科学质量或影响力。':'基于研究方向匹配、证据词、来源日期与综述信号的 0–100 分；表示阅读顺序，不是科学影响力。'},coverage:{windowUnique:windowPapers.length,shown:papers.length,duplicates,excludedNonResearch,invalidDate,outsideWindow,classified:papers.filter(p=>p.keywords.length).length,unclassified:papers.filter(p=>!p.keywords.length).length,withAuthorKeywords:papers.filter(p=>p.authorKeywords).length,withAbstract:papers.filter(p=>p.hasAbstract).length,withAI:papers.filter(p=>p.aiScored).length,scored:papers.filter(p=>p.score!==null).length,unscored:papers.filter(p=>p.score===null).length,publishedInWindow:papers.filter(p=>p.publicationDate&&p.publicationDate>=window.startDate&&p.publicationDate<=window.endDate).length,journals:new Set(papers.map(p=>p.sourceId)).size},papers,keywords,topics:TOPICS.map(({id,label})=>({id,label})),contentRevision:papers.flatMap(p=>[p.updatedAt||'',p.analysisUpdatedAt||'']).sort().at(-1)||null};
+ return {version:KEYWORD_MAP_VERSION,window,filters:{basis:window.basis,metric,publisher,topic},metric:{id:metric,label:metric==='ai'?'AI 重要性（摘要暂评）':'规则阅读优先级',description:metric==='ai'?'只使用与当前内容、模型配置和评估版本匹配的已保存摘要评估；不能证明科学质量或影响力。':'基于研究方向匹配、证据词、来源日期与综述信号的 0–100 分；表示阅读顺序，不是科学影响力。'},coverage:{windowUnique:windowPapers.length,shown:papers.length,duplicates,excludedNonResearch,invalidDate,outsideWindow,classified:papers.filter(p=>p.keywords.length).length,unclassified:papers.filter(p=>!p.keywords.length).length,withAuthorKeywords:papers.filter(p=>p.authorKeywords).length,withAbstract:papers.filter(p=>p.hasAbstract).length,withAI:papers.filter(p=>p.aiScored).length,scored:papers.filter(p=>p.score!==null).length,unscored:papers.filter(p=>p.score===null).length,publishedInWindow:papers.filter(p=>p.publicationDate&&p.publicationDate>=window.startDate&&p.publicationDate<=window.endDate).length,journals:new Set(papers.map(p=>p.sourceId)).size},papers,keywords,topics:TOPICS.map(({id,label})=>({id,label})),contentRevision:papers.flatMap(p=>[p.updatedAt||'',p.analysisUpdatedAt||'',p.classificationUpdatedAt||'']).sort().at(-1)||null};
 }
 export type KeywordMap=ReturnType<typeof buildKeywordMap>;
 /** Bounded to the chosen window, but never to a page or a top-N. One SQL statement provides a consistent read. */

@@ -1,77 +1,10 @@
+import {Link,useLoaderData} from 'react-router';
+import {apiGet,withPageUpdate} from '../lib/api.server';
 import {usePageRead} from '../components/NavigationUpdates';
-import { Link, useLoaderData } from "react-router";
-import { apiGet, withPageUpdate } from "../lib/api.server";
-import { pageMeta } from "../lib/seo";
-
-interface TopicSummary {
-  slug: string;
-  name: string;
-  group: "company" | "field" | "genre";
-  definition: string;
-  total: number;
-  recent: number;
-  indexable: boolean;
-  latestAt: string | null;
-}
-
-export async function loader({ request }: { request: Request }) {
-  return withPageUpdate('topics',()=>apiGet<{ topics: TopicSummary[] }>("/api/site/topics", { signal: request.signal }));
-}
-
-export function meta() {
-  return pageMeta({ title: "主题", description: "按公司与模型、技术方向、内容形态聚合的 AI 主题页：OpenAI、Anthropic、Agent、多模态、论文与教程等 38 个方向。", path: "/topics", image: "/og/pages/topics.png" });
-}
-
-export function headers() {
-  return { "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=600" };
-}
-
-const GROUPS = [
-  { key: "company", name: "公司与模型", blurb: "按厂商与模型系追踪：谁发了什么、又赢了哪一局" },
-  { key: "field", name: "技术方向", blurb: "按技术领域深挖：Agent、多模态、具身智能……" },
-  { key: "genre", name: "内容形态", blurb: "按内容类型浏览：论文、教程、观点、政策……" },
-] as const;
-
-export default function TopicsPage() {
-  const data = useLoaderData<typeof loader>();const {topics}=data;usePageRead(data.pageUpdate);
-  return (
-    <div className="pb-10">
-      <header className="pb-2 pt-5 lg:pt-1">
-        <h1 className="text-[24px] font-semibold leading-[1.3] text-ink">按主题看 AI</h1>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-ink-3">
-          按公司与模型、技术方向、内容形态浏览 <span className="num">{topics.length}</span> 个主题，持续汇集近期焦点与精选。
-        </p>
-      </header>
-      {GROUPS.map((g) => (
-        <section key={g.key} aria-labelledby={`topics-${g.key}`} className="pt-8">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-            <h2 id={`topics-${g.key}`} className="text-[15px] font-bold text-ink">
-              {g.name}
-            </h2>
-            <p className="text-[12px] text-ink-4">{g.blurb}</p>
-          </div>
-          <ul className="mt-3.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {topics
-              .filter((t) => t.group === g.key)
-              .map((t) => (
-                <li key={t.slug}>
-                  <Link
-                    to={`/topics/${t.slug}`}
-                    prefetch="intent"
-                    aria-label={`查看${t.name}相关精选文章`}
-                    className="card card-hover group flex h-full flex-col px-5 py-[18px]"
-                  >
-                    <span className="text-[15px] font-bold text-ink transition-colors group-hover:text-accent">{t.name}</span>
-                    <span className="mt-1.5 line-clamp-2 flex-1 text-[12.5px] leading-[1.7] text-ink-3">{t.definition}</span>
-                    <span className="mono mt-3 text-[11.5px] text-accent">
-                      查看 {t.total} 条精选 <span className="inline-block transition-transform duration-200 group-hover:translate-x-0.5">→</span>
-                    </span>
-                  </Link>
-                </li>
-              ))}
-          </ul>
-        </section>
-      ))}
-    </div>
-  );
-}
+import {cachedRouteLoader} from '../lib/reading-cache';
+export const clientLoader=cachedRouteLoader;
+export async function loader({request}:{request:Request}){return withPageUpdate('topics',()=>apiGet<{topics:{id:string;label:string;group:string;definition:string;total:number;recent:number;href:string}[];total:number}>('/api/site/research/themes',{signal:request.signal}));}
+export const headers=()=>({'Cache-Control':'private, no-store'});
+export const meta=()=>[{title:'研究主题 · HKIS'},{name:'description',content:'先进半导体器件与工艺、图像传感器、TCAD 研究论文主题入口'},{name:'robots',content:'noindex'}];
+const groups=[{id:'company',label:'公司 / 机构'},{id:'field',label:'领域方向'},{id:'genre',label:'内容形态'}];
+export default function Topics(){const data=useLoaderData<typeof loader>();usePageRead(data.pageUpdate);return <main className="research-page"><header className="research-heading"><div><p className="eyebrow">HKIS / TOPICS</p><h1>研究主题</h1><p>按单位署名、研究方向与文献形式 / 研究方法进入 {data.total.toLocaleString()} 篇已收录论文。主题可交叉归属，篇数不按阅读分数裁剪。</p></div><Link to="/hot">查看前三关键词分布 ↗</Link></header>{groups.map(g=><section key={g.id} className="research-panel"><h2>{g.label}</h2><div>{data.topics.filter(t=>t.group===g.id).slice(0,g.id==='company'?12:9999).map(t=><Link key={t.id} to={'/topics/'+t.id} prefetch="intent" className="block border-b border-line py-5"><div className="flex items-baseline justify-between gap-4"><h3 className="font-semibold text-ink">{t.label}</h3><span className="text-accent">{t.total} 篇 →</span></div><p className="mt-1 text-sm text-ink-3">{t.definition}</p><p className="mt-2 text-xs text-ink-4">近 7 日首次收录 {t.recent} 篇{!t.total?' · 暂无匹配论文':''}</p></Link>)}</div>{g.id==='company'&&data.topics.filter(t=>t.group===g.id).length>12&&<details className="mt-4"><summary>查看其余全部单位署名（{data.topics.filter(t=>t.group===g.id).length-12}）</summary>{data.topics.filter(t=>t.group===g.id).slice(12).map(t=><p className="border-b border-line py-3" key={t.id}><Link to={t.href}>{t.label} · {t.total} 篇 →</Link></p>)}</details>}</section>)}<p className="text-sm text-ink-3">主题依据标题、摘要、作者词与当前前三分类词的明确词义匹配；同一论文可属于多个主题。机构只依据现有作者单位，不以出版社替代；同一单位的不同院系署名暂不强行合并。内容形态区分文献形式与研究方法线索，可多选归属；缺证据保持待核实。这里的主题不改变论文评分。细关键词来源及缺失状态见论文详情。</p></main>}

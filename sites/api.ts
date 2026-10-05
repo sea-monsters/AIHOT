@@ -59,9 +59,7 @@ export async function siteApi(request:Request,env:any):Promise<Response>{
  const latest=await db.prepare('SELECT max(last_success) t FROM site_sources').first();return json({filters:f,items:rows.results.map(card),page,pageCount:Math.max(1,Math.ceil(total/40)),total,todayCount:(await db.prepare("SELECT count(*) n FROM site_items WHERE date(coalesce(published_at,discovered_at),'+8 hours')=date('now','+8 hours')").first()).n,freshness:latest?.t||now(),generatedAt:now()});}
  if(p==='/api/site/items/availability'){const ids=[...new Set((u.searchParams.get('ids')||'').split(','))].filter(x=>/^[\w-]{1,80}$/.test(x)).slice(0,500);const out:any={};for(const id of ids)out[id]=(await detail(db,id))?'public':'unavailable';return json(out);}
  if(/^\/api\/site\/items\/[\w-]+$/.test(p)){const item=await detail(db,p.split('/').pop()!);return item?json(item):json({code:'not_found'},404);}
- const allTopics=(Array.isArray(topicConfig)?topicConfig:(topicConfig as any).topics||[]).map((t:any)=>({...t,total:0,recent:0,indexable:false,latestAt:null}));
- if(p==='/api/site/topics')return json({topics:allTopics});
- if(p.startsWith('/api/site/topics/')){const topic=allTopics.find((t:any)=>t.slug===decodeURIComponent(p.split('/').pop()!));return topic?json({topic:{...topic,related:[]},items:[],page:1,pageCount:1}):json({code:'not_found'},404);}
+ if(p==='/api/site/topics')return researchApi(new Request(u.origin+'/api/site/research/themes',request),env);
  if(/\/reports\/(daily|weekly|monthly)\/latest-page$/.test(p))return json({index:[],report:null});
  if(/\/reports\/(daily|weekly|monthly)$/.test(p))return json({kind:p.split('/').pop(),items:[]});
  if(p==='/api/site/contact')return json({wechatQr:null,feishuQr:null,makerAvatar:null});

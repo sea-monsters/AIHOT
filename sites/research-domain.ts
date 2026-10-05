@@ -69,12 +69,12 @@ export function evaluate(p:Paper,at=Date.now()){
 }
 export function fromOpenAlex(w:any){const source='openalex';const authors:Author[]=arr(w.authorships).map(a=>({name:clean(a.raw_author_name||a.author?.display_name),orcid:a.author?.orcid||null,first:a.author_position==='first',corresponding:a.is_corresponding===true?true:null,affiliations:arr(a.raw_affiliation_strings).length?arr(a.raw_affiliation_strings).map(clean):arr(a.institutions).map(i=>clean(i.display_name)),source}));
  const words:string[]=[];if(w.abstract_inverted_index)for(const [word,positions] of Object.entries(w.abstract_inverted_index))for(const i of positions as number[])if(i>=0&&i<20000)words[i]=word;
- return {doi:normalizeDoi(w.doi),abstract:words.length?words.join(' '):null,authors,affiliations:[...new Set(authors.flatMap(a=>a.affiliations))],url:w.id};
+ return {doi:normalizeDoi(w.doi),keywordEvidence:Array.isArray(w.keywords)?{recordUrl:w.id,policy:'first-three-v2',status:w.keywords.length?'found':w.topics?.length?'topics_only':'no_keywords',records:[{kind:'openalex-keyword',method:'model-generated-index',terms:w.keywords.map((k:any)=>({label:k.display_name,score:k.score,id:k.id}))},{kind:'openalex-topic',method:'model-generated-topic',terms:(w.topics||[]).map((k:any)=>({label:k.display_name,score:k.score,id:k.id}))}]}:null,abstract:words.length?words.join(' '):null,authors,affiliations:[...new Set(authors.flatMap(a=>a.affiliations))],url:w.id};
 }
 export function enrichPaper(p:Paper,w:ReturnType<typeof fromOpenAlex>):Paper{if(!p.doi||w.doi!==p.doi)return p;const q={...p,authors:p.authors.map(a=>({...a})),provenance:{...p.provenance}};
  if(!q.abstract&&w.abstract){q.abstract=w.abstract;q.provenance.abstract='openalex';}
  if(!q.authors.length&&w.authors.length){q.authors=w.authors;q.provenance.authors='openalex';}
  for(const a of q.authors){const match=w.authors.find(b=>(a.orcid&&b.orcid===a.orcid)||normalizedTitle(b.name)===normalizedTitle(a.name));if(match&&!a.affiliations.length&&match.affiliations.length){a.affiliations=match.affiliations;a.affiliationSource='openalex';}if(match?.corresponding===true){a.corresponding=true;q.provenance.corresponding='openalex';}}
  if(!q.affiliations.length&&w.affiliations.length){q.affiliations=w.affiliations;q.provenance.affiliations='openalex';}
- q.provenance.openalexRecord=w.url;return q;
+ if(w.keywordEvidence&&!q.provenance.keywordEvidence)q.provenance.keywordEvidence={...w.keywordEvidence,checkedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),revision:1};if(['abstract','authors','affiliations'].some(k=>JSON.stringify((q as any)[k])!==JSON.stringify((p as any)[k])))q.provenance.openalexRecord=w.url;return q;
 }
