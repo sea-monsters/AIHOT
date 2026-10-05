@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-04T14:24:45Z",
+  "latestVersion": "2026-10-05T12:19:52Z",
   "releases": [
+    {
+      "id": "private-research-rss-mcp-2026-10-05",
+      "at": "2026-10-05T12:19:52Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "增加私有 RSS 与 MCP 只读情报接点",
+      "body": [
+        "论文与详情、研究进展、历史日报及引用、热点关键词、收藏和更新日志共用只读数据层，支持筛选、分页与实质更新时间；读取不触发采集、模型或状态修改。",
+        "保持所有者私有访问，MCP采用 Sites 托管连接；外部通用 agent 与 RSS 阅读器的登录兼容尚未验证。新增运行说明与接口文档，未导出凭据或扩大共享。"
+      ],
+      "sources": [
+        {
+          "label": "接口与接入限制说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-integrations.md"
+        }
+      ]
+    },
     {
       "id": "upstream-navigation-safety-2026-10-04",
       "at": "2026-10-04T14:24:45Z",
