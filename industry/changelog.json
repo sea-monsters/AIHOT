@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-05T14:29:00Z",
+  "latestVersion": "2026-10-05T15:04:00Z",
   "releases": [
+    {
+      "id": "topic-card-grid-20261005",
+      "at": "2026-10-05T15:04:00Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "主题子类改为紧凑圆角卡片阵列",
+      "body": [
+        "公司/机构、领域方向与内容形态各自默认展示两行卡片；每次展开只增加当前屏宽下的两行，支持独立收起与返回恢复。",
+        "保留全部分类、未知项、真实计数及论文筛选链接；长名称完整换行，窄屏和放大时按实际列数展开，不新增内滚动条。"
+      ],
+      "sources": [
+        {
+          "label": "主题页展示与交互说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/topic-card-grid.md"
+        }
+      ]
+    },
     {
       "id": "paper-keywords-research-themes-20261005",
       "at": "2026-10-05T14:29:00Z",

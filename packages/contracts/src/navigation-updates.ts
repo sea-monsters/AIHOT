@@ -5,7 +5,7 @@ export const UPDATE_PAGES = [
  {key:'all',path:'/all',label:'研究进展',version:1},
  {key:'hot',path:'/hot',label:'热点榜',version:1},
  {key:'daily',path:'/daily',label:'论文日报',version:1},
- {key:'topics',path:'/topics',label:'主题',version:1},
+ {key:'topics',path:'/topics',label:'主题',version:2},
  {key:'starred',path:'/starred',label:'收藏',version:1},
  {key:'settings',path:'/settings',label:'网站设置',version:1},
  {key:'agent',path:'/agent',label:'运行说明',version:2},

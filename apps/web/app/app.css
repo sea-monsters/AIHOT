@@ -940,3 +940,25 @@
  .rail-disclosure>summary,.rail-filter-actions .research-primary,.rail-filter-actions .research-back,.reading-kind-filters button{min-height:44px}
  .reading-control-rail .research-filters input,.reading-control-rail .research-filters select{min-height:44px;font-size:1rem}
 }
+
+/* Topic navigation is a compact card array; reading surfaces stay unboxed. */
+.topic-section{min-width:0;border-top:1px solid var(--line);padding:1.1rem 0;margin-top:.7rem}
+.topic-section-heading{display:flex;align-items:baseline;justify-content:space-between;gap:.75rem;margin-bottom:.7rem}
+.topic-section-heading h2{font-size:1.0625rem;font-weight:650;color:var(--ink)}
+.topic-section-heading>span,.topic-section-note{font-size:.8125rem;color:var(--ink-3)}
+.topic-section-note{margin:-.2rem 0 .85rem;line-height:1.65}
+.topic-card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,14rem),1fr));gap:.65rem;min-width:0;align-items:stretch}
+.topic-card{display:flex;flex-direction:column;min-width:0;padding:.85rem 1rem;border:1px solid var(--line);border-radius:12px;background:var(--surface);text-decoration:none;color:var(--ink);overflow-wrap:anywhere}
+.topic-card:hover{border-color:var(--accent);background:var(--bg-sunk)}
+.topic-card h3{font-size:.9375rem;line-height:1.5;font-weight:650;margin:0 0 .55rem}
+.topic-card-definition{font-size:.8125rem;line-height:1.65;color:var(--ink-3);margin:0 0 .7rem}
+.topic-card-footer{display:flex;align-items:baseline;flex-wrap:wrap;justify-content:space-between;gap:.35rem .65rem;margin-top:auto;font-size:.75rem;color:var(--ink-3)}
+.topic-card-footer strong{font-size:.875rem;font-weight:600;color:var(--accent-ink)}
+.topic-card-empty{font-size:.75rem;color:var(--ink-3);margin-top:.3rem}
+.topic-grid-controls{display:flex;align-items:center;flex-wrap:wrap;gap:.5rem .75rem;margin-top:.65rem;font-size:.8125rem}
+.topic-grid-controls p{color:var(--ink-3);margin-right:auto}
+.topic-grid-controls button{min-height:40px;padding:.4rem .8rem;border:1px solid var(--line);border-radius:8px;color:var(--accent-ink);background:var(--surface);cursor:pointer}
+.topic-grid-controls button:hover{background:var(--bg-sunk);border-color:var(--accent)}
+.topic-grid-controls button span{margin-left:.4rem;font-size:.75rem}
+.topic-card:focus-visible,.topic-grid-controls button:focus-visible,.topic-section-heading h2:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:640px){.topic-grid-controls button{min-height:44px}.topic-card{padding:.8rem .9rem}}
