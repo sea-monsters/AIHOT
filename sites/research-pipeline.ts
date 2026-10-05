@@ -15,7 +15,7 @@ export function monthWindow(at=new Date()){
 }
 export function inUpdateWindow(p:Paper,window=monthWindow()){const date=publicationDay(p).date;return !!date&&date>=window.startDate&&date<=window.endDate;}
 export async function digest(value:unknown){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(value)));return [...new Uint8Array(bytes)].map(b=>b.toString(16).padStart(2,'0')).join('');}
-export function metadataFields(p:Paper){return {doi:p.doi,title:p.title,url:p.url,journal:p.journal,publisher:p.publisher,publishedAt:p.publishedAt,datePrecision:p.datePrecision,authors:p.authors,affiliations:p.affiliations,abstract:p.abstract,keywords:p.keywords,provenance:Object.fromEntries(Object.entries(p.provenance).filter(([k])=>k!=='keywordEvidence'))};}
+export function metadataFields(p:Paper){return {doi:p.doi,title:p.title,url:p.url,journal:p.journal,publisher:p.publisher,publishedAt:p.publishedAt,datePrecision:p.datePrecision,authors:p.authors,affiliations:p.affiliations,abstract:p.abstract,keywords:p.keywords,provenance:Object.fromEntries(Object.entries(p.provenance).filter(([k])=>!['keywordEvidence','metadataEvidence'].includes(k)))};}
 // Author order, affiliations and retrieval times cannot invalidate a semantic assessment that did not use them.
 export function analysisFields(p:Paper){return {title:p.title,abstract:p.abstract,keywords:p.keywords,publication:publicationDay(p),abstractSource:p.provenance.abstract||null,ruleVersion:RULE_VERSION};}
 export function analysisGate(p:Paper,preferences:any={}){

@@ -1,3 +1,4 @@
+import {mergeMetadata} from '../paper-metadata.ts';
 import {AIError,owner,csrf,readBody} from '../ai/security.ts';
 import {rowPaper} from '../research.ts';
 import {evaluate,normalizedTitle} from '../research-domain.ts';
@@ -15,7 +16,7 @@ export async function cachedRecord(db:any,id:string,key:any,recordId:any):Promis
 export async function saveEvidence(db:any,paperId:string,r:RecordData){
  // Stable payload hash excludes retrieval time; identical retries do not create duplicate evidence.
  const stable={...r,retrievedAt:undefined,fields:Object.fromEntries(Object.entries(r.fields).map(([k,v])=>[k,{...v,retrievedAt:undefined}]))};
- const hash=await fingerprint(JSON.stringify(stable)),id=await fingerprint(`scholarly|${paperId}|${r.service}|${r.recordId}|${hash}`);
+ const hash=await fingerprint(JSON.stringify(stable,(k,v)=>['checkedAt','updatedAt','revision'].includes(k)?undefined:v)),id=await fingerprint(`scholarly|${paperId}|${r.service}|${r.recordId}|${hash}`);
  await db.prepare('INSERT INTO research_records(id,paper_id,source_id,channel,record_url,retrieved_at,fields_json) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING').bind(id,paperId,'manual-'+r.service,r.service,r.recordUrl,r.retrievedAt,JSON.stringify({...r,contentHash:hash})).run();
 }
 export async function existingPaper(db:any,r:RecordData){
@@ -30,6 +31,7 @@ export async function applyRecord(db:any,id:string,body:any){
  if(old){
   const p=rowPaper(old),comparison=compareRecord(p,r);if(!comparison.canMerge)throw new AIError('identity_conflict',409,'标识尚未验证或标题存在差异，已保留原记录；请核对来源，不会自动合并');
   const missing=comparison.fields.filter(f=>f.state==='missing'&&f.field!=='title'&&f.field!=='doi').map(f=>f.field);
+  if(r.metadataEvidence){await db.prepare("UPDATE research_papers SET provenance_json=json_set(provenance_json,'$.metadataEvidence',json(?)) WHERE id=? AND doi IS ?").bind(JSON.stringify(mergeMetadata(p.provenance.metadataEvidence,r.metadataEvidence.sources,r.retrievedAt)),old.id,old.doi).run();p.provenance.metadataEvidence=mergeMetadata(p.provenance.metadataEvidence,r.metadataEvidence.sources,r.retrievedAt);}
   if(!missing.length){await saveEvidence(db,old.id,r);return {paperId:old.id,added:false,filled:[],message:'论文已在库中，没有可安全补充的缺失字段；来源证据已保留'}}
   const columns:Record<string,string>={publishedAt:'published_at',authors:'authors_json',affiliations:'affiliations_json',abstract:'abstract',journal:'journal'};
   const provenance:Record<string,any>={...p.provenance,scholarlyIds:{...p.provenance.scholarlyIds,[r.service]:r.recordId},scholarlyFields:{...p.provenance.scholarlyFields}};

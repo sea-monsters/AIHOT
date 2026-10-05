@@ -16,5 +16,5 @@ export async function saveSettings(db:any,id:string,body:any,env:any){
  }
  const changed=cipher!==old?.key_ciphertext;
  const result=await db.prepare('INSERT INTO scholarly_settings(id,owner_id,service,endpoint,key_ciphertext,revision,updated_at,tested_at,test_status,test_code) VALUES(?,?,?,?,?,1,?,?,?,?) ON CONFLICT(id) DO UPDATE SET key_ciphertext=excluded.key_ciphertext,revision=scholarly_settings.revision+1,updated_at=excluded.updated_at,tested_at=excluded.tested_at,test_status=excluded.test_status,test_code=excluded.test_code WHERE scholarly_settings.revision=?').bind(settingsKey(id,service),id,service,endpoint,cipher,new Date().toISOString(),changed?null:old?.tested_at||null,changed?null:old?.test_status||null,changed?null:old?.test_code||null,old?.revision||0).run();
- if(!result.meta?.changes)throw new AIError('settings_conflict',409,'设置已修改，请重新载入后保存');return safeSettings(db,id,env);
+ if(!result.meta?.changes)throw new AIError('settings_conflict',409,'设置已修改，请重新载入后保存');if(changed&&body.apiKey&&!body.removeKey)await db.prepare("UPDATE scholarly_usage SET blocked_code=NULL WHERE id=?").bind('__site__|'+service).run();return safeSettings(db,id,env);
 }

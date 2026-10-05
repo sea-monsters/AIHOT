@@ -1,3 +1,4 @@
+import {metadataMaintenance} from './metadata-maintenance.ts';
 import {navigationUpdatesApi} from './navigation-updates.ts';
 import {paperReaderApi} from './paper-reader.ts';
 import {anysearchApi} from './anysearch/api.ts';
@@ -32,6 +33,7 @@ export async function collect(db:any,id:string){const s=sources.find(s=>s.id===i
  }catch(e){await writeLog(db,{component:'feed',event:'collection_failed',severity:'error',outcome:'failed',errorCode:'collection_failed',sourceId:id,correlationId:checked+id,durationMs:Date.now()-Date.parse(checked)});const error=String((e as Error).message).slice(0,300);await db.prepare('UPDATE site_sources SET error=? WHERE id=?').bind(error,id).run();return {id,ok:false,error};}}
 export async function siteApi(request:Request,env:any):Promise<Response>{
  const path=new URL(request.url).pathname;
+ if(path==='/api/site/research/metadata-maintenance')return metadataMaintenance(request,env);
  if(path==='/api/site/navigation-updates'||path==='/api/site/navigation-updates/content')return navigationUpdatesApi(request,env);
  if(path==='/api/site/changelog'||path==='/api/site/meta'){
   if(request.method!=='GET')return json({code:'method_not_allowed'},405);

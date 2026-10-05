@@ -1,0 +1,39 @@
+# 机构与文献形式证据管线
+
+2026-10-05 维护记录：本次只修复机构、文献类型与必要的供应商安全网关，不改评分阈值、模型预算或历史日报。
+
+## 发现与修复
+
+- 旧RSS映射的 `recordType:null` 会覆盖Crossref已有类型。现保留非空已有值，并在 `provenance.metadataEvidence` 按来源记录类型证据。
+- 作者级补齐单位以前未进入论文顶层单位集合与主题筛选。现主题、详情、私有RSS/MCP共用同一机构证据解析器。
+- OpenAlex的原始单位字符串与结构化institution同时保留，存储来源提供的ROR、OpenAlex ID、国家/类型、作者位置与通讯角色。稳定ID相同才合并别名；原始院系/地址署名不猜母机构，不以出版社当研究单位。
+- `journal-article` / `article` 表示期刊论文形式，不代表原创研究或实验。明确review、preprint、会议、社论等类型单独归类；不同具体类型冲突保留待核验。题名的review词保留为线索，不压过供应商明确类型。
+- 方法线索与文献形式分开返回，附题名/摘要的实际匹配词、字段与规则版本，不作为科学质量结论。未知区分尚未收集、来源未给、无精确匹配及冲突。
+
+## 共享安全网关
+
+手动检索、站内助手、常规采集和元数据维护统一经过 `sites/scholarly/provider.ts`：
+
+- 每个provider全站共享100次实际请求/UTC日，keyed最小1.1秒，S2匿名维持3.1秒；持久租约确保单并发，30秒请求超时早于65秒租约到期。
+- 旧owner级已用额度合计继承。旧自动OpenAlex流量未完整计量时，迁移日保守视为额度用尽，不重置后继续请求。
+- 429不在当前调用自动重试。Retry-After接受秒数与HTTP日期；兼顾OpenAlex预算重置提示，持久保留最晚冷却，不随UTC换日缩短。
+- 继承旧采集cooldown；关键词导入审计中的429以“后续审计完成时间 + 已记录Retry-After”作保守上界，避免无法精确复原早期失败时刻时提早请求。
+- 401/403持久熔断，不切换key、网络或服务绕过。缓存命中不耗请求额度；缓存按所有者、设置版本、provider、规范URL隔离，6小时单篇/1小时列表，不缓存失败为空结果。
+- 已保存key只在服务端解密并发给该官方provider，不导出或新增凭证。自动采集仅使用该私有站点唯一的既有provider配置，多owner歧义时停止。
+
+官方规则核对（2026-10-05）：
+
+- [OpenAlex认证/限流](https://help.openalex.org/api/authentication/)：100 RPS、daily budget、Bearer支持、每页/OR最多100；[当前计费示例](https://help.openalex.org/access/example-costs/)：单条ID/DOI免费，列表/filter按请求计费。官方额度不等于本站获准额度。
+- [Semantic Scholar API](https://webflow.semanticscholar.org/product/api)：初始key跨端点1 RPS；匿名额度共享，不能视为个人额度。
+
+## 有界维护与保护
+
+所有者登录后可访问 `/api/site/research/metadata-maintenance`。GET只读诊断；POST是同源原生表单，不接收任意SQL、任意URL或数据库导入。
+
+1. 先5篇既有证据样本，再每批100篇。只重用精确paper ID与DOI对应的research_records及该owner的已有缓存，不联网。
+2. 可选OpenAlex阶段先5篇样本，再每批最多40个精确DOI，冻结最多3000篇，整个任务最多60次请求，同时受全站100次/日与冷却约束。先看覆盖与保护校验再继续。
+3. 每批冻结ID/DOI/content hash并校验；单独递增metadataEvidence revision。仅更新该JSON字段，不更改first_seen、updated_at、原摘要、评分、content hash、已读收藏、采集批次或历史日报。
+4. 保护快照涵盖其它论文字段、阅读收藏、批次成员、日报与模型回执。并发变化时标记需要核对，不宣称保护校验成功。
+5. 检查点、失败状态与请求计数持久保存。断点可继续，不把元数据补充算作新论文或新增未读。
+
+没有增加日常采集页数、付费AI调用或定时任务。源码仓库不保存私有响应缓存、数据库、运行凭证或生产数据。

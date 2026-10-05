@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-05T15:04:00Z",
+  "latestVersion": "2026-10-05T20:29:28Z",
   "releases": [
+    {
+      "id": "institution-form-evidence-20261005",
+      "at": "2026-10-05T20:29:28Z",
+      "basis": "record",
+      "kind": "fix",
+      "title": "修复机构与文献形式来源丢失并统一安全补全",
+      "body": [
+        "保留Crossref文献类型，合并作者级单位证据；稳定机构ID、原始署名和来源分别保留，主题计数、筛选、详情和私有RSS/MCP共用规范。",
+        "文献形式与研究方法线索分开，缺失或冲突明确保留。元数据维护先验证样本、按断点补全，不改评分、首次入库、已读收藏和历史日报。",
+        "OpenAlex与Semantic Scholar各入口共用全站限额、单并发租约、缓存和持久冷却；旧用量保守承接，429及权限失败停止请求，不增加采集或模型预算。"
+      ],
+      "sources": [
+        {
+          "label": "机构与文献形式证据说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/paper-metadata.md"
+        }
+      ]
+    },
     {
       "id": "topic-card-grid-20261005",
       "at": "2026-10-05T15:04:00Z",

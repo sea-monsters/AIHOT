@@ -1,3 +1,4 @@
+import {providerRequest} from './scholarly/provider.ts';
 import {owner,AIError} from './ai/security.ts';
 import {normalizeDoi} from './research-domain.ts';
 import {validKeyword,KEYWORD_POLICY} from './paper-keywords.ts';
@@ -8,13 +9,11 @@ export function openAlexEvidence(raw:any,doi:string,at:string){
  const keywords=terms(raw.keywords),topics=terms(raw.topics);
  return {policy:KEYWORD_POLICY,checkedAt:at,status:keywords.length?'found':topics.length?'topics_only':'no_keywords',provider:'openalex',recordUrl:raw.id,providerUpdatedAt:raw.updated_date||null,records:[{kind:'openalex-keyword',method:'model-generated-index',rawTerms:raw.keywords||[],terms:keywords},{kind:'openalex-topic',method:'model-generated-topic',rawTerms:raw.topics||[],terms:topics}]};
 }
-export async function fetchKeywordBatch(papers:any[],fetcher:typeof fetch=fetch){
- const dois=[...new Set(papers.map(p=>normalizeDoi(p.doi)).filter(Boolean))];if(!dois.length)return [];
+export async function fetchKeywordBatch(papers:any[],fetcher:typeof fetch=fetch,context?:{db:any;env:any;ownerId:string}){
+ if(!context)throw new AIError('gateway_required',409,'元数据查询必须经过共享安全网关');
+ const dois=[...new Set(papers.map(p=>normalizeDoi(p.doi)).filter(Boolean))].sort();if(!dois.length)return [];if(dois.length>100)throw new AIError('batch_too_large',400,'单批最多100个DOI');
  const u=new URL('https://api.openalex.org/works');u.searchParams.set('filter','doi:'+dois.map(d=>'https://doi.org/'+d).join('|'));u.searchParams.set('per_page','100');u.searchParams.set('select','id,doi,title,keywords,primary_topic,topics,updated_date');
- const r=await fetcher(u,{headers:{Accept:'application/json'},redirect:'manual',signal:AbortSignal.timeout(30000)});
- if(!r.ok){await r.body?.cancel();throw new AIError('openalex_http_'+r.status,r.status===429?429:502,'元数据请求暂停；HTTP '+r.status+'；Retry-After '+(r.headers.get('retry-after')||'未提供'));}
- if(!r.headers.get('content-type')?.includes('json'))throw new AIError('openalex_format',502,'元数据格式无效');
- const text=await r.text();if(text.length>2000000)throw new AIError('openalex_size',502,'元数据响应过大');const data=JSON.parse(text);if(!Array.isArray(data.results))throw new AIError('openalex_format',502,'元数据列表无效');return data.results;
+ const {data}=await providerRequest(context.db,context.env,'openalex',u.href,AbortSignal.timeout(30000),{ownerId:context.ownerId,fetcher});if(!Array.isArray(data.results))throw new AIError('openalex_format',502,'元数据列表无效');return data.results;
 }
 export function keywordEvidenceStatement(db:any,paper:any,evidence:any){
  // JSON-path updates preserve simultaneous metadata edits; no ingestion timestamps or scores change.
@@ -25,12 +24,12 @@ export function keywordEvidenceStatement(db:any,paper:any,evidence:any){
  return {changed,statement:db.prepare("UPDATE research_papers SET provenance_json=json_set(provenance_json,'$.keywordEvidence',json(?)) WHERE id=? AND doi IS ? AND coalesce(json_extract(provenance_json,'$.keywordEvidence.checkedAt'),'')<=?").bind(JSON.stringify(value),paper.id,paper.doi,evidence.checkedAt)};
 }
 export async function applyKeywordEvidence(db:any,paper:any,evidence:any){const op=keywordEvidenceStatement(db,paper,evidence);await op.statement.run();return op.changed;}
-export async function keywordJobStep(db:any,id:string,fetcher:typeof fetch=fetch){
+export async function keywordJobStep(db:any,id:string,fetcher:typeof fetch=fetch,env:any={}){
  const now=new Date().toISOString();let job=await db.prepare('SELECT * FROM research_keyword_jobs WHERE id=? AND owner_id=?').bind(KEYWORD_JOB,id).first();
  if(!job){const rows=(await db.prepare('SELECT id FROM research_papers WHERE priority>=0 ORDER BY id').all()).results;if(rows.length>3000)throw new AIError('scope_changed',409,'论文数量超过本次维护上限');await db.prepare('INSERT OR IGNORE INTO research_keyword_jobs(id,owner_id,paper_ids_json,cursor,requests,status,created_at,updated_at) VALUES(?,?,?,0,0,?,?,?)').bind(KEYWORD_JOB,id,JSON.stringify(rows.map((r:any)=>r.id)),'ready',now,now).run();job=await db.prepare('SELECT * FROM research_keyword_jobs WHERE id=? AND owner_id=?').bind(KEYWORD_JOB,id).first();}
  if(job.status==='completed')return job;if(job.status==='paused')throw new AIError('job_paused',409,'该批次因供应商错误暂停，未自动重试');
  const lease=new Date(Date.now()+60000).toISOString();const claim=await db.prepare("UPDATE research_keyword_jobs SET lease_until=?,status='running',requests=requests+1 WHERE id=? AND owner_id=? AND (lease_until IS NULL OR lease_until<?) AND cursor=? AND requests<60 AND status!='completed'").bind(lease,KEYWORD_JOB,id,now,job.cursor).run();if(!claim.meta?.changes)throw new AIError('job_busy',409,'已有批次运行或已达到请求上限');
- try{const ids=JSON.parse(job.paper_ids_json).slice(job.cursor,job.cursor+50);const rows=(await db.prepare('SELECT * FROM research_papers WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id').bind(JSON.stringify(ids)).all()).results;const results=await fetchKeywordBatch(rows,fetcher);for(const p of rows){const matches=results.filter((r:any)=>normalizeDoi(r.doi)===normalizeDoi(p.doi));const evidence=matches.length>1?{policy:KEYWORD_POLICY,checkedAt:now,status:'ambiguous_doi',records:[]}:openAlexEvidence(matches[0],p.doi,now);await applyKeywordEvidence(db,p,evidence);}
+ try{const ids=JSON.parse(job.paper_ids_json).slice(job.cursor,job.cursor+50);const rows=(await db.prepare('SELECT * FROM research_papers WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id').bind(JSON.stringify(ids)).all()).results;const results=await fetchKeywordBatch(rows,fetcher,{db,env,ownerId:id});for(const p of rows){const matches=results.filter((r:any)=>normalizeDoi(r.doi)===normalizeDoi(p.doi));const evidence=matches.length>1?{policy:KEYWORD_POLICY,checkedAt:now,status:'ambiguous_doi',records:[]}:openAlexEvidence(matches[0],p.doi,now);await applyKeywordEvidence(db,p,evidence);}
  const cursor=job.cursor+ids.length,status=cursor>=JSON.parse(job.paper_ids_json).length?'completed':'ready';await db.prepare('UPDATE research_keyword_jobs SET cursor=?,status=?,lease_until=?,updated_at=?,error_code=NULL WHERE id=? AND lease_until=?').bind(cursor,status,new Date(Date.now()+1200).toISOString(),new Date().toISOString(),KEYWORD_JOB,lease).run();return {cursor,status,total:JSON.parse(job.paper_ids_json).length};
  }catch(e){await db.prepare("UPDATE research_keyword_jobs SET status='paused',error_code=?,updated_at=? WHERE id=? AND lease_until=?").bind(e instanceof AIError?e.code:'metadata_error',now,KEYWORD_JOB,lease).run();throw e;}
 }
