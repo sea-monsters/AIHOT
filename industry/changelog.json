@@ -1,8 +1,27 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-05T20:54:00Z",
+  "latestVersion": "2026-10-05T21:19:00Z",
   "releases": [
+    {
+      "id": "daily-pipeline-evidence-20261005",
+      "at": "2026-10-05T21:19:00Z",
+      "basis": "record",
+      "kind": "fix",
+      "title": "修复补摘要后的评估阻塞与日报证据诊断",
+      "body": [
+        "补充摘要后同步更新内容版本，使旧的证据不足评估失效；同日未冻结候选原子补证据，手动导入保留真实来源，旧归档不重写。",
+        "采集先保存出版商摘要，再按剩余时间补充可选元数据；限流、超时与补充未完成不抹掉已成功采集内容。",
+        "日报分开显示规则入选与全候选摘要覆盖，避免未评估或缺摘要被误解为低质量；同时加固并发冻结与已收到响应的恢复检查。",
+        "原有规则分严格大于75、AI调用配额、前日边界与限流冷却保持不变；读取页面不启动采集或模型。"
+      ],
+      "sources": [
+        {
+          "label": "日报采集与证据修复边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/daily-pipeline-recovery.md"
+        }
+      ]
+    },
     {
       "id": "daily-home-firedot-20261005",
       "at": "2026-10-05T20:54:00Z",
