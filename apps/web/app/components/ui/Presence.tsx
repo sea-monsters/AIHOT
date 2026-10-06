@@ -38,8 +38,8 @@ export function Presence({ show, children, enter, exit, duration }: {
   return cloneElement(child, { className: `${child.props.className ?? ""} ${cls}`.trim() });
 }
 
-/** A block that opens to its natural height and closes to nothing (grid rows 0fr ↔ 1fr). */
-export function Collapse({ open, children, duration = 240, className = "" }: { open: boolean; children: ReactNode; duration?: number; className?: string }) {
+/** A natural-height disclosure with a brief fade; never animate reading layout height. */
+export function Collapse({ open, children, duration = 160, className = "" }: { open: boolean; children: ReactNode; duration?: number; className?: string }) {
   return (
     <Presence show={open} enter="anim-collapse-in" exit="anim-collapse-out" duration={duration}>
       <div className={`grid ${className}`} style={{ "--anim-ms": `${duration}ms` } as CSSProperties}>

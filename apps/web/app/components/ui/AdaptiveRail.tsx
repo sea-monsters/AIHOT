@@ -1,3 +1,4 @@
+import {DisclosureIndicator} from './Interaction';
 import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 
 /** A rail is sticky only while it fits. Long/expanded content stays in the document scroll. */
@@ -31,5 +32,5 @@ export function AdaptiveRail({children,className='',label,as:Tag='aside'}:{child
 
 /** Keep fields mounted when folded so GET forms retain every selected value. */
 export function RailDisclosure({title,children,className=''}:{title:ReactNode;children:ReactNode;className?:string}){
-  return <details className={`rail-disclosure ${className}`}><summary><span>{title}</span><span className="rail-disclosure-state" aria-hidden="true"><span className="rail-closed">展开 +</span><span className="rail-open">收起 −</span></span></summary><div className="rail-disclosure-content">{children}</div></details>;
+  return <details className={`rail-disclosure ${className}`}><summary><span>{title}</span><DisclosureIndicator/></summary><div className="rail-disclosure-content">{children}</div></details>;
 }

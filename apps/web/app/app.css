@@ -295,21 +295,6 @@
   }
 }
 
-/* Where the browser can animate to an auto height, disclosures open and close smoothly. */
-@supports (interpolate-size: allow-keywords) {
-  .disclosure {
-    interpolate-size: allow-keywords;
-  }
-  .disclosure::details-content {
-    block-size: 0;
-    overflow: clip;
-    transition: block-size 220ms var(--ease-out-quart), content-visibility 220ms allow-discrete;
-  }
-  .disclosure[open]::details-content {
-    block-size: auto;
-  }
-}
-
 /* Cards are utilities so they take variants (lg:card: a card on desktop, a plain row on phones). */
 @utility card {
   background: var(--surface);
@@ -354,8 +339,8 @@
 }
 
 /* Enter/leave keyframes for components/ui/Presence.tsx; --anim-ms overrides a default length. */
-@keyframes aihot-collapse-in { from { grid-template-rows: 0fr; opacity: 0; } to { grid-template-rows: 1fr; opacity: 1; } }
-@keyframes aihot-collapse-out { from { grid-template-rows: 1fr; opacity: 1; } to { grid-template-rows: 0fr; opacity: 0; } }
+@keyframes aihot-collapse-in { from { opacity: .72; } to { opacity: 1; } }
+@keyframes aihot-collapse-out { from { opacity: 1; } to { opacity: .72; } }
 @keyframes aihot-fade-in { from { opacity: 0; } }
 @keyframes aihot-fade-out { to { opacity: 0; } }
 @keyframes aihot-drop-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
@@ -370,8 +355,8 @@
 @keyframes aihot-bump { from { transform: scale(0.7); } 55% { transform: scale(1.08); } to { transform: scale(1); } }
 @keyframes aihot-pop-in { from { opacity: 0; transform: scale(0.6); } 60% { opacity: 1; transform: scale(1.05); } to { transform: scale(1); } }
 @keyframes aihot-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
-.anim-collapse-in { animation: aihot-collapse-in var(--anim-ms, 240ms) var(--ease-out-quart) both; }
-.anim-collapse-out { animation: aihot-collapse-out var(--anim-ms, 240ms) var(--ease-out-quart) both; }
+.anim-collapse-in { animation: aihot-collapse-in var(--anim-ms, 160ms) var(--ease-out-quart) both; }
+.anim-collapse-out { animation: aihot-collapse-out var(--anim-ms, 160ms) var(--ease-out-quart) both; }
 .anim-fade-in { animation: aihot-fade-in var(--anim-ms, 160ms) ease-out both; }
 .anim-fade-out { animation: aihot-fade-out var(--anim-ms, 160ms) ease-in both; }
 .anim-drop-in { animation: aihot-drop-in 140ms var(--ease-out-quart) both; }

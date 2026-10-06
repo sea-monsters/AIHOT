@@ -87,7 +87,7 @@ export function SearchField({ action = "/all", defaultValue = "", keep = {}, var
             </button>
           )}
         </label>
-        <button type="submit" className={`h-11 shrink-0 rounded-full bg-accent px-5 text-[14.5px] font-semibold text-accent-contrast transition-[background-color,transform] active:scale-[0.98] ${searching ? "opacity-60" : ""}`}>
+        <button type="submit" className={`h-11 shrink-0 rounded-full bg-accent px-5 text-[14.5px] font-semibold text-accent-contrast transition-colors active:bg-selected ${searching ? "opacity-60" : ""}`}>
           搜索
         </button>
       </Form>

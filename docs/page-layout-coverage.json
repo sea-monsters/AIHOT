@@ -13,7 +13,16 @@
       "zoom200": "pass: real browser 200%, 590x420 CSS viewport; no document horizontal overflow",
       "limitation": "Single chat instance preserved structurally; keyboard focus and unsent empty composer verified. No model request or test draft sent; busy/replay covered by isolated regressions",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion",
+        "native-disclosure"
+      ],
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits"
     },
     {
       "route": "/settings",
@@ -27,7 +36,15 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "Final loaded service-row structure verified; only encrypted-status labels visible. No credential fields opened, read or changed",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits; closed configuration controls point to hidden mounted form regions; no credential fields opened or tests run"
     },
     {
       "route": "/research",
@@ -41,7 +58,16 @@
       "zoom200": "pass: real browser 200%, 590x420 CSS viewport; no document horizontal overflow",
       "limitation": "",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion",
+        "native-disclosure"
+      ],
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits; Space native fold keeps focus/values; mobile click fold; source-link keyboard focus without opening paper; 1182×600 long rail uses document scroll; 400×606 and 393×252 no overflow"
     },
     {
       "route": "/research/:id",
@@ -55,7 +81,16 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "打开详情会标记已读；生产仅共享框架审计，详情使用隔离SSR合成数据，不写用户已读",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion",
+        "native-disclosure"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/all",
@@ -69,7 +104,16 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion",
+        "native-disclosure"
+      ],
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits"
     },
     {
       "route": "/all/search-busy",
@@ -83,7 +127,15 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/search-busy",
@@ -97,7 +149,15 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/items/:id",
@@ -111,7 +171,16 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "旧订阅详情与原文含阅读/跳转行为；仅隔离SSR核对",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion",
+        "native-disclosure"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/items/:id/original",
@@ -125,7 +194,16 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "旧订阅详情与原文含阅读/跳转行为；仅隔离SSR核对",
       "ssrStatus": 404,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion",
+        "native-disclosure"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/hot",
@@ -139,7 +217,16 @@
       "zoom200": "pass: real browser 200%, 590x420 CSS viewport; no document horizontal overflow",
       "limitation": "",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion",
+        "native-disclosure"
+      ],
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits"
     },
     {
       "route": "/story/:publicId",
@@ -153,7 +240,15 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "未迁移或feature disabled，验证共享错误shell，不声称业务可用",
       "ssrStatus": 503,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/daily",
@@ -167,7 +262,16 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion",
+        "native-disclosure"
+      ],
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits"
     },
     {
       "route": "/daily/archive",
@@ -181,7 +285,16 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion",
+        "native-disclosure"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/daily/:key",
@@ -195,7 +308,16 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion",
+        "native-disclosure"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/weekly",
@@ -209,7 +331,15 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "Sites原版周/月报仅返回空态，无真实报告",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/weekly/:key",
@@ -223,7 +353,15 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "未迁移或feature disabled，验证共享错误shell，不声称业务可用",
       "ssrStatus": 404,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/monthly",
@@ -237,7 +375,15 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "Sites原版周/月报仅返回空态，无真实报告",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/monthly/:key",
@@ -251,7 +397,15 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "未迁移或feature disabled，验证共享错误shell，不声称业务可用",
       "ssrStatus": 404,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/topics",
@@ -265,7 +419,15 @@
       "zoom200": "pass: 590x420 at real200%; 2 columns, 4→8 cards; filter navigation and Back restore8 cards/scroll",
       "limitation": "",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits; stable hover dimensions; 8→16 desktop/2→4 narrow; close focus + history rows restored; 590×379 actual 200% zoom, 393×252 and 400×606; light/dark screenshots"
     },
     {
       "route": "/topics/:slug",
@@ -279,7 +441,11 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "主题详情是 /research 筛选重定向；覆盖目标模板，不伪称独立详情页",
       "ssrStatus": 302,
-      "ssrSharedFrame": false
+      "ssrSharedFrame": false,
+      "interactionVariants": [
+        "destination route variants"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/topics/:slug/page/:page",
@@ -293,7 +459,11 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "主题详情是 /research 筛选重定向；覆盖目标模板，不伪称独立详情页",
       "ssrStatus": 302,
-      "ssrSharedFrame": false
+      "ssrSharedFrame": false,
+      "interactionVariants": [
+        "destination route variants"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/about",
@@ -307,7 +477,15 @@
       "zoom200": "pass: real browser 200%, 590x420 CSS viewport; no document horizontal overflow",
       "limitation": "目前共用版本说明；不新拟法律条款/反馈服务",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/terms",
@@ -321,7 +499,15 @@
       "zoom200": "shared sites-info template visually verified at /about; this route SSR200, baseline individually captured",
       "limitation": "目前共用版本说明；不新拟法律条款/反馈服务",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/privacy",
@@ -335,7 +521,15 @@
       "zoom200": "shared sites-info template visually verified at /about; this route SSR200, baseline individually captured",
       "limitation": "目前共用版本说明；不新拟法律条款/反馈服务",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/changelog",
@@ -349,7 +543,16 @@
       "zoom200": "pass: real browser 200%, 590x420 CSS viewport; no document horizontal overflow",
       "limitation": "",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion",
+        "native-disclosure"
+      ],
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits"
     },
     {
       "route": "/feedback",
@@ -363,7 +566,15 @@
       "zoom200": "shared sites-info template visually verified at /about; this route SSR200, baseline individually captured",
       "limitation": "目前共用版本说明；不新拟法律条款/反馈服务",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/more",
@@ -377,7 +588,15 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/starred",
@@ -391,7 +610,15 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "Final actual zero-favorites empty state verified. No favorites or read-state writes performed",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits"
     },
     {
       "route": "/agent",
@@ -405,7 +632,15 @@
       "zoom200": "shared sites-info template visually verified at /about; this route SSR200, baseline individually captured",
       "limitation": "目前共用版本说明；不新拟法律条款/反馈服务",
       "ssrStatus": 200,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits"
     },
     {
       "route": "/codex-reset",
@@ -419,7 +654,15 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "未迁移或feature disabled，验证共享错误shell，不声称业务可用",
       "ssrStatus": 404,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/codex-reset/history/:date",
@@ -433,7 +676,15 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "未迁移或feature disabled，验证共享错误shell，不声称业务可用",
       "ssrStatus": 404,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/leaderboard",
@@ -447,7 +698,15 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "未迁移或feature disabled，验证共享错误shell，不声称业务可用",
       "ssrStatus": 404,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/leaderboard/category/:key",
@@ -461,7 +720,15 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "未迁移或feature disabled，验证共享错误shell，不声称业务可用",
       "ssrStatus": 404,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/leaderboard/sources",
@@ -475,7 +742,15 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "未迁移或feature disabled，验证共享错误shell，不声称业务可用",
       "ssrStatus": 404,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/leaderboard/sources/:key",
@@ -489,7 +764,15 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "未迁移或feature disabled，验证共享错误shell，不声称业务可用",
       "ssrStatus": 404,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/leaderboard/rules",
@@ -503,7 +786,15 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "未迁移或feature disabled，验证共享错误shell，不声称业务可用",
       "ssrStatus": 404,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/leaderboard/:slug",
@@ -517,7 +808,15 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "未迁移或feature disabled，验证共享错误shell，不声称业务可用",
       "ssrStatus": 404,
-      "ssrSharedFrame": true
+      "ssrSharedFrame": true,
+      "interactionVariants": [
+        "keyboard-focus",
+        "quiet-navigation",
+        "inline-reference",
+        "disabled-busy",
+        "reduced-motion"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/admin/login",
@@ -531,7 +830,11 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "Sites worker明确503纯文本；不属于公开app shell，不新增后台",
       "ssrStatus": 503,
-      "ssrSharedFrame": false
+      "ssrSharedFrame": false,
+      "interactionVariants": [
+        "unavailable response; legacy control variants source-checked"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/admin",
@@ -545,7 +848,11 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "Sites worker明确503纯文本；不属于公开app shell，不新增后台",
       "ssrStatus": 503,
-      "ssrSharedFrame": false
+      "ssrSharedFrame": false,
+      "interactionVariants": [
+        "unavailable response; legacy control variants source-checked"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/admin/content",
@@ -559,7 +866,11 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "Sites worker明确503纯文本；不属于公开app shell，不新增后台",
       "ssrStatus": 503,
-      "ssrSharedFrame": false
+      "ssrSharedFrame": false,
+      "interactionVariants": [
+        "unavailable response; legacy control variants source-checked"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/admin/content/:id",
@@ -573,7 +884,11 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "Sites worker明确503纯文本；不属于公开app shell，不新增后台",
       "ssrStatus": 503,
-      "ssrSharedFrame": false
+      "ssrSharedFrame": false,
+      "interactionVariants": [
+        "unavailable response; legacy control variants source-checked"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/admin/sources",
@@ -587,7 +902,11 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "Sites worker明确503纯文本；不属于公开app shell，不新增后台",
       "ssrStatus": 503,
-      "ssrSharedFrame": false
+      "ssrSharedFrame": false,
+      "interactionVariants": [
+        "unavailable response; legacy control variants source-checked"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/admin/sources/new",
@@ -601,7 +920,11 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "Sites worker明确503纯文本；不属于公开app shell，不新增后台",
       "ssrStatus": 503,
-      "ssrSharedFrame": false
+      "ssrSharedFrame": false,
+      "interactionVariants": [
+        "unavailable response; legacy control variants source-checked"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/admin/sources/:id",
@@ -615,7 +938,11 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "Sites worker明确503纯文本；不属于公开app shell，不新增后台",
       "ssrStatus": 503,
-      "ssrSharedFrame": false
+      "ssrSharedFrame": false,
+      "interactionVariants": [
+        "unavailable response; legacy control variants source-checked"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/admin/monitor",
@@ -629,7 +956,11 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "Sites worker明确503纯文本；不属于公开app shell，不新增后台",
       "ssrStatus": 503,
-      "ssrSharedFrame": false
+      "ssrSharedFrame": false,
+      "interactionVariants": [
+        "unavailable response; legacy control variants source-checked"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/admin/feedback",
@@ -643,7 +974,11 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "Sites worker明确503纯文本；不属于公开app shell，不新增后台",
       "ssrStatus": 503,
-      "ssrSharedFrame": false
+      "ssrSharedFrame": false,
+      "interactionVariants": [
+        "unavailable response; legacy control variants source-checked"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/admin/runs",
@@ -657,7 +992,11 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "Sites worker明确503纯文本；不属于公开app shell，不新增后台",
       "ssrStatus": 503,
-      "ssrSharedFrame": false
+      "ssrSharedFrame": false,
+      "interactionVariants": [
+        "unavailable response; legacy control variants source-checked"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/admin/models",
@@ -671,7 +1010,11 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "Sites worker明确503纯文本；不属于公开app shell，不新增后台",
       "ssrStatus": 503,
-      "ssrSharedFrame": false
+      "ssrSharedFrame": false,
+      "interactionVariants": [
+        "unavailable response; legacy control variants source-checked"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/admin/selectbench",
@@ -685,7 +1028,11 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "Sites worker明确503纯文本；不属于公开app shell，不新增后台",
       "ssrStatus": 503,
-      "ssrSharedFrame": false
+      "ssrSharedFrame": false,
+      "interactionVariants": [
+        "unavailable response; legacy control variants source-checked"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/admin/selectbench/:runId",
@@ -699,7 +1046,11 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "Sites worker明确503纯文本；不属于公开app shell，不新增后台",
       "ssrStatus": 503,
-      "ssrSharedFrame": false
+      "ssrSharedFrame": false,
+      "interactionVariants": [
+        "unavailable response; legacy control variants source-checked"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/admin/settings",
@@ -713,7 +1064,11 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "Sites worker明确503纯文本；不属于公开app shell，不新增后台",
       "ssrStatus": 503,
-      "ssrSharedFrame": false
+      "ssrSharedFrame": false,
+      "interactionVariants": [
+        "unavailable response; legacy control variants source-checked"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     },
     {
       "route": "/admin/audit",
@@ -727,7 +1082,11 @@
       "zoom200": "not individually run; see shared-template coverage and limitation",
       "limitation": "Sites worker明确503纯文本；不属于公开app shell，不新增后台",
       "ssrStatus": 503,
-      "ssrSharedFrame": false
+      "ssrSharedFrame": false,
+      "interactionVariants": [
+        "unavailable response; legacy control variants source-checked"
+      ],
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
     }
   ],
   "visualBuild": "v55 / a61f69c9a842f822f9778155840d0da431a51689; subsequent final patch only aligns two-column statistic padding and documents these results",
@@ -747,5 +1106,7 @@
     "postgresIntegration": "not run: requires separate PostgreSQL test database",
     "localPreview": "not available in portable execution; production audit is not a local preview",
     "publicScreenshots": "not uploaded to public fork; private audit screenshots are retained separately"
-  }
+  },
+  "interactionBaseline": "v58 / 762524f; current screenshot audit 2026-10-06",
+  "interactionStandard": "docs/reading-interactions.md"
 }

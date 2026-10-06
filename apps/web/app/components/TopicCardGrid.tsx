@@ -1,3 +1,4 @@
+import {DisclosureIndicator} from './ui/Interaction';
 import {useLayoutEffect,useRef,useState} from 'react';
 import {Link} from 'react-router';
 import {topicWindow,topicColumns} from '../lib/topic-grid';
@@ -37,8 +38,8 @@ export function TopicCardGrid({id,label,topics,historyKey}:{id:string;label:stri
   </div>
   <div className="topic-grid-controls">
    <p role="status" aria-live="polite" aria-atomic="true">已显示 {visible.toLocaleString()} / {topics.length.toLocaleString()} 个子类</p>
-   {next>0&&<button type="button" aria-controls={'topic-grid-'+id} aria-expanded={expanded} aria-label={label+'：展开更多，下 '+Math.min(2,Math.ceil(next/columns))+' 行，共 '+next+' 个子类'} onClick={expand}>展开更多 <span>+{next}</span></button>}
-   {expanded&&<button type="button" aria-controls={'topic-grid-'+id} aria-expanded="true" aria-label={label+'：收起至前两行'} onClick={collapse}>收起</button>}
+   {next>0&&<button type="button" aria-controls={'topic-grid-'+id} aria-expanded={expanded} aria-label={label+'：展开更多，下 '+Math.min(2,Math.ceil(next/columns))+' 行，共 '+next+' 个子类'} onClick={expand}>展开更多 <span>+{next}</span><DisclosureIndicator open={false} label={false}/></button>}
+   {expanded&&<button type="button" aria-controls={'topic-grid-'+id} aria-expanded="true" aria-label={label+'：收起至前两行'} onClick={collapse}>收起<DisclosureIndicator open label={false}/></button>}
   </div>
  </section>
 }

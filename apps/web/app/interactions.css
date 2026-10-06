@@ -1,0 +1,82 @@
+/* HKIS interaction variants. Theme/layout stay in app.css; this module owns feedback.
+   Inline references stay underlined. Quiet actions get a modest hit area, not a primary CTA. */
+:root{--interaction-duration:160ms;--interaction-ease:cubic-bezier(.2,.7,.3,1);--interaction-hover:var(--bg-sunk);--interaction-pressed:var(--selected);--interaction-disabled:var(--ink-3)}
+:where(a,button,summary,input,select,textarea){-webkit-tap-highlight-color:var(--selected)}
+:where(a,button,summary):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+:where(a,button,summary){transition:background-color var(--interaction-duration) var(--interaction-ease),border-color var(--interaction-duration) var(--interaction-ease),color var(--interaction-duration) var(--interaction-ease),text-decoration-color var(--interaction-duration) var(--interaction-ease)}
+
+/* Explicit variants, plus existing semantic component aliases for legacy route families. */
+.hkis-link,.research-back,.page-header>a,.research-pagination :is(a,button),.weekly-links>a,.paper-bulk>a,.ai-actions>a,.info-page ul a{
+ display:inline-flex;align-items:center;justify-content:center;gap:.4rem;max-width:100%;min-height:34px;padding:.3rem .55rem;border:1px solid var(--line);border-radius:var(--radius-control);background:transparent;color:var(--accent-ink);font-size:.875rem;font-weight:550;line-height:1.5;text-decoration:none;white-space:normal;overflow-wrap:anywhere;vertical-align:baseline
+}
+.hkis-link-source{justify-content:flex-start;min-height:30px;padding:.2rem .45rem;border-color:transparent;font-size:inherit;font-weight:500}
+.link-mark{flex:0 0 auto;color:currentColor}
+.hkis-link-inline,.prose a,.page-prose p a,.weekly-citation,.weekly-evidence p a,.progress-provenance p a{
+ color:var(--accent-ink);text-decoration:underline;text-decoration-color:var(--accent);text-decoration-thickness:1px;text-underline-offset:.2em;text-decoration-skip-ink:auto
+}
+.hkis-link-inline{display:inline;padding:0;min-height:0;border:0;border-radius:0;font-weight:inherit;background:transparent}
+.research-card-bottom .hkis-link-source,.daily-source-paper>.hkis-link-source{font-size:.8125rem;text-decoration:none}
+:is(.research-card h2,.weekly-paper h3,.daily-source-paper h4)>a{text-decoration:underline;text-decoration-color:transparent;text-decoration-thickness:1px;text-underline-offset:.2em}
+:is(.research-card h2,.weekly-paper h3,.daily-source-paper h4)>a:focus-visible{color:var(--accent-ink);text-decoration-color:currentColor}
+
+/* Keyword navigation is a compact chip; it is not a paragraph citation. */
+.research-tags>a{display:inline-flex;align-items:center;min-height:28px;max-width:100%;padding:.18rem .45rem;border:1px solid var(--line);border-radius:var(--radius-mark);background:var(--surface-2);color:var(--accent-ink);font-size:.8125rem;line-height:1.45;text-decoration:none;overflow-wrap:anywhere}
+@media(hover:hover){.research-tags>a:hover{border-color:var(--line-strong)}}
+@media(pointer:coarse){.research-tags>a{min-height:36px}}
+
+/* Same footprint in idle/hover/current states; no width, weight or position animation. */
+.progress-tabs{gap:.35rem .65rem}
+.progress-tabs a{display:inline-flex;align-items:center;min-height:40px;padding:.5rem .65rem;border-bottom:2px solid transparent;border-radius:var(--radius-control) var(--radius-control) 0 0;font-weight:600}
+.progress-tabs a[aria-current=page]{border-bottom-color:var(--accent);background:var(--selected);color:var(--accent-ink);font-weight:600}
+.hkis-control:active:not(:disabled),.paper-text-button:active:not(:disabled){background:var(--interaction-pressed)}
+.paper-text-button{display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:.3rem .5rem;border:1px solid transparent;border-radius:var(--radius-control);text-decoration:none;color:var(--ink-2)}
+:is(.hkis-link,.research-back,.page-header>a,.weekly-links>a,.paper-bulk>a,.ai-actions>a,.info-page ul a,.research-pagination a,.progress-tabs a,.research-tags a,.topic-card,.topic-grid-controls button):active{background:var(--interaction-pressed);color:var(--accent-ink)}
+:where(button):disabled,:where(button)[aria-disabled=true]{cursor:not-allowed}
+:is(.research-primary,.ai-secondary,.paper-text-button,.paper-favorite,.hkis-control,.topic-grid-controls button):disabled{
+ opacity:1;color:var(--interaction-disabled);background:var(--bg-sunk);border-color:var(--line);text-decoration:none;cursor:not-allowed
+}
+[aria-busy=true]{cursor:progress}
+:is(.research-primary,.ai-secondary,.paper-text-button,.hkis-control)[aria-busy=true]{cursor:progress}
+
+/* Native details preserve focus/fields and do not tween layout height. */
+.disclosure-summary,.rail-disclosure>summary{display:flex;align-items:center;justify-content:space-between;gap:.65rem;list-style:none;cursor:pointer;border-radius:var(--radius-control)}
+.disclosure-summary::-webkit-details-marker{display:none}
+.disclosure-label{min-width:0;overflow-wrap:anywhere}
+.disclosure-indicator{display:inline-flex;align-items:center;justify-content:flex-end;gap:.3rem;flex-shrink:0;color:var(--accent-ink);font-size:.75rem;font-weight:400;white-space:nowrap}
+.disclosure-caret{flex:0 0 auto;transition:transform var(--interaction-duration) var(--interaction-ease);transform:rotate(0)}
+.disclosure-open-label{display:none}
+:where(details[open])>summary .disclosure-closed-label{display:none}
+:where(details[open])>summary .disclosure-open-label{display:inline}
+:where(details[open])>summary .disclosure-caret,.disclosure-indicator[data-open=true]>.disclosure-caret{transform:rotate(180deg)}
+:is(.disclosure-summary,.rail-disclosure>summary,.changelog-toggle,.reading-control-toggle):active{background:var(--interaction-pressed)}
+:is(.research-panel,.progress-provenance,.scholarly-discovery)>summary.disclosure-summary{padding:.45rem .5rem;min-height:38px;margin:0}
+.ai-privacy>.disclosure-summary{min-height:30px}
+:is(.changelog-toggle,.reading-control-toggle){border-radius:var(--radius-control)}
+.topic-grid-controls button{display:inline-flex;align-items:center;justify-content:center;gap:.35rem}
+.topic-grid-controls button .disclosure-indicator{margin-left:0}
+.service-row-actions .ai-secondary{display:inline-flex;align-items:center;justify-content:center;gap:.35rem}
+.service-row-body[hidden],.changelog-content[hidden]{display:none}
+:where(details[open])>:not(summary),.changelog-content:not([hidden]),.service-row-body:not([hidden]){animation:reading-reveal var(--interaction-duration) var(--interaction-ease)}
+@keyframes reading-reveal{from{opacity:.72}to{opacity:1}}
+
+@media(hover:hover){
+ :is(.hkis-link,.research-back,.page-header>a,.weekly-links>a,.paper-bulk>a,.ai-actions>a,.info-page ul a,.research-pagination a):hover{background:var(--interaction-hover);border-color:var(--line-strong);color:var(--accent-ink);text-decoration:none}
+ :is(.hkis-link-inline,.prose a,.page-prose p a,.weekly-citation,.weekly-evidence p a,.progress-provenance p a):hover{text-decoration-color:currentColor;background:var(--accent-soft)}
+ :is(.research-card h2,.weekly-paper h3,.daily-source-paper h4)>a:hover{color:var(--accent-ink);text-decoration-color:currentColor}
+ :is(.progress-tabs a,.research-tags a):hover{background:var(--interaction-hover);color:var(--accent-ink)}
+ .progress-tabs a[aria-current=page]:hover{background:var(--selected)}
+ :is(.disclosure-summary,.rail-disclosure>summary,.changelog-toggle,.reading-control-toggle):hover{background:var(--interaction-hover)}
+ .paper-text-button:hover:not(:disabled){background:var(--interaction-hover);border-color:var(--line)}
+ .topic-card:hover{border-color:var(--accent);background:var(--interaction-hover)}
+}
+@media(max-width:640px),(pointer:coarse){
+ :is(.hkis-link:not(.hkis-link-inline),.research-back,.page-header>a,.weekly-links>a,.paper-bulk>a,.ai-actions>a,.info-page ul a,.research-pagination a,.paper-text-button,.progress-tabs a,.disclosure-summary,.rail-disclosure>summary){min-height:44px}
+}
+@media(prefers-reduced-motion:reduce){
+ *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+/* The keyword drill-down is a button disclosure, with its original lazy result mount. */
+.keyword-disclosure{display:flex;align-items:center;gap:.6rem;border-radius:var(--radius-control)}
+.keyword-disclosure>.disclosure-indicator{margin-left:auto}
+.keyword-disclosure:active{background:var(--interaction-pressed)}
+@media(hover:hover){.keyword-disclosure:hover{background:var(--interaction-hover)}}

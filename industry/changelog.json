@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-06T00:30:31Z",
+  "latestVersion": "2026-10-06T03:09:41Z",
   "releases": [
+    {
+      "id": "quiet-reading-interactions-20261006",
+      "kind": "fix",
+      "at": "2026-10-06T03:09:41Z",
+      "basis": "record",
+      "title": "统一轻链接与折叠响应，保持轻松阅读",
+      "body": [
+        "导航、原文入口与正文引用使用不同层级：轻描边、细小方向提示和稳定的暖色响应，正文引用继续保留下划线，不把每个链接都变成按钮。",
+        "栏目折叠统一方向指示与短促淡入，保留原生按钮和 details 的键盘操作；减少动态效果时关闭动画。主题仍按当前列数从两行开始、每次增加两行，右栏继续随文档滚动。",
+        "同步完善键盘焦点、触屏按下、禁用与处理中状态；未改变采集预算、模型调用、阅读收藏或日报筛选规则。"
+      ],
+      "sources": [
+        {
+          "label": "阅读交互规范与验证范围",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/reading-interactions.md"
+        }
+      ]
+    },
     {
       "id": "metadata-exact-raw-dedup-20261006",
       "at": "2026-10-06T00:30:31Z",

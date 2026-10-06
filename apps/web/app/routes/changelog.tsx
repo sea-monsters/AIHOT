@@ -1,3 +1,4 @@
+import {DisclosureSummary,DisclosureIndicator,linkClass,ExternalLinkMark} from '../components/ui/Interaction';
 import {PageHeader} from '../components/ui/PageFrame';
 import {usePageRead} from '../components/NavigationUpdates';
 import {ControlReadingLayout} from '../components/ui/ControlReadingLayout';
@@ -36,16 +37,16 @@ export function Entry({ entry, open, onToggle }: { entry: ChangeRelease; open:bo
         <span className={`rounded-full px-2 py-0.5 font-medium ${COLORS[entry.kind]}`}>{LABELS[entry.kind]}</span>
         <span className="text-ink-3">{BASIS[entry.basis]} <time dateTime={entry.at} className="mono">{beijingTime(entry.at)}</time></span>
       </div>
-      <h3 className="mt-2 text-base font-semibold leading-relaxed text-ink"><button type="button" className="changelog-toggle" aria-expanded={open} aria-controls={`change-content-${entry.id}`} onClick={onToggle}><span>{entry.title}</span><span className="changelog-chevron" aria-hidden="true">{open?'收起 −':'展开 +'}</span></button></h3>
+      <h3 className="mt-2 text-base font-semibold leading-relaxed text-ink"><button type="button" className="changelog-toggle" aria-expanded={open} aria-controls={`change-content-${entry.id}`} onClick={onToggle}><span>{entry.title}</span><DisclosureIndicator open={open}/></button></h3>
       <div id={`change-content-${entry.id}`} className="changelog-content" hidden={!open}>
       <div className="changelog-body mt-1.5 text-ink-2">
         {entry.body.map((line, index) => <p key={index}><Inline text={line} /></p>)}
       </div>
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-        {entry.sources.map(source => <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer" className="break-words text-accent underline decoration-accent/30 underline-offset-4 hover:decoration-accent">{source.label}</a>)}
+        {entry.sources.map(source => <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer" className={linkClass('source')}>{source.label}<ExternalLinkMark/></a>)}
       </div>
       {entry.upstream && <details className="mt-2 rounded-control border border-line-soft bg-bg-sunk/40 px-3 py-2">
-        <summary className="cursor-pointer text-xs font-medium text-ink-2">查看 {entry.upstream.commits.length} 个上游提交</summary>
+        <DisclosureSummary className="cursor-pointer text-xs font-medium text-ink-2">查看 {entry.upstream.commits.length} 个上游提交</DisclosureSummary>
         <p className="mt-2 text-xs leading-relaxed text-ink-3">以下是上游原始提交时间（UTC+08）；本站于 {beijingDate(entry.at)} {beijingTime(entry.at)} 合入 fork。合入日期不等同于精确上线时间。</p>
         <ol className="mt-2 space-y-2">
           {entry.upstream.commits.map(commit => <li key={commit.sha} className="text-xs leading-relaxed">

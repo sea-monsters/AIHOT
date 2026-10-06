@@ -28,7 +28,7 @@ function Thumb({ id }: { id: string }) {
     if (entrance && !reduce && prev && now.at - prev.at < 1000 && (prev.left !== now.left || prev.width !== now.width) && el.animate) {
       el.animate(
         [{ transform: `translateX(${prev.left - now.left}px)`, width: `${prev.width}px` }, { transform: "translateX(0)", width: `${now.width}px` }],
-        { duration: 300, easing: "cubic-bezier(0.25, 1, 0.5, 1)" },
+        { duration: 160, easing: "cubic-bezier(0.25, 1, 0.5, 1)" },
       );
     }
     return () => {
@@ -58,7 +58,7 @@ const TRACK = "gap-0.5 rounded-full bg-bg-sunk p-[3px] ring-1 ring-inset ring-li
 const THUMB = "absolute inset-0 rounded-full bg-surface shadow-[var(--shadow-thumb)] ring-1 ring-line dark:bg-raised";
 
 function optionClass(size: keyof typeof SIZES, on: boolean) {
-  return `relative inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap rounded-full font-medium outline-offset-1 transition-colors duration-150 active:scale-[0.98] ${SIZES[size]} ${on ? "text-ink" : "text-ink-3 hover:text-ink"}`;
+  return `relative inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap rounded-full font-medium outline-offset-1 transition-colors duration-150 hkis-control ${SIZES[size]} ${on ? "text-ink" : "text-ink-3 hover:text-ink"}`;
 }
 
 /**

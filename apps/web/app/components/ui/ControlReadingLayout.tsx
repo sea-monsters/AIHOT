@@ -1,3 +1,4 @@
+import {DisclosureIndicator} from './Interaction';
 import {PageGrid} from './PageFrame';
 import {AdaptiveRail} from './AdaptiveRail';
 import {useId, useState, type ReactNode} from 'react';
@@ -10,7 +11,7 @@ export function ControlReadingLayout({children, header, rail, label, summary}: {
     {header && <div className="reading-page-heading">{header}</div>}
     <AdaptiveRail className="reading-control-rail" label={label}>
       <button type="button" className="reading-control-toggle" aria-expanded={open} aria-controls={id} onClick={() => setOpen(value => !value)}>
-        <span><strong>{label}</strong>{summary && <small>{summary}</small>}</span><span aria-hidden="true">{open ? '收起 −' : '展开 +'}</span>
+        <span><strong>{label}</strong>{summary && <small>{summary}</small>}</span><DisclosureIndicator open={open}/>
       </button>
       <div id={id} className="reading-control-panel" data-open={open}>{rail}</div>
     </AdaptiveRail>

@@ -1,3 +1,4 @@
+import {DisclosureSummary} from '../components/ui/Interaction';
 import {PaperFavorites} from '../components/PaperFavorites';
 import { SITE } from "@aihot/industry/site";
 import { useEffect, useRef, useState } from "react";
@@ -142,4 +143,4 @@ function LegacyStarredPage() {
   );
 }
 
-export default function StarredPage(){return <><PaperFavorites/><details className="research-panel"><summary>原版订阅内容的本机收藏</summary><LegacyStarredPage/></details></>}
+export default function StarredPage(){return <><PaperFavorites/><details className="research-panel"><DisclosureSummary>原版订阅内容的本机收藏</DisclosureSummary><LegacyStarredPage/></details></>}

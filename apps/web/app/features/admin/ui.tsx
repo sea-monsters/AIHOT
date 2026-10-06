@@ -153,7 +153,7 @@ export function Button({
       type="button"
       {...rest}
       disabled={rest.disabled || busy}
-      className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-control font-medium transition-[opacity,background-color,transform] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45 ${
+      className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-control font-medium transition-[opacity,background-color] active:bg-selected disabled:pointer-events-none disabled:opacity-45 ${
         size === "sm" ? "h-7 px-2.5 text-[12.5px]" : "h-9 px-3.5 text-[13.5px]"
       } ${BTN[tone]} ${className}`}
     >

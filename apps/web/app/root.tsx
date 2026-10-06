@@ -14,6 +14,7 @@ import { useEffect, type ReactNode } from "react";
 import { noteRecoveryNavigation } from "./lib/render-recovery.ts";
 import type { Route } from "./+types/root";
 import "./app.css";
+import "./interactions.css";
 import { Sidebar } from "./components/shell/Sidebar";
 import { MobileTabBar } from "./components/shell/MobileTabBar";
 import { BackToTop, NavigationProgress } from "./components/shell/Chrome";
