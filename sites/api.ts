@@ -39,7 +39,7 @@ export async function siteApi(request:Request,env:any):Promise<Response>{
   if(request.method!=='GET')return json({code:'method_not_allowed'},405);
   return json(path==='/api/site/changelog'?CHANGELOG:{changelogVersion:CHANGELOG.latestVersion});
  }
- if(path==='/api/site/research/reader-state'||path==='/api/site/research/reader-state/favorites')return paperReaderApi(request,env);
+ if(path==='/api/site/research/reader-state'||path==='/api/site/research/reader-state/batch'||path==='/api/site/research/reader-state/favorites')return paperReaderApi(request,env);
  if(path.startsWith('/api/site/anysearch/'))return anysearchApi(request,env);
  if(new URL(request.url).pathname.startsWith('/api/site/scholarly/'))return scholarlyApi(request,env);
  if(new URL(request.url).pathname==='/api/site/logs')return logsApi(request,env);

@@ -16,9 +16,10 @@ export function createPaperReaderStore(fetcher:Fetcher=(...args)=>fetch(...args)
   ids.filter(Boolean).forEach(id=>known.add(id));const unique=[...new Set(ids)].filter(Boolean),missing=unique.filter(id=>(force||!confirmed[id])&&!loading.has(id));
   if(missing.length){missing.forEach(id=>requested.add(id));if(!scheduled)scheduled=Promise.resolve().then(async()=>{
    const all=[...requested];requested.clear();scheduled=null;
-   try{let failure:unknown=null;const tasks=[];for(let i=0;i<all.length;i+=100){const chunk=all.slice(i,i+100);tasks.push((async()=>{await acquireRead();try{
+   try{let failure:unknown=null;const tasks=[],bulk=all.length>100,limit=bulk?2000:100;for(let i=0;i<all.length;i+=limit){const chunk=all.slice(i,i+limit);tasks.push((async()=>{await acquireRead();try{
     if(failure)return;
-    const start=Object.fromEntries(chunk.map(id=>[id,versions.get(id)||0]));const body=await request('/api/site/research/reader-state?'+new URLSearchParams(chunk.map(id=>['id',id])));for(const id of chunk)if((versions.get(id)||0)===start[id]&&!snapshot.pending[id]&&body.states[id])confirmed[id]=body.states[id];emit('');
+    // A read started during an optimistic write is stale even if the write finishes before its response.
+    const start=Object.fromEntries(chunk.map(id=>[id,snapshot.pending[id]?null:(versions.get(id)||0)]));const body=await request(bulk?'/api/site/research/reader-state/batch':'/api/site/research/reader-state?'+new URLSearchParams(chunk.map(id=>['id',id])),bulk?{method:'POST',headers:{'Content-Type':'application/json','X-HKIS-Request':'1'},body:JSON.stringify({ids:chunk})}:undefined);for(const id of chunk)if((versions.get(id)||0)===start[id]&&!snapshot.pending[id]&&body.states[id])confirmed[id]=body.states[id];emit('');
    }catch(e){failure??=e}finally{releaseRead()}})())}await Promise.all(tasks);if(failure)throw failure}catch(e){emit((e as Error).message);throw e}finally{all.forEach(id=>loading.delete(id))}
   });missing.forEach(id=>loading.set(id,scheduled!));}
   await Promise.all(unique.map(id=>loading.get(id)).filter(Boolean));

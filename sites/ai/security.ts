@@ -15,11 +15,11 @@ export function csrf(request:Request){
  if(request.headers.get('origin')!==url.origin||request.headers.get('x-hkis-request')!=='1'||!request.headers.get('content-type')?.startsWith('application/json'))throw new AIError('csrf_rejected',403,'请求来源验证失败，请刷新页面重试');
  const site=request.headers.get('sec-fetch-site');if(site&&site!=='same-origin'&&site!=='none')throw new AIError('csrf_rejected',403,'仅允许本站操作');
 }
-export async function readBody(request:Request){
- if(Number(request.headers.get('content-length'))>24000)throw new AIError('request_too_large',413,'输入过长');
+export async function readBody(request:Request,maxBytes=24000){
+ if(Number(request.headers.get('content-length'))>maxBytes)throw new AIError('request_too_large',413,'输入过长');
  const reader=request.body?.getReader();if(!reader)throw new AIError('invalid_json',400,'缺少请求内容');
  let text='',size=0;const decoder=new TextDecoder();
- while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>24000){await reader.cancel();throw new AIError('request_too_large',413,'输入过长')}text+=decoder.decode(value,{stream:true})}text+=decoder.decode();
+ while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>maxBytes){await reader.cancel();throw new AIError('request_too_large',413,'输入过长')}text+=decoder.decode(value,{stream:true})}text+=decoder.decode();
  try{const value=JSON.parse(text);if(!value||typeof value!=='object'||Array.isArray(value))throw Error();return value}catch{throw new AIError('invalid_json',400,'请求格式无效')}
 }
 // Exact public endpoints prevent private-network, metadata, DNS-rebinding and redirect SSRF.

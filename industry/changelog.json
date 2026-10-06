@@ -1,8 +1,31 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-06T13:42:35Z",
+  "latestVersion": "2026-10-06T14:07:24Z",
   "releases": [
+    {
+      "id": "profile-full-reader-batch-20261006",
+      "kind": "fix",
+      "at": "2026-10-06T14:07:24Z",
+      "basis": "record",
+      "title": "合并完整论文列表的只读状态查询并防止旧刷新覆盖",
+      "body": [
+        "新增所有者专用、严格同源的有界只读批量查询，大列表一次读取最多2000篇状态；已有100篇GET/PUT边界和写入队列保持兼容，不因打开列表写入已读或收藏。",
+        "完整列表减少逐批网络等待；按单个请求两次索引查询读取，限制请求字节、IDs和并发，并保持缺失论文原子失败、所有者隔离和显式重试。",
+        "卡片和收藏按钮复用同一阅读状态订阅，选择范围改为Set查询；不缩减实际论文、统计或全选范围。",
+        "修复刷新在写入pending时发起、迟到后覆盖新确认状态的竞态。取消、失败、返回和大列表实际完成时间分别验收，不把加载反馈当作全部完成。"
+      ],
+      "sources": [
+        {
+          "label": "论文阅读与状态查询",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/paper-reader.md"
+        },
+        {
+          "label": "性能测量协议",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/performance-profile.md"
+        }
+      ]
+    },
     {
       "id": "profile-projection-followon-20261006",
       "kind": "fix",

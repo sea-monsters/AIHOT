@@ -2,7 +2,7 @@ import {observeProfileResponse} from './profile-response';
 /** Local, explicit diagnostic session only. Never sends telemetry or retains user text. */
 type Row={kind:string;at:number;duration?:number;[key:string]:unknown};
 let enabled=false,started=0,lastAction=0,actionId=0,requestId=0,sampleId=0,mountPanel:(()=>void)|null=null,records:Row[]=[];
-const apiRoutes=new Set(['meta','navigation-updates','research/papers','research/status','research/themes','research/feed','research/weekly','research/keyword-map','research/daily','research/daily/calendar','research/reader-state','research/reader-state/favorites','ai/settings','ai/chat','ai/test','ai/preferences','logs','changelog']);
+const apiRoutes=new Set(['meta','navigation-updates','research/papers','research/status','research/themes','research/feed','research/weekly','research/keyword-map','research/daily','research/daily/calendar','research/reader-state','research/reader-state/batch','research/reader-state/favorites','ai/settings','ai/chat','ai/test','ai/preferences','logs','changelog']);
 const apiRoute=(path:string)=>{const suffix=path.replace(/^\/api\/site\//,'');return apiRoutes.has(suffix)?suffix:'other'};
 const round=(n:number)=>Math.round(n*100)/100;
 function add(kind:string,values:Record<string,unknown>={}){if(!enabled)return;records.push({kind,at:round(performance.now()),...values});if(records.length>1200)records.shift()}
