@@ -1,8 +1,30 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-06T04:58:48Z",
+  "latestVersion": "2026-10-06T11:16:30Z",
   "releases": [
+    {
+      "id": "upstream-atom-baseline-20261006",
+      "kind": "fix",
+      "at": "2026-10-06T11:16:30Z",
+      "basis": "record",
+      "title": "核对上游19项更新，保留 Atom 纯文本论文内容",
+      "body": [
+        "选择性适配 Atom 默认及 text 类型：保留尖括号术语与实体文字，避免只含这类术语的论文标题被丢弃；HTML 内容继续用既有解析器。",
+        "保持论文摘要与出版商说明的证据区别、私有权限、采集预算和冻结日报；未导入上游 PostgreSQL、公共缓存或模型预设。",
+        "本次源码作为后续性能测量基线，不宣称已经完成 profile 或获得速度提升。"
+      ],
+      "sources": [
+        {
+          "label": "选择性审查与验证",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/upstream-sync.md"
+        },
+        {
+          "label": "本轮审查的上游19项提交",
+          "url": "https://github.com/KKKKhazix/AIHOT/compare/290822424c0bd30841ac771ff74774041bbb842b...2b80294859160a727e0749f7b8b6232c2812fdf4"
+        }
+      ]
+    },
     {
       "id": "shared-controls-performance-20261006",
       "kind": "fix",

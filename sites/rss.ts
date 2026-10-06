@@ -1,4 +1,5 @@
 import {atomLink} from './atom-link.ts';
+import {atomPlainText} from './atom-text.ts';
 import {SITE} from '@aihot/industry/site';
 import {XMLParser} from 'fast-xml-parser';
 import {Parser} from 'htmlparser2';
@@ -11,8 +12,8 @@ export function parseFeed(xml:string,base:string){
  const d=p.parse(xml);const atom=!!d.feed;const entries=arr(d.feed?.entry??d.rss?.channel?.item??d['rdf:RDF']?.item);
  if(!d.feed&&!d.rss&&!d['rdf:RDF'])throw new Error('响应不是有效的 RSS / Atom');
  return entries.map(e=>{const link=atom?atomLink(d.feed,e,base):text(e.link);if(!link)return null; let url;try{url=new URL(link,base);if(url.protocol!=='https:'&&url.protocol!=='http:')return null;}catch{return null;}
- const title=clean(e.title);const stamp=Date.parse(text(e.pubDate??e.published??e.updated??e['dc:date']));
- return title?{url:url.href,title:title.slice(0,1000),summary:clean(e.description??e.summary??e['content:encoded']??e.content).slice(0,1200),publishedAt:Number.isFinite(stamp)&&stamp<Date.now()+86400000?new Date(stamp).toISOString():null}:null;}).filter(Boolean);
+ const title=atom?(atomPlainText(e.title)??clean(e.title)):clean(e.title);const stamp=Date.parse(text(e.pubDate??e.published??e.updated??e['dc:date']));
+ return title?{url:url.href,title:title.slice(0,1000),summary:(atom&&e.description==null&&(e.summary!=null||e['content:encoded']==null)?(atomPlainText(e.summary??e.content)??clean(e.summary??e.content)):clean(e.description??e.summary??e['content:encoded']??e.content)).slice(0,1200),publishedAt:Number.isFinite(stamp)&&stamp<Date.now()+86400000?new Date(stamp).toISOString():null}:null;}).filter(Boolean);
 }
 export async function fetchFeed(url:string){
  let current=new URL(url); const host=current.hostname.replace(/^www\./,''); for(let n=0;n<4;n++){

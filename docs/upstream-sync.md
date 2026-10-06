@@ -1,5 +1,46 @@
 # 上游同步记录
 
+## 2026-10-06 · 第三轮选择性适配 / 性能测量基线
+
+本轮固定审查窗口为 `290822424c0bd30841ac771ff74774041bbb842b` → `2b80294859160a727e0749f7b8b6232c2812fdf4`，GitHub 比较确认新增 **19** 个提交；2026-10-06 11:12 UTC 再核实上游 HEAD 未变。[上游范围](https://github.com/KKKKhazix/AIHOT/compare/290822424c0bd30841ac771ff74774041bbb842b...2b80294859160a727e0749f7b8b6232c2812fdf4)。完整 merge 基线仍为 **cf8f8d0**；本次选择性审查截至 **2b80294**，不加虚假第二父提交。
+
+### 实际适配
+
+- 修复两套 Sites Atom 解析器：未写 type 或 type=text 时保留 literal <model> 等文本，XML 已解码的实体不再经过 HTML 二次解码。HTML 内容仍用原 htmlparser2。标题仅有尖括号术语时不再丢弃条目。
+- 论文摘要与出版商说明继续分开；Nature 的说明不提升为摘要，Science 仍要求原有摘要证据。RSS/RDF、Atom XML Base、来源白名单、发表日期精度、字段来源与去重规则均沿用。
+- 上游 #134 的引号属性样例只新增回归验证：本站原 parser 已正确处理，未换为上游 tokenizer。
+- 不做上游公共缓存/PG 查询的盲目性能移植。以本次发布源码作为后续 profile 的新基线；v61 旧遥测不能冒充本基线，后续优化另记、同基线前后测。
+
+### 逐提交判定（原始 UTC 提交时间）
+
+- [`309e32e`](https://github.com/KKKKhazix/AIHOT/commit/309e32eb343a57d721525f04956887d3b9057fdf) · 2026-10-04T14:16:48Z · 适配：Atom 默认/text 的标题、摘要及内容按纯文本保存，不再吞掉尖括号术语或二次解码；保持 Nature/Science/Wiley 证据分级。英文日期与 JSON 列表属于原 Node 采集器，本站论文 date-parts/精度语义不替换；未采用 DROP TABLE 迁移放行。
+- [`2628ad6`](https://github.com/KKKKhazix/AIHOT/commit/2628ad6a9dcb54d1d62c60b1414b25c0263310bb) · 2026-10-04T17:21:02Z · 未采用：site/modules 静态文件出口和主题插口说明，不迁移本站行业目录或 Worker 路由。
+- [`9d5de21`](https://github.com/KKKKhazix/AIHOT/commit/9d5de21c50f3ee54bf83677cf24be9308d8f63dc) · 2026-10-04T22:02:00Z · 已有或不适用：本站已有有界标签页阅读缓存、按需数据、导航失效及批次预算。上游公共页面预取/缓存、正文图片代码增强、二分滚动定位、PG 搜索合并/轻摘要和任务/通知/恢复不直接导入；保留本站动态栏目滚动与私有 no-store。免费列表重试不导入论文共享请求预算。
+- [`36604b9`](https://github.com/KKKKhazix/AIHOT/commit/36604b9a5535d029e7ed850e80153ef7275b8aa1) · 2026-10-04T22:39:30Z · 未采用：Node 图片磁盘缓存与 MCP 长订阅发布排空；本站 stateless POST MCP 无订阅，接入页为独立运行说明，不导入 SIGURG 生命周期。
+- [`dd12db1`](https://github.com/KKKKhazix/AIHOT/commit/dd12db13bc140d4be8021f980b1cdc3d92c2a075) · 2026-10-04T23:14:32Z · 未采用：共享 MCP 订阅通道和容量治理；本站不支持 subscriptions/listen / GET SSE，现有普通请求边界保留。
+- [`9acad0c`](https://github.com/KKKKhazix/AIHOT/commit/9acad0c3d7687d9210c2b7774f83799dfd36734b) · 2026-10-04T23:27:47Z · 未采用：sharp/磁盘图片缓存、SVG 实际传输与模型位图输入；本站论文元数据路径不运行原媒体处理，不新增图片或视觉模型请求。
+- [`1756ad7`](https://github.com/KKKKhazix/AIHOT/commit/1756ad71f0b5086d8e3e9034b9e20b4cb8b91a75) · 2026-10-05T16:13:01Z · 未采用：视频页误作图片修复仅针对旧 Node 图片代理，本站论文页面不走此媒体路径；不为闲置旧后端改动扩大验证范围。
+- [`cc7297c`](https://github.com/KKKKhazix/AIHOT/commit/cc7297c0dd8a03c3e22d5fa2c66290bc55a949f4) · 2026-10-05T16:13:01Z · 未采用：1756ad7 的图片地址判断整理，同上。
+- [`cf75ad4`](https://github.com/KKKKhazix/AIHOT/commit/cf75ad4ee3af4bcbd3dcd5a6f0d98f219e4de5ff) · 2026-10-05T16:18:41Z · 未采用：原模型步骤的视觉能力匹配与后台选择；本站按用户保存的独立服务配置调用，不导入原模型预设或探测。
+- [`337e7e1`](https://github.com/KKKKhazix/AIHOT/commit/337e7e1b37876429dc17d19ea145b1b50da42eb5) · 2026-10-05T16:18:41Z · 未采用：视觉模型允许文本步骤、默认 GLM 预设能力修改；不修改本站模型选择和费用。
+- [`c45cf68`](https://github.com/KKKKhazix/AIHOT/commit/c45cf6848ad4710feeb41676f4e148da94dc0828) · 2026-10-05T16:23:34Z · 未采用：Readability 内联隐藏样式规则；本站不抓全文，不能借此增加全文读取或改变摘要来源规则。
+- [`ede7c7b`](https://github.com/KKKKhazix/AIHOT/commit/ede7c7bf6fbf2fe3d1282732423f16d1fc7dbf08) · 2026-10-05T21:15:35Z · 未采用：上游英文 README 与默认行业文案，保留本站文档与身份。
+- [`672e2c1`](https://github.com/KKKKhazix/AIHOT/commit/672e2c123b040069ec5b0aeffcc3728fc48eb209) · 2026-10-06T05:56:25Z · 未采用：原事件关系评测器的 coverage/completeAccuracy、失败复用和 production 门槛；本站无该事件归组流程。不将其评测结果套在论文规则分或 AI 摘要证据分。
+- [`e6cda05`](https://github.com/KKKKhazix/AIHOT/commit/e6cda0568c2113ee3bf43c6e1bf4fea7aeadb1d0) · 2026-10-06T06:04:43Z · 择取回归样例：引号属性含 >、无引号属性带撇号等用例在本站 htmlparser2 上验证通过；生产解析器已有该能力，不替换成正则/自制 tokenizer。旧 Node stripTags 留原样，未声称修复闲置路径。
+- [`7d6ac83`](https://github.com/KKKKhazix/AIHOT/commit/7d6ac837b364faf40bec30ab29be2a346f20262e) · 2026-10-06T06:09:25Z · 已有或不适用：本站 HTML 清洗使用解析器；原全文目录和模型文本共用 tokenizer 不导入，论文 Atom text 则走独立纯文本分支。
+- [`7b6be43`](https://github.com/KKKKhazix/AIHOT/commit/7b6be438204c671c76ed8f6520e70aa4eaa7f038) · 2026-10-06T06:55:56Z · 已有或不适用：X 原帖/空刊/PG 发布读取、队列停机与通知、备份、模块规则、公共页面复用、旧 Node 测试拆分不迁移；该提交移除上游长订阅，本站原本已无此接口。本站已有独立预算/暂停/未完成态与保守付费回执规则，unknown 不自动重发；不改变 owner 私有缓存。
+- [`175d230`](https://github.com/KKKKhazix/AIHOT/commit/175d2301403109ec56212da3c907d659d7d39607) · 2026-10-06T08:10:41Z · 未采用生产搜索合并：本站没有原 PG sharedSearch 路径，导航已有各 store 内进行中去重；router serverLoader 的取消信号不能跨导航共享。若后续 profile 显示收益，须另按 owner/config/query 与取消语义适配，不添加无测缓存。借鉴纯解析回归独立运行。
+- [`3cc5d35`](https://github.com/KKKKhazix/AIHOT/commit/3cc5d35c1327d2c1d2d59a3e041f2fee25e720c2) · 2026-10-06T09:09:43Z · 参考测试边界，不导入 Node DNS/net 仿真：Workers 不提供原 guardedLookup 接口；原 RSS 地址/逐跳拒绝测试仍运行，不能宣称已有 DNS/connect-time 防护。
+- [`2b80294`](https://github.com/KKKKhazix/AIHOT/commit/2b80294859160a727e0749f7b8b6232c2812fdf4) · 2026-10-06T10:00:54Z · 参考行为测试原则：新增用例实际调用两套解析器及 Worker/D1/SSR，先重现旧行为失败，不用词匹配替代功能验证；没有照搬上游删测试。
+
+### 保留范围与验证
+
+UI、CSS、PageFrame/共享控件、论文阅读状态、只读 MCP/RSS、owner 权限、17学术源、08/20调度、近期月/20页及每源2页、共享学术网关额度、付费未知不重试、严格 >75 和冻结日报均不改。无数据库迁移、依赖变更、线上采集或历史回填。
+
+验证：新增4项解析行为测试（其中2项先在旧代码重现失败）；372项 Sites 测试全部通过。typecheck、生产 build 与 changelog 检查通过；16组隔离 Worker/D1 脚本全部通过，包括新 Atom 真实入库与 SSR 转义、52路由、owner隔离、冻结日报、共享预算与只读出口。原 web 套件35/41通过，6项既知公共缓存契约差异仍失败，未改成公开缓存来使其通过。未使用 PostgreSQL 测试库，不把旧 Node 数据库集成计为通过。未进行新一轮性能profile或浏览器视觉改版验收；本次没有UI/CSS变更，性能测量在此基线固定后开始。
+
+---
+
 ## 2026-10-04 · 第二轮定向安全与导航适配
 
 本轮在 GitHub 只读核实新增 **12** 个提交，从上次选择性审查截至 `1ca5d6dd97ca876ade8fba593da9e4f93228918f` 到 `290822424c0bd30841ac771ff74774041bbb842b`。 [比较范围](https://github.com/KKKKhazix/AIHOT/compare/1ca5d6dd97ca876ade8fba593da9e4f93228918f...290822424c0bd30841ac771ff74774041bbb842b)。当前选择性审查截至 **2908224**；最后完整 merge 基线仍为 **cf8f8d0**。没有添加虚假的上游第二父提交，未采用项目仍须结合本记录逐项判断。
