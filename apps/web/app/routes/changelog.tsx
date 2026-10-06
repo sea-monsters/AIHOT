@@ -39,16 +39,16 @@ export function Entry({ entry, open, onToggle }: { entry: ChangeRelease; open:bo
       </div>
       <h3 className="mt-2 text-base font-semibold leading-relaxed text-ink"><button type="button" className="changelog-toggle" aria-expanded={open} aria-controls={`change-content-${entry.id}`} onClick={onToggle}><span>{entry.title}</span><DisclosureIndicator open={open}/></button></h3>
       <div id={`change-content-${entry.id}`} className="changelog-content" hidden={!open}>
-      <div className="changelog-body mt-1.5 text-ink-2">
-        {entry.body.map((line, index) => <p key={index}><Inline text={line} /></p>)}
-      </div>
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+      <ul className="changelog-body">
+        {entry.body.map((line, index) => <li key={index}><Inline text={line} /></li>)}
+      </ul>
+      <div className="changelog-sources mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
         {entry.sources.map(source => <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer" className={linkClass('source')}>{source.label}<ExternalLinkMark/></a>)}
       </div>
-      {entry.upstream && <details className="mt-2 rounded-control border border-line-soft bg-bg-sunk/40 px-3 py-2">
+      {entry.upstream && <details className="changelog-upstream">
         <DisclosureSummary className="cursor-pointer text-xs font-medium text-ink-2">查看 {entry.upstream.commits.length} 个上游提交</DisclosureSummary>
         <p className="mt-2 text-xs leading-relaxed text-ink-3">以下是上游原始提交时间（UTC+08）；本站于 {beijingDate(entry.at)} {beijingTime(entry.at)} 合入 fork。合入日期不等同于精确上线时间。</p>
-        <ol className="mt-2 space-y-2">
+        <ol className="changelog-commits">
           {entry.upstream.commits.map(commit => <li key={commit.sha} className="text-xs leading-relaxed">
             <time dateTime={commit.at} className="mono block text-xs text-ink-3">{beijingDate(commit.at)} {beijingTime(commit.at)}</time>
             <a href={commit.url} target="_blank" rel="noopener noreferrer" className="mt-1 block text-accent underline decoration-accent/30 underline-offset-4">{commit.title} <span className="mono text-xs">{commit.sha.slice(0, 7)}</span></a>

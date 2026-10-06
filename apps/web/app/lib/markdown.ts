@@ -21,6 +21,44 @@ function inline(s: string, site: string): string {
   return out;
 }
 
+type ListMarker = { indent: number; ordered: boolean; start: number; text: string };
+function listMarker(line: string): ListMarker | null {
+  const match = /^(\s*)([-*]|(\d+)[.．])\s+(.*)$/.exec(line);
+  if (!match) return null;
+  return { indent: match[1]!.replace(/\t/g, "  ").length, ordered: !!match[3], start: Number(match[3] || 1), text: match[4]! };
+}
+
+/** Indentation belongs to the preceding item, never to an invented heading. */
+function renderList(lines: string[], start: number, site: string): { html: string; next: number } {
+  const first = listMarker(lines[start]!)!;
+  const tag = first.ordered ? "ol" : "ul";
+  const items: string[] = [];
+  let i = start;
+  while (i < lines.length) {
+    const marker = listMarker(lines[i]!);
+    if (!marker || marker.indent !== first.indent || marker.ordered !== first.ordered) break;
+    let item = inline(marker.text, site);
+    i++;
+    while (i < lines.length && lines[i]!.trim()) {
+      const child = listMarker(lines[i]!);
+      if (child) {
+        if (child.indent <= first.indent) break;
+        const nested = renderList(lines, i, site);
+        item += nested.html;
+        i = nested.next;
+      } else {
+        const indent = /^\s*/.exec(lines[i]!)![0].replace(/\t/g, "  ").length;
+        if (indent <= first.indent) break;
+        item += ` ${inline(lines[i]!.trim(), site)}`;
+        i++;
+      }
+    }
+    items.push(`<li>${item}</li>`);
+  }
+  const number = first.ordered && first.start !== 1 ? ` start="${first.start}"` : "";
+  return { html: `<${tag}${number}>${items.join("")}</${tag}>`, next: i };
+}
+
 export function slugifyHeading(text: string, i: number): string {
   return `s${i + 1}`;
 }
@@ -70,17 +108,10 @@ export function renderMarkdown(md: string, site: string): RenderedCopy {
       html.push(`<blockquote><p>${inline(buf.join(" "), site)}</p></blockquote>`);
       continue;
     }
-    if (/^\s*[-*]\s+/.test(line) || /^\s*\d+[.．]\s+/.test(line)) {
-      const ordered = /^\s*\d+[.．]\s+/.test(line);
-      const items: string[] = [];
-      while (i < lines.length && (/^\s*[-*]\s+/.test(lines[i]!) || /^\s*\d+[.．]\s+/.test(lines[i]!) || (/^\s{2,}\S/.test(lines[i]!) && items.length))) {
-        const l = lines[i]!;
-        if (/^\s{2,}\S/.test(l) && !/^\s*[-*]\s+/.test(l) && !/^\s*\d+[.．]\s+/.test(l)) items[items.length - 1] += ` ${l.trim()}`;
-        else items.push(l.replace(/^\s*(?:[-*]|\d+[.．])\s+/, ""));
-        i++;
-      }
-      const tag = ordered ? "ol" : "ul";
-      html.push(`<${tag}>${items.map((it) => `<li>${inline(it, site)}</li>`).join("")}</${tag}>`);
+    if (listMarker(line)) {
+      const list = renderList(lines, i, site);
+      html.push(list.html);
+      i = list.next;
       continue;
     }
     const para: string[] = [];

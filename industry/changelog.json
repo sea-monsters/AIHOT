@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-06T15:38:00Z",
+  "latestVersion": "2026-10-06T16:37:45Z",
   "releases": [
+    {
+      "id": "reading-hierarchy-separators-20261007",
+      "kind": "fix",
+      "at": "2026-10-06T16:37:45Z",
+      "basis": "record",
+      "title": "精简重复分割线，细化栏目正文与更新日志层级",
+      "body": [
+        "移除页签与统计、日期标题与统计、服务列表与下一栏目之间重复的边线；保留真正的栏目和条目分隔。",
+        "更新日志正文稍微缩小，并按原有清单显示项目符号与适度缩进；标题、来源和上游提交形成清晰层级，历史内容与时间不变。",
+        "补充 Markdown 嵌套列表的真实父子结构与标记层级；正文、代码、表格与表单保持各自样式，折叠和键盘操作继续可用。"
+      ],
+      "sources": [
+        {
+          "label": "阅读层级与分隔规则",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/reading-hierarchy.md"
+        }
+      ]
+    },
     {
       "id": "large-list-chart-rendering-20261006",
       "kind": "fix",
