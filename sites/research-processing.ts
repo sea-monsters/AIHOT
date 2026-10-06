@@ -23,23 +23,25 @@ function eligibility(config:any,env:any){
  if(config.test_status!=='ok')return 'connection_test_required';
  return null;
 }
-export async function currentAnalysisKey(db:any){
- const rows=(await db.prepare('SELECT endpoint,model,protocol,reasoning,max_tokens,owner_id FROM ai_settings LIMIT 2').all()).results;if(rows.length!==1)return null;
+export async function currentAnalysisKey(db:any,configSnapshot?:any){
+ const rows=configSnapshot?[configSnapshot]:(await db.prepare('SELECT endpoint,model,protocol,reasoning,max_tokens,owner_id FROM ai_settings LIMIT 2').all()).results;if(rows.length!==1)return null;
  const pref=await db.prepare('SELECT value_json FROM ai_preferences WHERE owner_id=?').bind(rows[0].owner_id).first();const preferences=parse(pref?.value_json,{});
  return digest(configurationFields(rows[0],{keywords:preferences.keywords||[],excludedKeywords:preferences.excludedKeywords||[]}));
 }
 export async function processingStatus(db:any,env:any){
  let config:any=null,blocked:string|null=null;try{config=await processingConfig(db,env);blocked=eligibility(config,env)}catch(e){blocked=e instanceof AIError?e.code:'not_configured'}
- const activeKey=await currentAnalysisKey(db);
- const counts=(await db.prepare('SELECT a.status,count(*) total FROM research_analyses a JOIN research_papers p ON p.id=a.paper_id AND p.content_hash=a.content_hash WHERE a.config_hash=? AND a.schema_version=? AND a.id=(SELECT b.id FROM research_analyses b WHERE b.paper_id=a.paper_id AND b.content_hash=p.content_hash AND b.config_hash=a.config_hash AND b.schema_version=a.schema_version ORDER BY b.updated_at DESC,b.id DESC LIMIT 1) GROUP BY a.status').bind(activeKey,ANALYSIS_SCHEMA).all()).results;
- const used=config?Number((await db.prepare('SELECT count(*) n FROM ai_receipts WHERE owner_id=? AND created_at>=?').bind(config.owner_id,stamp().slice(0,10)+'T00:00:00.000Z').first())?.n||0):0;
+ const activeKey=await currentAnalysisKey(db,config);
+ const [countResult,usedResult]=await Promise.all([db.prepare('SELECT a.status,count(*) total FROM research_analyses a JOIN research_papers p ON p.id=a.paper_id AND p.content_hash=a.content_hash WHERE a.config_hash=? AND a.schema_version=? AND a.id=(SELECT b.id FROM research_analyses b WHERE b.paper_id=a.paper_id AND b.content_hash=p.content_hash AND b.config_hash=a.config_hash AND b.schema_version=a.schema_version ORDER BY b.updated_at DESC,b.id DESC LIMIT 1) GROUP BY a.status').bind(activeKey,ANALYSIS_SCHEMA).all(),
+ config?db.prepare('SELECT count(*) n FROM ai_receipts WHERE owner_id=? AND created_at>=?').bind(config.owner_id,stamp().slice(0,10)+'T00:00:00.000Z').first():Promise.resolve(null)]);
+ const counts=countResult.results,used=Number(usedResult?.n||0);
  return {version:PIPELINE_VERSION,window:monthWindow(),limits:PROCESSING_LIMITS,counts,configured:!!config,eligible:!!config&&!blocked,blocked,model:config?.model||null,protocol:config?.protocol||null,reasoning:config?.reasoning||null,settingsRevision:config?.revision||null,configuredMaxTokens:config?.max_tokens||null,dailyLimit:config?.daily_limit||null,callsToday:used,evidenceScope:'abstract_only',scientificQualityVerified:false};
 }
-export async function attachAnalyses(db:any,papers:any[]){
+export async function attachAnalyses(db:any,papers:any[],analysisKey?:string|null){
  if(!papers.length)return papers;
- const activeKey=await currentAnalysisKey(db);
+ const activeKey=analysisKey===undefined?await currentAnalysisKey(db):analysisKey;
  const ids=papers.map(p=>p.id);const rows=(await db.prepare(`SELECT a.* FROM research_analyses a WHERE a.paper_id IN (SELECT value FROM json_each(?)) AND a.id=(SELECT b.id FROM research_analyses b JOIN research_papers p ON p.id=b.paper_id WHERE b.paper_id=a.paper_id ORDER BY (b.content_hash=p.content_hash AND b.config_hash=? AND b.schema_version=?) DESC,b.updated_at DESC,b.id DESC LIMIT 1)`).bind(JSON.stringify(ids),activeKey,ANALYSIS_SCHEMA).all()).results;
- return papers.map(p=>{const matching=rows.find((r:any)=>r.paper_id===p.id&&r.content_hash===p.contentHash&&r.config_hash===activeKey&&r.schema_version===ANALYSIS_SCHEMA);const out={...p,analysis:matching?{id:matching.id,status:matching.status,gate:parse(matching.gate_json),result:parse(matching.result_json,null),config:parse(matching.config_json),schema:matching.schema_version,updatedAt:matching.updated_at,errorCode:matching.error_code}:null,analysisStale:!matching&&rows.some((r:any)=>r.paper_id===p.id)};return {...out,categories:paperCategories(out)}});
+ const byPaper=new Map<string,any>(rows.map((r:any)=>[r.paper_id,r]));
+ return papers.map(p=>{const row=byPaper.get(p.id),matching=row&&row.content_hash===p.contentHash&&row.config_hash===activeKey&&row.schema_version===ANALYSIS_SCHEMA?row:null;const out={...p,analysis:matching?{id:matching.id,status:matching.status,gate:parse(matching.gate_json),result:parse(matching.result_json,null),config:parse(matching.config_json),schema:matching.schema_version,updatedAt:matching.updated_at,errorCode:matching.error_code}:null,analysisStale:!matching&&byPaper.has(p.id)};return {...out,categories:paperCategories(out)}});
 }
 export async function processRecent(db:any,env:any,body:any={},request?:Request){
  const config=await processingConfig(db,env,request),blocked=eligibility(config,env);const window=monthWindow();

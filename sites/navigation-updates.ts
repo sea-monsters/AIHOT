@@ -5,9 +5,10 @@ const json=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache
 const own=(key:UpdatePageKey)=>key==='settings'||key==='starred';
 function database(env:any){if(!env.DB)throw new AIError('database_unavailable',503,'更新提示暂不可用');return env.DB.withSession?env.DB.withSession('first-primary'):env.DB}
 export async function contentRevision(db:any,key:UpdatePageKey,ownerId=''):Promise<PageRevision>{
- const row=await db.prepare('SELECT revision FROM navigation_content WHERE scope=? AND page_key=?').bind(own(key)?ownerId:'',key==='home'?'daily':key).first();
+ const withDate=['home','daily'].includes(key);
+ const row=await db.prepare(withDate?'SELECT (SELECT revision FROM navigation_content WHERE scope=? AND page_key=?) revision,(SELECT max(date) FROM research_daily) latest_date':'SELECT revision FROM navigation_content WHERE scope=? AND page_key=?').bind(own(key)?ownerId:'',key==='home'?'daily':key).first();
  const version=key==='changelog'?Date.parse(CHANGELOG.latestVersion):UPDATE_PAGES.find(p=>p.key===key)!.version;
- return {key,revision:Number(row?.revision||0),version,...(['home','daily'].includes(key)?{latestDate:(await db.prepare('SELECT max(date) date FROM research_daily').first())?.date||null}:{})};
+ return {key,revision:Number(row?.revision||0),version,...(withDate?{latestDate:row?.latest_date||null}:{})};
 }
 async function pageList(db:any,id:string){
  // One D1 round trip; no per-page read and no duplicate latest-date lookup.

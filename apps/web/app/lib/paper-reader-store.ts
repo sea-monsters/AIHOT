@@ -7,12 +7,19 @@ export function createPaperReaderStore(fetcher:Fetcher=(...args)=>fetch(...args)
  let snapshot:ReaderSnapshot={states:{},pending:{},error:'',revision:0};const listeners=new Set<()=>void>();let confirmed:Record<string,PaperState>={};const operations:Operation[]=[];const versions=new Map<string,number>();const loading=new Map<string,Promise<void>>();let queue:Promise<any>=Promise.resolve();
  const emit=(error=snapshot.error)=>{const states={...confirmed},pending:Record<string,boolean>={};for(const op of operations)for(const id of op.ids){if(states[id])states[id]={...states[id],[op.column]:op.value?(states[id][op.column]||op.at):null};pending[id]=true;}snapshot={states,pending,error,revision:snapshot.revision+1};listeners.forEach(fn=>fn())};
  const request=async(path:string,init?:RequestInit)=>{const res=await fetcher(path,{credentials:'same-origin',cache:'no-store',...init});const body=await res.json();if(!res.ok)throw new Error(body.detail||'阅读记录暂不可用，请稍后重试');return body};
+ // Bound simultaneous read requests across all coalesced loads; writes retain their own serial queue.
+ let activeReads=0;const waitingReads:Array<()=>void>=[];
+ const acquireRead=async()=>{if(activeReads<3){activeReads++;return}await new Promise<void>(resolve=>waitingReads.push(resolve))};
+ const releaseRead=()=>{const next=waitingReads.shift();if(next)next();else activeReads--};
  let scheduled:Promise<void>|null=null;const requested=new Set<string>(),known=new Set<string>();
  async function load(ids:string[],force=false){
   ids.filter(Boolean).forEach(id=>known.add(id));const unique=[...new Set(ids)].filter(Boolean),missing=unique.filter(id=>(force||!confirmed[id])&&!loading.has(id));
   if(missing.length){missing.forEach(id=>requested.add(id));if(!scheduled)scheduled=Promise.resolve().then(async()=>{
    const all=[...requested];requested.clear();scheduled=null;
-   try{for(let i=0;i<all.length;i+=100){const chunk=all.slice(i,i+100),start=Object.fromEntries(chunk.map(id=>[id,versions.get(id)||0]));const body=await request('/api/site/research/reader-state?'+new URLSearchParams(chunk.map(id=>['id',id])));for(const id of chunk)if((versions.get(id)||0)===start[id]&&!snapshot.pending[id]&&body.states[id])confirmed[id]=body.states[id];emit('')}}catch(e){emit((e as Error).message);throw e}finally{all.forEach(id=>loading.delete(id))}
+   try{let failure:unknown=null;const tasks=[];for(let i=0;i<all.length;i+=100){const chunk=all.slice(i,i+100);tasks.push((async()=>{await acquireRead();try{
+    if(failure)return;
+    const start=Object.fromEntries(chunk.map(id=>[id,versions.get(id)||0]));const body=await request('/api/site/research/reader-state?'+new URLSearchParams(chunk.map(id=>['id',id])));for(const id of chunk)if((versions.get(id)||0)===start[id]&&!snapshot.pending[id]&&body.states[id])confirmed[id]=body.states[id];emit('');
+   }catch(e){failure??=e}finally{releaseRead()}})())}await Promise.all(tasks);if(failure)throw failure}catch(e){emit((e as Error).message);throw e}finally{all.forEach(id=>loading.delete(id))}
   });missing.forEach(id=>loading.set(id,scheduled!));}
   await Promise.all(unique.map(id=>loading.get(id)).filter(Boolean));
  }

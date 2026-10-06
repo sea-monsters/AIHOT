@@ -1,0 +1,1 @@
+CREATE INDEX `research_papers_doi_lower_idx` ON `research_papers` (lower("doi"));

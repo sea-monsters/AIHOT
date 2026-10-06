@@ -40,3 +40,25 @@ Gateway cache hit/miss、rate lease、cooldown等用隔离条件回归，真实O
 真实操作及平台CPU交叉验证后，先修静态别名反复规范化、导航版本多次查询、阅读别名逐项查询和折叠论文列表提前读取状态。别名预计算保留首匹配及返回新对象；数据库合并保留所有者和错误边界；隐藏列表仅推迟读取，展开仍完整加载。没有改机构ID/hash算法、分类标准、主题成员或原始元数据。
 
 `node sites/profile-worker.mjs <private-output.json> [worker-bundle-path]` 可对指定打包Worker执行1881篇合成数据、零外部请求的对照；样本包括SSR、API、搜索、分页、主题、热点、阅读/收藏/bulk与计时开关开销。JSON明确区分合成数据与生产D1。原始生产与浏览器导出不随仓库发布。
+
+## 第二轮：同步元数据、传输和响应目标
+
+本轮重新固定 v64 为改动前来源；真实数据量以每次样本核对，不与前轮数据量混用。目标为基本本地 UI 操作 200 ms、站内 API 从发起到应用实际消费响应 1000 ms；网络导航和读取状态必须另报完整完成点。目标不是已达成承诺。小样本报告 n/min/median/max，不以 n<20 捏造 p95；无法测得或外部服务未获准新测的项目明确未知。
+
+- 原始数据库行解码与完整元数据派生分离，聚合只做所需计算，进展页仅对最终页论文补全同样字段；最终详情、公开形状、分类和排序保持不变
+- 主题在单次聚合内复用机构身份 hash（上限4096项），不改 hash 算法、归并规则或跨请求缓存；仅在紧接 `attachAnalyses` 的明确路径复用本次分类快照，普通调用仍重新计算
+- 分析记录按论文 ID 建索引；出版出口关键词成员按论文原顺序一次索引，保留前50篇、截断标记和游标
+- 热点完整表及其余关键词折叠时不挂载；散点、图例行、表行和阅读卡片分离更新。输入/统计/完整展开能力不改变
+- 热点 loader 按完整值和有序来源数组做请求内对象复用，利用现有 Router 序列化；默认 API/RSS/MCP 不改字段、无新编码协议
+- 日报/首页版本与最新日期合成一条 SQL；独立状态/日历/归档读取并行。`withPageUpdate` 仍严格 before → payload → after，不把新版本误确认为已读
+- 阅读状态只对 GET 加每 store 3路并发上限，100 ID/请求、请求合并、防陈旧覆盖与失败重试保持；PUT队列、写入顺序和回滚不变
+
+诊断 schema 2 为 fetch 分配单调 requestId，并捕获请求开始时的 actionId/sampleId。`fetch-headers` 只到响应头；`fetch-body-json-ready`/`text-ready` 为应用实际调用消费方法返回，包含读取与解析；`fetch-body-stream-consumed` / `fetch-body-transformed-stream-consumed` 是原始或经 pipeThrough 的流读取 done，不等于 Router 解析或 React commit。观测不 clone 或主动消耗 body；clone、异步迭代、pipeTo等未覆盖路径不能冒充已测。取消/读错单列。Resource Timing补充 start/responseStart/responseEnd，仍不保存资源URL。
+
+`content-dom-ready` 来自页面 layout effect，reader 标记只表示控件所需状态已知、无pending且无当前错误；它不是PUT成功确认，失败回滚或旧状态保留需结合请求结果判断。页面标记；不是像素绘制。最新 action 关联只是候选关系，快速切换必须核对请求/样本；被替代或取消样本另列，不能悄悄丢弃慢样本。React commit CPU、布局/纯绘制CPU仍须专用trace，当前浏览器受支持接口不能建立这些结论。
+
+诊断面板的「读取主要 API」按钮仅由所有者显式点击，每次按固定顺序单轮读取9项本站API并消费JSON。无后台运行、付费调用、个人已读收藏写入或外部采集，不导出返回正文/查询文本。结果只含固定操作名、状态、时长及计数；这类受控读取不是自然用户分布。
+
+输入计时schema2保存事件timeStamp起点、捕获时刻和排队延迟（不一致时明确capture-fallback）。RAF与显式API一轮均捕获起始sampleId；重置后的旧完成记录保留旧样本号/失效标记，不并入新样本。研究论文新增 lower(doi)表达式索引，只改变查询计划，不修改解析/别名规则和已有索引；用隔离EXPLAIN与真实rows_read验证，不以“加索引”代替线上墙钟证据。
+
+表达式索引配合显式 rowid 首匹配排序，保留原扫描下ID/DOI碰撞的返回对象；该构造边界单列回归，不能把未排序索引候选的更低rows_read当最终实现。

@@ -1,8 +1,28 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-06T11:38:00Z",
+  "latestVersion": "2026-10-06T13:13:00Z",
   "releases": [
+    {
+      "id": "profile-metadata-payload-latency-20261006",
+      "kind": "fix",
+      "at": "2026-10-06T13:13:00Z",
+      "basis": "record",
+      "title": "减少同步元数据处理、大响应与串行读取等待",
+      "body": [
+        "主题、热点、搜索候选与对外只读出口按需构造元数据；主题内复用机构身份计算，分析记录与关键词成员改为一次索引，保留原分类、排序与证据语义。",
+        "热点折叠的大表和其余关键词按需挂载，图表、列表和阅读选择分离更新；传输仅复用完全相同对象，不删除论文或统计字段。",
+        "合并日报版本查询，并行独立状态读取；阅读状态保持100篇边界、最多3路并发读取，写操作保持原队列和失败处理。",
+        "阅读别名查询增加兼容的 lower(doi) 表达式索引，保留原索引及数据；不改变DOI别名、身份与所有者隔离。",
+        "所有者本地诊断补充操作/请求关联、响应实际消费及内容/阅读状态就绪；以基本交互200ms、站内API1000ms为验收目标，未验证的长尾不视为达标。未增加模型调用、外部采集或改变业务门槛。"
+      ],
+      "sources": [
+        {
+          "label": "性能测量与验收协议",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/performance-profile.md"
+        }
+      ]
+    },
     {
       "id": "profile-targeted-performance-20261006",
       "kind": "fix",

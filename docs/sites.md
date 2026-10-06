@@ -45,7 +45,7 @@ Node.js 24.11+；`npm ci`；schema 更改后 `npm run db:generate`，仅追加�
 
 构建产物 `dist/server/index.js` + `dist/client`；`drizzle/` 保存增量迁移。新增 AI 迁移只创建新表，不改写/删除已有论文和信源表。
 
-`node --test sites/ai/ai.test.ts sites/research.test.ts sites/weekly.test.ts` 全部 provider 调用 mock。`node sites/test-worker.mjs` 验证真实 Worker/D1/WebCrypto 与既有周报回归。原 PostgreSQL 集成测试仍需独立测试库；旧 web 公共缓存测试的 6 个已知失败不得当作全套通过。
+`node --test sites/ai/ai.test.ts sites/research.test.ts sites/weekly.test.ts` 全部 provider 调用 mock。`node sites/test-worker.mjs` 验证真实 Worker/D1/WebCrypto 与既有周报回归。原 PostgreSQL 集成测试仍需独立测试库；web 缓存回归按 HKIS 私有页面与保留的旧公开详情分别验证，不再套用旧首页 timeline / q 重定向假设。
 
 ## 安全边界
 

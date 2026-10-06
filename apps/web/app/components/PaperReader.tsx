@@ -1,3 +1,4 @@
+import {profileContentReady} from '../lib/performance-profile';
 import {selectStore} from '../lib/selected-store';
 import {ActionButton} from './ui/ResearchControls';
 import {linkClass,ExternalLinkMark} from './ui/Interaction';
@@ -27,8 +28,10 @@ const SelectionContext=createContext<Selection|null>(null);
 export function PaperSelection({ids,scopeKey,children,load=true}:{ids:string[];scopeKey:string;children:ReactNode;load?:boolean}){const key=ids.join(','),list=useMemo(()=>[...new Set(ids)],[key]),scope=scopeKey+'|'+key;const [selection,setSelection]=useState({scope,selected:new Set<string>()});const store=useStore();useEffect(()=>{if(load)void store?.load(list).catch(()=>{})},[key,scopeKey,store,load]);const selected=selection.scope===scope?selection.selected:new Set<string>();return <SelectionContext.Provider value={{ids:list,selected,setSelected:next=>setSelection({scope,selected:next})}}>{children}</SelectionContext.Provider>;}
 
 export function PaperBulkToolbar({scopeLabel="当前页"}:{scopeLabel?:string}={}){const selection=useContext(SelectionContext);const {store,state}=useReader();const checkbox=useRef<HTMLInputElement>(null);const [busy,setBusy]=useState(false),[message,setMessage]=useState('');const count=selection?.selected.size||0,total=selection?.ids.length||0;
- useEffect(()=>{if(checkbox.current)checkbox.current.indeterminate=count>0&&count<total},[count,total]);useEffect(()=>setMessage(''),[selection?.ids]);if(!selection||!total)return null;
- const ready=selection.ids.every(id=>!!state.states[id]),pending=selection.ids.some(id=>state.pending[id]);
+ useEffect(()=>{if(checkbox.current)checkbox.current.indeterminate=count>0&&count<total},[count,total]);useEffect(()=>setMessage(''),[selection?.ids]);
+ const ready=!!selection&&selection.ids.every(id=>!!state.states[id]),pending=!!selection&&selection.ids.some(id=>state.pending[id]);
+ useEffect(()=>{if(ready&&!pending&&total&&!state.error)profileContentReady('reader','local-state')},[ready,pending,total,selection?.ids,state.error]);
+ if(!selection||!total)return null;
  async function apply(value:boolean){if(!selection||!store)return;setBusy(true);setMessage('');const n=selection.selected.size;if(await store.set([...selection.selected],'read',value)){selection.setSelected(new Set());setMessage(`已将 ${n} 篇设为${value?'已读':'未读'}`)}setBusy(false)}
  return <div className="paper-bulk" role="group" aria-label={"批量设置"+scopeLabel+"论文阅读状态"}><label><input ref={checkbox} type="checkbox" checked={total>0&&count===total} disabled={busy} onChange={e=>selection.setSelected(e.target.checked?new Set(selection.ids):new Set())}/>全选{scopeLabel}（{total} 篇）</label><span>已选 {count} 篇</span><ActionButton appearance="secondary" disabled={!count||!ready||busy||pending} onClick={()=>void apply(true)}>{busy?'保存中…':'批量已读'}</ActionButton><ActionButton appearance="text" disabled={!count||!ready||busy||pending} onClick={()=>void apply(false)}>设为未读</ActionButton><ActionButton appearance="text" disabled={!count||busy} onClick={()=>selection.setSelected(new Set())}>清空选择</ActionButton><Link to="/starred">查看收藏</Link><p role="status">{message||(!ready?'正在读取阅读状态…':scopeLabel==='当前页'?'只操作当前页勾选的论文；翻页或更改筛选后清空选择':'只操作当前结果中勾选的论文；固定其他关键词或更改口径后清空选择')}</p></div>;
 }

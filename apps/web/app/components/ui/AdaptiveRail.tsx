@@ -31,6 +31,6 @@ export function AdaptiveRail({children,className='',label,as:Tag='aside'}:{child
 }
 
 /** Keep fields mounted when folded so GET forms retain every selected value. */
-export function RailDisclosure({title,children,className=''}:{title:ReactNode;children:ReactNode;className?:string}){
-  return <details className={`rail-disclosure ${className}`}><summary><span>{title}</span><DisclosureIndicator/></summary><div className="rail-disclosure-content">{children}</div></details>;
+export function RailDisclosure({title,children,className='',onOpenChange}:{title:ReactNode;children:ReactNode;className?:string;onOpenChange?:(open:boolean)=>void}){
+  return <details className={`rail-disclosure ${className}`} onToggle={e=>onOpenChange?.(e.currentTarget.open)}><summary><span>{title}</span><DisclosureIndicator/></summary><div className="rail-disclosure-content">{children}</div></details>;
 }
