@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-05T21:38:00Z",
+  "latestVersion": "2026-10-06T00:14:09Z",
   "releases": [
+    {
+      "id": "metadata-doi-conflict-isolation-20261006",
+      "at": "2026-10-06T00:14:09Z",
+      "basis": "record",
+      "kind": "fix",
+      "title": "隔离同DOI多工作冲突并明确作者单位来源",
+      "body": [
+        "供应商为同一DOI返回多个工作时仅隔离冲突论文并保留来源标识，其余精确匹配继续；非本批DOI仍整批拒绝，不盲选首条。",
+        "论文详情区分原始作者记录与补充机构证据，展示来源绑定的作者角色和获取日期；不改变评分、摘要、首次入库、阅读状态或历史日报。"
+      ],
+      "sources": [
+        {
+          "label": "元数据证据与冲突处理说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/paper-metadata.md"
+        }
+      ]
+    },
     {
       "id": "unified-page-framework-20261005",
       "at": "2026-10-05T21:38:00Z",
