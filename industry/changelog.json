@@ -1,8 +1,24 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-06T16:37:45Z",
+  "latestVersion": "2026-10-06T16:48:01Z",
   "releases": [
+    {
+      "id": "reading-stat-edge-20261007",
+      "kind": "fix",
+      "at": "2026-10-06T16:48:01Z",
+      "basis": "record",
+      "title": "补齐两列统计区的边缘收口",
+      "body": [
+        "窄屏与较窄正文栏的热点统计移除第二列右侧多余竖线，只保留列间分隔；四列统计和全部数据口径保持不变。"
+      ],
+      "sources": [
+        {
+          "label": "阅读层级与分隔规则",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/reading-hierarchy.md"
+        }
+      ]
+    },
     {
       "id": "reading-hierarchy-separators-20261007",
       "kind": "fix",
