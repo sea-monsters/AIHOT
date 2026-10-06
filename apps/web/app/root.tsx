@@ -1,3 +1,4 @@
+import {profileRoute} from './lib/performance-profile.ts';
 import {PageFrame,PageGrid} from './components/ui/PageFrame';
 import {ReadingContinuity} from './components/ReadingContinuity';
 import {NavigationUpdatesProvider} from './components/NavigationUpdates';
@@ -110,7 +111,7 @@ export default function App() {
   useHydratedFlag();
   useThemeSync();
   const { pathname, key } = useLocation();
-  useEffect(() => noteRecoveryNavigation(key), [key]);
+  useEffect(() => {noteRecoveryNavigation(key);profileRoute();}, [key]);
   // The admin has its own chrome.
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return <Outlet />;
   return (
@@ -125,7 +126,7 @@ export function ErrorBoundary() {
   const error = useRouteError();
   const site = useRouteLoaderData<typeof loader>("root");
   const { pathname, search, hash, key } = useLocation();
-  useEffect(() => noteRecoveryNavigation(key), [key]);
+  useEffect(() => {noteRecoveryNavigation(key);profileRoute();}, [key]);
   const status = isRouteErrorResponse(error) ? error.status : 500;
   const notFound = status === 404;
   const body = (

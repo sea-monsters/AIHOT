@@ -8,7 +8,9 @@ export function readerIds(value:unknown):string[]{
 }
 export function readerDoi(value:string){return value.trim().replace(/^https?:\/\/(?:dx\.)?doi\.org\//i,'').replace(/^doi:\s*/i,'').toLowerCase()}
 export async function resolveReaderIds(db:any,ids:string[]){
- const pairs=await Promise.all(ids.map(async alias=>{const p=await db.prepare('SELECT id FROM research_papers WHERE id=? OR lower(doi)=? LIMIT 1').bind(alias,readerDoi(alias)).first();if(!p)throw new AIError('paper_not_found',404,'所选论文已不可用，请刷新列表');return [alias,String(p.id)] as const}));
+ // Preserve the exact id-or-DOI lookup and LIMIT semantics, but send all aliases in one statement.
+ const rows=(await db.prepare("SELECT json_extract(value,'$[0]') alias,(SELECT id FROM research_papers WHERE id=json_extract(input.value,'$[0]') OR lower(doi)=json_extract(input.value,'$[1]') LIMIT 1) id FROM json_each(?) input").bind(JSON.stringify(ids.map(alias=>[alias,readerDoi(alias)]))).all()).results;
+ const pairs=rows.map((r:any)=>{if(!r.id)throw new AIError('paper_not_found',404,'所选论文已不可用，请刷新列表');return [r.alias,String(r.id)]});
  return Object.fromEntries(pairs);
 }
 async function states(db:any,ownerId:string,aliases:Record<string,string>){

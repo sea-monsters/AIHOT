@@ -1,3 +1,4 @@
+import {profileHydrated} from './performance-profile.ts';
 // Server-rendered content must be visible without JavaScript. Entrance animations therefore only
 // play for components mounted after hydration (client-side navigation, loaded-more content).
 import { useEffect, useState } from "react";
@@ -13,5 +14,6 @@ export function useEntrance(): boolean {
 export function useHydratedFlag() {
   useEffect(() => {
     hydrated = true;
+    profileHydrated();
   }, []);
 }

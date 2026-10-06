@@ -1,0 +1,27 @@
+import {Miniflare,convertV4MiniflareOptions} from 'miniflare';
+import {readFile,readdir,writeFile,mkdir} from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {savePaper} from './research.ts';
+// Synthetic isolated workload. No production data, external traffic or model requests.
+const output=process.argv[2]||'.sites-runtime/profile-worker.json';
+let outbound=0;
+const mf=new Miniflare(convertV4MiniflareOptions({outboundService:async()=>{outbound++;return new Response('Profiling isolation: egress disabled',{status:599})},modules:true,scriptPath:process.argv[3]||'dist/server/index.js',compatibilityDate:'2026-09-01',compatibilityFlags:['nodejs_compat'],d1Databases:['DB'],bindings:{HKIS_OWNER_EMAIL:'profile@example.invalid'}}));
+const identity={'oai-authenticated-user-id':'profile-fixture','oai-authenticated-user-email':'profile@example.invalid'};
+const records=[];
+async function sample(operation,path,profile=true,body){const start=performance.now();const res=await mf.dispatchFetch('https://local.test'+path,{method:body?'PUT':'GET',headers:{...identity,...(profile?{'X-HKIS-Profile':'1'}:{}),...(body?{origin:'https://local.test','content-type':'application/json','x-hkis-request':'1'}:{})},...(body?{body:JSON.stringify(body)}:{})});const headersMs=performance.now()-start;const text=await res.text();assert.equal(res.status,200,operation+': '+text.slice(0,120));records.push({operation,profile,headersMs,completeMs:performance.now()-start,bytes:Buffer.byteLength(text),serverTiming:res.headers.get('server-timing')});}
+try{
+ const db=await mf.getD1Database('DB');
+ for(const file of (await readdir('drizzle')).filter(f=>f.endsWith('.sql')).sort())for(const sql of (await readFile('drizzle/'+file,'utf8')).split('--> statement-breakpoint').map(s=>s.trim()).filter(Boolean))await db.prepare(sql).run();
+ const p=await savePaper(db,{doi:'10.9999/profile-fixture',title:'Synthetic TCAD interface trap study',url:'https://example.invalid/profile',publisher:'IEEE',journal:'Synthetic journal',sourceId:'ieee-ted',issn:'0018-9383',publishedAt:'2026-10-05',datePrecision:'day',authors:[{name:'Synthetic author',affiliations:['Synthetic University'],first:true}],affiliations:['Synthetic University'],abstract:'Synthetic TCAD interface trap measurement evidence. '.repeat(20),keywords:['TCAD'],provenance:{title:'publisher-rss',abstract:'publisher-rss'},sourceIndexedAt:null,discovery:'publisher-rss'});
+ const row=await db.prepare('SELECT * FROM research_papers WHERE id=?').bind(p.id).first();const keys=Object.keys(row),ids=[p.id];
+ for(let offset=1;offset<1881;offset+=100){const batch=[];for(let i=offset;i<Math.min(1881,offset+100);i++){const r={...row,id:'profile-'+String(i).padStart(5,'0'),doi:'10.9999/profile-'+i,url:'https://example.invalid/profile-'+i,title:'Synthetic TCAD interface trap study '+i,priority:i%101};ids.push(r.id);batch.push(db.prepare(`INSERT INTO research_papers(${keys.map(k=>'"'+k+'"').join(',')}) VALUES(${keys.map(()=>'?').join(',')})`).bind(...keys.map(k=>r[k])))}await db.batch(batch)}
+ const operations=[['navigation-poll','/api/site/navigation-updates'],['papers','/api/site/research/papers?min=0'],['search','/api/site/research/papers?min=0&q=TCAD'],['page-2','/api/site/research/papers?min=0&page=2'],['feed','/api/site/research/feed'],['themes','/api/site/research/themes'],['keyword-map','/api/site/research/keyword-map'],['status','/api/site/research/status'],['reader-get100','/api/site/research/reader-state?'+new URLSearchParams(ids.slice(0,100).map(id=>['id',id]))],['daily-calendar','/api/site/research/daily/calendar?month=2026-10'],['home-ssr','/'],['research-ssr','/research'],['topics-ssr','/topics'],['hot-ssr','/hot'],['daily-ssr','/daily']];
+ for(const [op,path]of operations){await sample(op+'-first',path);for(let i=0;i<5;i++)await sample(op,path)}
+ for(let i=0;i<10;i++){await sample('overhead-navigation','/api/site/navigation-updates',false);await sample('overhead-navigation','/api/site/navigation-updates',true)}
+ for(let i=0;i<5;i++){await sample('read-one','/api/site/research/reader-state',true,{ids:[ids[i]],field:'read',value:true});await sample('favorite-one','/api/site/research/reader-state',true,{ids:[ids[i]],field:'favorite',value:true});await sample('read-bulk25','/api/site/research/reader-state',true,{ids:ids.slice(i*25,(i+1)*25),field:'read',value:true})}
+ assert.equal(outbound,0);assert.equal((await db.prepare('SELECT count(*) n FROM ai_receipts').first()).n,0);
+ const bundleSha256=createHash('sha256').update(await readFile(process.argv[3]||'dist/server/index.js')).digest('hex');
+ const result={schema:1,bundleSha256,capturedAt:new Date().toISOString(),sourceCommit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),uncommittedChanges:execFileSync('git',['status','--porcelain'],{encoding:'utf8'}).trim().length>0,runtime:'local Miniflare Workerd + SQLite, not production D1',dataset:{papers:1881,kind:'synthetic uniform body; priorities 0–100, one journal, no AI records'},instrumentation:'owner opt-in header; first() row metadata unavailable; db duration is summed overlapping waits',outbound,modelReceipts:0,records};await mkdir(output.substring(0,output.lastIndexOf('/'))||'.',{recursive:true});await writeFile(output,JSON.stringify(result,null,2));console.log(JSON.stringify({output,samples:records.length,outbound}));
+}finally{await mf.dispose()}

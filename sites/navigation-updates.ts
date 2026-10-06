@@ -10,8 +10,16 @@ export async function contentRevision(db:any,key:UpdatePageKey,ownerId=''):Promi
  return {key,revision:Number(row?.revision||0),version,...(['home','daily'].includes(key)?{latestDate:(await db.prepare('SELECT max(date) date FROM research_daily').first())?.date||null}:{})};
 }
 async function pageList(db:any,id:string){
- const rows=(await db.prepare('SELECT page_key,seen_revision,seen_version,enabled FROM navigation_seen WHERE owner_id=?').bind(id).all()).results;
- return Object.fromEntries(await Promise.all(UPDATE_PAGES.map(async p=>{const r=rows.find((r:any)=>r.page_key===p.key);return [p.key,{...await contentRevision(db,p.key,id),seenRevision:r?Number(r.seen_revision):null,seenVersion:r?Number(r.seen_version):null,enabled:r?r.enabled===1:true} satisfies PageUpdate]})));
+ // One D1 round trip; no per-page read and no duplicate latest-date lookup.
+ const [seen,content,latest]=await db.batch([
+  db.prepare('SELECT page_key,seen_revision,seen_version,enabled FROM navigation_seen WHERE owner_id=?').bind(id),
+  db.prepare('SELECT scope,page_key,revision FROM navigation_content WHERE scope=? OR scope=?').bind('',id),
+  db.prepare('SELECT max(date) date FROM research_daily'),
+ ]);
+ return Object.fromEntries(UPDATE_PAGES.map(p=>{const r=seen.results.find((r:any)=>r.page_key===p.key),scope=own(p.key)?id:'',key=p.key==='home'?'daily':p.key;
+  const revision=content.results.find((r:any)=>r.scope===scope&&r.page_key===key);
+  return [p.key,{key:p.key,revision:Number(revision?.revision||0),version:p.key==='changelog'?Date.parse(CHANGELOG.latestVersion):p.version,...(['home','daily'].includes(p.key)?{latestDate:latest.results[0]?.date||null}:{}),seenRevision:r?Number(r.seen_revision):null,seenVersion:r?Number(r.seen_version):null,enabled:r?r.enabled===1:true} satisfies PageUpdate];
+ }));
 }
 function exactKeys(body:any,keys:string[]){if(Object.keys(body).some(k=>!keys.includes(k)))throw new AIError('invalid_update_state',400,'更新提示操作无效')}
 function revision(value:any):value is PageRevision{return !!value&&typeof value==='object'&&!Array.isArray(value)&&isUpdatePageKey(value.key)&&Number.isSafeInteger(value.revision)&&value.revision>=0&&Number.isSafeInteger(value.version)&&value.version>=0&&Object.keys(value).every(k=>['key','revision','version','latestDate'].includes(k))}

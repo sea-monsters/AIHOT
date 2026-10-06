@@ -1,3 +1,4 @@
+import {startProfile} from './lib/performance-profile.ts';
 // React Router's default bootstrap, with one recovery path for obsolete public documents.
 import { startTransition, StrictMode } from "react";
 import { hydrateRoot } from "react-dom/client";
@@ -11,6 +12,7 @@ const unedited = createEditGuard(document);
 window.addEventListener("popstate", () => noteRecoveryNavigation());
 const onError = createRenderErrorHandler(documentManifest, () => document.visibilityState === "visible" && unedited());
 
+startProfile();
 startTransition(() => {
   hydrateRoot(
     document,

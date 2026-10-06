@@ -40,7 +40,10 @@ const TERMS:[string,string,string[],RegExp][]=[
  ['lithography','光刻',['lithography','lithographic'],/\blithograph\w*\b/i],
 ];
 const norm=(s:string)=>s.normalize('NFKC').toLowerCase().replace(/[‐‑–—_-]/g,' ').replace(/\s+/g,' ').trim();
-export function canonicalKeyword(raw:string){const label=raw.replace(/\s+/g,' ').trim();const n=norm(label);const term=TERMS.find(([id,l,aliases])=>[id,l,...aliases].some(a=>norm(a)===n));return term?{id:term[0],label:term[1]}:{id:'term:'+n,label};}
+// Static aliases are normalized once; first-match precedence and fresh results remain unchanged.
+const canonicalAliases=new Map<string,{id:string;label:string}>();
+for(const [id,label,aliases] of TERMS)for(const alias of [id,label,...aliases]){const key=norm(alias);if(!canonicalAliases.has(key))canonicalAliases.set(key,{id,label});}
+export function canonicalKeyword(raw:string){const label=raw.replace(/\s+/g,' ').trim();const n=norm(label);const term=canonicalAliases.get(n);return term?{id:term.id,label:term.label}:{id:'term:'+n,label};}
 
 const INVALID=/^(?:keywords?|index terms?|none|null|n\/a|unknown|unclassified|article|research|study|science|engineering|physics|materials science|computer science)$/i;
 export function validKeyword(raw:unknown):raw is string{return typeof raw==='string'&&raw.trim().length>=2&&raw.trim().length<=120&&!INVALID.test(raw.trim())&&!/[<>\x00-\x1f]/.test(raw)&&!/^https?:/i.test(raw)&&/[\p{L}]/u.test(raw)}
