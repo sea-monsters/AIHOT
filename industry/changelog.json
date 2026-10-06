@@ -1,8 +1,24 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-06T00:14:09Z",
+  "latestVersion": "2026-10-06T00:30:31Z",
   "releases": [
+    {
+      "id": "metadata-exact-raw-dedup-20261006",
+      "at": "2026-10-06T00:30:31Z",
+      "basis": "record",
+      "kind": "fix",
+      "title": "去重明确对应的机构署名并区分混合证据",
+      "body": [
+        "仅去除与来源作者稳定机构ID精确对应的重复原始署名卡片，不模糊合并院系或地址。混合证据明确显示部分已规范化，数据库、作者关系和评分均不改写。"
+      ],
+      "sources": [
+        {
+          "label": "机构证据读取说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/paper-metadata.md"
+        }
+      ]
+    },
     {
       "id": "metadata-doi-conflict-isolation-20261006",
       "at": "2026-10-06T00:14:09Z",
