@@ -1,3 +1,4 @@
+import {formatHotTime as time} from '../lib/hot-format';
 import {profileContentReady} from '../lib/performance-profile';
 import {useContentProfile} from '../lib/use-content-profile';
 import {ActionButton,EmptyState} from '../components/ui/ResearchControls';
@@ -24,7 +25,6 @@ export const headers=()=>({'Cache-Control':'no-store'});
 export function meta(){return [{title:`关键词热点分布 · ${SITE.name}`},{name:'description',content:'近七日更新论文的关键词数量、阅读优先级与逐篇分数分布。全量统计，悬停联动。'},{name:'robots',content:'noindex, nofollow'}];}
 const num=(n:number|null)=>n===null?'未评分':Number.isInteger(n)?String(n):n.toFixed(1);
 const sourceNames={author:'作者关键词','publisher-index':'供应商索引','openalex-keyword':'OpenAlex 索引词','openalex-topic':'OpenAlex 主题',ai:'AI 提取',derived:'规则提取'};
-const time=(s:string|null)=>s?new Date(s).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):'暂无';
 export function keywordSummary(k:Keyword){return `${k.label}：${k.count} 篇，中位数 ${num(k.median)}，四分位区间 ${num(k.q1)}–${num(k.q3)}，范围 ${num(k.min)}–${num(k.max)}，已评分 ${k.scored}，未评分 ${k.unscored}`;}
 export function histogram(papers:KeywordMap['papers']){const bins=Array.from({length:11},(_,i)=>({label:i===10?'未评分':`${i*10}–${i===9?100:i*10+9}`,count:0}));for(const p of papers)bins[p.score===null?10:Math.min(9,Math.floor(p.score/10))]!.count++;return bins;}
 const KeywordButton=memo(function KeywordButton({k,active,pinned,onHover,onPin}:{k:Keyword;active:boolean;pinned:boolean;onHover:(id:string|null)=>void;onPin:(id:string)=>void}){return <button type="button" onMouseEnter={()=>onHover(k.id)} onMouseLeave={()=>onHover(null)} onFocus={()=>onHover(k.id)} onBlur={()=>onHover(null)} onClick={()=>onPin(k.id)} aria-pressed={pinned} aria-label={keywordSummary(k)} className={active?'is-active':''}><span>{k.label}</span><b>{k.count}</b></button>});

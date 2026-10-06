@@ -62,3 +62,6 @@ Gateway cache hit/miss、rate lease、cooldown等用隔离条件回归，真实O
 输入计时schema2保存事件timeStamp起点、捕获时刻和排队延迟（不一致时明确capture-fallback）。RAF与显式API一轮均捕获起始sampleId；重置后的旧完成记录保留旧样本号/失效标记，不并入新样本。研究论文新增 lower(doi)表达式索引，只改变查询计划，不修改解析/别名规则和已有索引；用隔离EXPLAIN与真实rows_read验证，不以“加索引”代替线上墙钟证据。
 
 表达式索引配合显式 rowid 首匹配排序，保留原扫描下ID/DOI碰撞的返回对象；该构造边界单列回归，不能把未排序索引候选的更低rows_read当最终实现。
+
+### 实测后的读取投影
+热点默认/field路径SQL不再传输未使用的作者、机构与完整metadataEvidence；company/genre路径保持完整行。坏provenance保留原decode容错，空数组显式占位避免解析异常。716项合成完整输出对照与隔离Workerd复测确认shape不变；数据库返回体积不等于浏览器响应体积。独立计数/分页并行，热点展开日期复用固定Intl格式器（106输入保持旧格式），都需实际后测；未采用仅约6%合成收益、风险更高的机构summary派生分支。

@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-06T13:13:00Z",
+  "latestVersion": "2026-10-06T13:42:35Z",
   "releases": [
+    {
+      "id": "profile-projection-followon-20261006",
+      "kind": "fix",
+      "at": "2026-10-06T13:42:35Z",
+      "basis": "record",
+      "title": "按真实响应复测进一步减少热点读取与展开开销",
+      "body": [
+        "热点默认及领域筛选只从数据库读取计算真正使用的字段；机构/文献形式筛选仍读取完整证据，所有API响应字段、日期、AI证据校验和全量统计保持一致。",
+        "论文页独立的计数与分页读取并行；热点大列表复用同一中文时区日期格式器，减少反复初始化。",
+        "本轮继续按实际响应消费与完整内容就绪验收，较大页面和网络长尾仍单列；不将服务端计时、占位反馈或合成样本当作200ms/1000ms目标已全部达成。"
+      ],
+      "sources": [
+        {
+          "label": "性能测量与验收协议",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/performance-profile.md"
+        }
+      ]
+    },
     {
       "id": "profile-metadata-payload-latency-20261006",
       "kind": "fix",
