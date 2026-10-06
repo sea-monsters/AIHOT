@@ -22,7 +22,8 @@
         "reduced-motion",
         "native-disclosure"
       ],
-      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits"
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/settings",
@@ -44,7 +45,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits; closed configuration controls point to hidden mounted form regions; no credential fields opened or tests run"
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits; closed configuration controls point to hidden mounted form regions; no credential fields opened or tests run",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/research",
@@ -67,7 +69,8 @@
         "reduced-motion",
         "native-disclosure"
       ],
-      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits; Space native fold keeps focus/values; mobile click fold; source-link keyboard focus without opening paper; 1182×600 long rail uses document scroll; 400×606 and 393×252 no overflow"
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits; Space native fold keeps focus/values; mobile click fold; source-link keyboard focus without opening paper; 1182×600 long rail uses document scroll; 400×606 and 393×252 no overflow",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/research/:id",
@@ -90,7 +93,8 @@
         "reduced-motion",
         "native-disclosure"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/all",
@@ -113,7 +117,8 @@
         "reduced-motion",
         "native-disclosure"
       ],
-      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits"
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/all/search-busy",
@@ -135,7 +140,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/search-busy",
@@ -157,7 +163,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/items/:id",
@@ -180,7 +187,8 @@
         "reduced-motion",
         "native-disclosure"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/items/:id/original",
@@ -203,7 +211,8 @@
         "reduced-motion",
         "native-disclosure"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/hot",
@@ -226,7 +235,8 @@
         "reduced-motion",
         "native-disclosure"
       ],
-      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits"
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/story/:publicId",
@@ -248,7 +258,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/daily",
@@ -271,7 +282,8 @@
         "reduced-motion",
         "native-disclosure"
       ],
-      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits"
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/daily/archive",
@@ -294,7 +306,8 @@
         "reduced-motion",
         "native-disclosure"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/daily/:key",
@@ -317,7 +330,8 @@
         "reduced-motion",
         "native-disclosure"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/weekly",
@@ -339,7 +353,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/weekly/:key",
@@ -361,7 +376,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/monthly",
@@ -383,7 +399,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/monthly/:key",
@@ -405,7 +422,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/topics",
@@ -427,7 +445,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits; stable hover dimensions; 8→16 desktop/2→4 narrow; close focus + history rows restored; 590×379 actual 200% zoom, 393×252 and 400×606; light/dark screenshots"
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits; stable hover dimensions; 8→16 desktop/2→4 narrow; close focus + history rows restored; 590×379 actual 200% zoom, 393×252 and 400×606; light/dark screenshots",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/topics/:slug",
@@ -445,7 +464,8 @@
       "interactionVariants": [
         "destination route variants"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/topics/:slug/page/:page",
@@ -463,7 +483,8 @@
       "interactionVariants": [
         "destination route variants"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/about",
@@ -485,7 +506,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/terms",
@@ -507,7 +529,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/privacy",
@@ -529,7 +552,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/changelog",
@@ -552,7 +576,8 @@
         "reduced-motion",
         "native-disclosure"
       ],
-      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits"
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/feedback",
@@ -574,7 +599,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/more",
@@ -596,7 +622,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/starred",
@@ -618,7 +645,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits"
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/agent",
@@ -640,7 +668,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits"
+      "interactionAudit": "Current-run before/after cloud screenshots at 1180–1182 × 758; stable rendered state inspected. See reading-interactions.md for narrower interaction checks and limits",
+      "componentCoverage": "Shared native control contract + isolated SSR; domain-specific interactions retained"
     },
     {
       "route": "/codex-reset",
@@ -662,7 +691,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/codex-reset/history/:date",
@@ -684,7 +714,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/leaderboard",
@@ -706,7 +737,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/leaderboard/category/:key",
@@ -728,7 +760,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/leaderboard/sources",
@@ -750,7 +783,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/leaderboard/sources/:key",
@@ -772,7 +806,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/leaderboard/rules",
@@ -794,7 +829,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/leaderboard/:slug",
@@ -816,7 +852,8 @@
         "disabled-busy",
         "reduced-motion"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/admin/login",
@@ -834,7 +871,8 @@
       "interactionVariants": [
         "unavailable response; legacy control variants source-checked"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/admin",
@@ -852,7 +890,8 @@
       "interactionVariants": [
         "unavailable response; legacy control variants source-checked"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/admin/content",
@@ -870,7 +909,8 @@
       "interactionVariants": [
         "unavailable response; legacy control variants source-checked"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/admin/content/:id",
@@ -888,7 +928,8 @@
       "interactionVariants": [
         "unavailable response; legacy control variants source-checked"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/admin/sources",
@@ -906,7 +947,8 @@
       "interactionVariants": [
         "unavailable response; legacy control variants source-checked"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/admin/sources/new",
@@ -924,7 +966,8 @@
       "interactionVariants": [
         "unavailable response; legacy control variants source-checked"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/admin/sources/:id",
@@ -942,7 +985,8 @@
       "interactionVariants": [
         "unavailable response; legacy control variants source-checked"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/admin/monitor",
@@ -960,7 +1004,8 @@
       "interactionVariants": [
         "unavailable response; legacy control variants source-checked"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/admin/feedback",
@@ -978,7 +1023,8 @@
       "interactionVariants": [
         "unavailable response; legacy control variants source-checked"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/admin/runs",
@@ -996,7 +1042,8 @@
       "interactionVariants": [
         "unavailable response; legacy control variants source-checked"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/admin/models",
@@ -1014,7 +1061,8 @@
       "interactionVariants": [
         "unavailable response; legacy control variants source-checked"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/admin/selectbench",
@@ -1032,7 +1080,8 @@
       "interactionVariants": [
         "unavailable response; legacy control variants source-checked"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/admin/selectbench/:runId",
@@ -1050,7 +1099,8 @@
       "interactionVariants": [
         "unavailable response; legacy control variants source-checked"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/admin/settings",
@@ -1068,7 +1118,8 @@
       "interactionVariants": [
         "unavailable response; legacy control variants source-checked"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     },
     {
       "route": "/admin/audit",
@@ -1086,7 +1137,8 @@
       "interactionVariants": [
         "unavailable response; legacy control variants source-checked"
       ],
-      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run"
+      "interactionAudit": "Source + isolated SSR; not individually browser-audited this run",
+      "componentCoverage": "Existing shared shell/legacy controls or explicit unavailable/redirect contract retained"
     }
   ],
   "visualBuild": "v55 / a61f69c9a842f822f9778155840d0da431a51689; subsequent final patch only aligns two-column statistic padding and documents these results",
@@ -1108,5 +1160,7 @@
     "publicScreenshots": "not uploaded to public fork; private audit screenshots are retained separately"
   },
   "interactionBaseline": "v58 / 762524f; current screenshot audit 2026-10-06",
-  "interactionStandard": "docs/reading-interactions.md"
+  "interactionStandard": "docs/reading-interactions.md",
+  "componentStandard": "docs/component-controls.md",
+  "componentBaseline": "v60 / f0e6b6c"
 }

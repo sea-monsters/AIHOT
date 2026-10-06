@@ -1,3 +1,4 @@
+import {ActionButton} from '../components/ui/ResearchControls';
 import {DisclosureSummary} from '../components/ui/Interaction';
 import {PageHeader} from '../components/ui/PageFrame';
 import {PaperDetailState,PaperSourceLink} from '../components/PaperReader';
@@ -11,7 +12,7 @@ export async function loader({params}:LoaderFunctionArgs){return loadOr404<any>(
 export const headers=()=>({'Cache-Control':'no-store'});
 export function meta({data}:any){return [{title:`${data?.title||'论文'} · ${SITE.shortName}`},{name:'robots',content:'noindex, nofollow'}]}
 const from=(p:any,field:string)=>p.provenance[field]||'来源未提供';
-export default function Paper(){const p=useLoaderData<typeof loader>();return <article className="research-page research-detail"><Link to="/research" className="research-back">返回论文情报</Link><PageHeader><div><p className="research-eyebrow">{p.publisher} / {p.journal}</p><h1>{p.title}</h1></div></PageHeader><p>{p.publishedAt||'发表日期未提供'}{p.datePrecision==='month'?'（来源卷期月份）':''} · DOI {p.doi||'未提供'}</p><PaperDetailState id={p.id}/><div className="research-actions"><PaperSourceLink paperId={p.id} className="research-primary" href={p.doi?`https://doi.org/${p.doi}`:p.url} target="_blank" rel="noreferrer">打开论文原文</PaperSourceLink><button className="ai-secondary" onClick={()=>openAI('请基于这篇论文的实际摘要分析研究方法、主要发现、局限，并给出是否值得阅读的建议。没有摘要时请明确说明，勿推测。',[p.id])}>AI 分析摘要</button><span>相关度 {p.relevance} · 阅读优先级 {p.priority} · 规则评分，非 AI 评价</span></div>
+export default function Paper(){const p=useLoaderData<typeof loader>();return <article className="research-page research-detail"><Link to="/research" className="research-back">返回论文情报</Link><PageHeader><div><p className="research-eyebrow">{p.publisher} / {p.journal}</p><h1>{p.title}</h1></div></PageHeader><p>{p.publishedAt||'发表日期未提供'}{p.datePrecision==='month'?'（来源卷期月份）':''} · DOI {p.doi||'未提供'}</p><PaperDetailState id={p.id}/><div className="research-actions"><PaperSourceLink paperId={p.id} className="research-primary" href={p.doi?`https://doi.org/${p.doi}`:p.url} target="_blank" rel="noreferrer">打开论文原文</PaperSourceLink><ActionButton appearance="secondary" onClick={()=>openAI('请基于这篇论文的实际摘要分析研究方法、主要发现、局限，并给出是否值得阅读的建议。没有摘要时请明确说明，勿推测。',[p.id])}>AI 分析摘要</ActionButton><span>相关度 {p.relevance} · 阅读优先级 {p.priority} · 规则评分，非 AI 评价</span></div>
  <ScholarlySearch paperId={p.id}/><PaperAssessment paper={p}/>
  <section id="abstract"><h2>摘要</h2><p className="research-field-source">字段来源：{from(p,'abstract')}</p><p className="research-full-abstract">{p.abstract||'当前可用信源未提供摘要，未自动生成替代内容。'}</p></section>
  {p.provenance.publisherSummary&&<section><h2>出版商导读</h2><p className="research-field-source">来自官方 RSS，可能截短；不是论文摘要，不用于生成研究结论</p><p className="research-full-abstract">{p.provenance.publisherSummary}</p></section>}

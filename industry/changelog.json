@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-06T03:09:41Z",
+  "latestVersion": "2026-10-06T04:58:48Z",
   "releases": [
+    {
+      "id": "shared-controls-performance-20261006",
+      "kind": "fix",
+      "at": "2026-10-06T04:58:48Z",
+      "basis": "record",
+      "title": "归并同型控件，减少无关阅读状态更新",
+      "body": [
+        "将研究按钮、提示、空态、统计、分页及栏目标题归并到共用控件；日报与日志月历共用年月选择和星期网格，沿用现有暖纸色、排版、尺寸和交互。",
+        "论文卡片按各自阅读状态接收更新；保留批量读取、收藏已读操作、聊天草稿、主题展开历史和右栏自适应。",
+        "本次仅内部控件化与性能优化，未修改评分、采集预算、模型调用、日报门槛或访问权限。"
+      ],
+      "sources": [
+        {
+          "label": "控件边界、迁移与性能验证",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/component-controls.md"
+        }
+      ]
+    },
     {
       "id": "quiet-reading-interactions-20261006",
       "kind": "fix",
