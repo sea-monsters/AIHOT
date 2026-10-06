@@ -1062,3 +1062,16 @@ html{scrollbar-gutter:stable}
 }
 @media(prefers-reduced-motion:reduce){.page-frame *{scroll-behavior:auto}}
 .page-frame .article-prose h1{font-size:var(--site-page-title);line-height:1.4;font-weight:700;letter-spacing:-.02em;overflow-wrap:anywhere}
+
+/* Keep every item searchable/focusable; let the browser skip only offscreen layout/paint. */
+@supports (content-visibility:auto){
+ .keyword-paper-list>.keyword-paper{content-visibility:auto;contain-intrinsic-block-size:auto 270px}
+ .keyword-legend-chunk{content-visibility:auto;contain-intrinsic-block-size:auto 2432px}
+ .keyword-paper-list>.keyword-paper:focus-within,.keyword-legend-chunk:focus-within{content-visibility:visible}
+}
+/* Stable columns avoid measuring all 3986 rows to determine intrinsic column widths. */
+.keyword-data-table table{table-layout:fixed;min-width:760px}
+.keyword-data-table col:nth-child(1){width:33%}.keyword-data-table col:nth-child(2){width:7%}.keyword-data-table col:nth-child(3){width:10%}.keyword-data-table col:nth-child(4){width:12%}.keyword-data-table col:nth-child(5){width:9%}.keyword-data-table col:nth-child(6){width:29%}
+.keyword-data-table th:first-child{overflow-wrap:anywhere}.keyword-data-table td:last-child{white-space:normal;overflow-wrap:anywhere}
+@media(max-width:700px){.keyword-legend-chunk{contain-intrinsic-block-size:auto 2816px}}
+@media print{.keyword-paper-list>.keyword-paper,.keyword-legend-chunk{content-visibility:visible;contain:none;contain-intrinsic-block-size:none}.keyword-paper-list,.keyword-table-scroll{max-height:none;overflow:visible}}

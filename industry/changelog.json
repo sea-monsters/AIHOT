@@ -1,8 +1,27 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-06T14:07:24Z",
+  "latestVersion": "2026-10-06T15:22:00Z",
   "releases": [
+    {
+      "id": "large-list-chart-rendering-20261006",
+      "kind": "fix",
+      "at": "2026-10-06T15:22:00Z",
+      "basis": "record",
+      "title": "减少大列表与散点图的重复渲染，保留完整查找与选择",
+      "body": [
+        "散点、图例和数据表按稳定小块隔离更新；悬停与固定仍保留全部关键词、重叠点顺序、键盘焦点和逐篇分布。",
+        "展开论文保留完整DOM，原生跳过屏外布局与绘制，已测高度随浏览器记忆；完整数据表使用稳定列布局，减少跨全表测宽。",
+        "选择状态按单篇订阅，范围变化清空选择；旧范围批量完成不影响新范围选择或提示。全选仍覆盖全部结果，不截断数据。",
+        "比较原生方案与开源虚拟列表/绘图库后，本轮未新增依赖。完整完成时间与网络等待仍分开测量，不承诺所有操作已低于200毫秒。"
+      ],
+      "sources": [
+        {
+          "label": "大列表与散点图优化",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/frontend-rendering.md"
+        }
+      ]
+    },
     {
       "id": "profile-full-reader-batch-20261006",
       "kind": "fix",
