@@ -3,7 +3,7 @@ import {providerRequest} from './scholarly/provider.ts';
 import {paperCategories,matchesPaperQuery} from './paper-keywords.ts';
 import {matchesResearchTheme,themeSummaries,resolveResearchTheme} from './research-topics.ts';
 import {dailyCohortKey,collectionEntryPoint,type CollectionEntryPoint} from './research-attribution.ts';
-import {prepareCrossref,nextCrossrefPage,reserveCrossrefPage,crossrefURL,commitCrossrefPage,crossrefSummary} from './research-crossref.ts';
+import {prepareCrossref,nextCrossrefPage,reserveCrossrefPage,markCrossrefAttempt,crossrefURL,commitCrossrefPage,crossrefSummary} from './research-crossref.ts';
 import {startBatch,finishBatch,validateBatch} from './research-batches.ts';
 import {dailyRead,dailyCalendarRead,generateDaily} from './research-daily.ts';
 import {AIError} from './ai/security.ts';
@@ -14,7 +14,7 @@ import {writeLog} from './runtime-logs.ts';
 import {buildResearchView} from './research-views.ts';
 import {readKeywordMap} from './keyword-map.ts';
 import {buildWeeklyDigest} from './weekly.ts';
-import {PUBLISHERS,RESEARCH_SOURCES,TOPICS,RULE_VERSION,type JournalSource} from './research-config.ts';
+import {PUBLISHERS,RESEARCH_SOURCES,RESEARCH_PAGE_BUDGET,TOPICS,RULE_VERSION,type JournalSource} from './research-config.ts';
 import {fromCrossref,parsePublisherRSS,sourceAccepts,fromOpenAlex,enrichPaper,evaluate,normalizedTitle,canonicalURL,type Paper} from './research-domain.ts';
 const json=(data:any,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
 const stamp=()=>new Date().toISOString();
@@ -23,14 +23,14 @@ const delay=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 const DAY=86400000;
 // Read paths perform one version check, not repairs/upserts on every navigation.
 const initialization=new WeakMap<object,Promise<void>>();
-const initializationVersion=JSON.stringify(['reading-init-v1',RULE_VERSION,RESEARCH_SOURCES.map(s=>[s.id,s.publisher,s.name,s.issn,s.rss])]);
+const initializationVersion=JSON.stringify(['reading-init-v1',RULE_VERSION,RESEARCH_SOURCES.map(s=>[s.id,s.publisher,s.name,s.issn,s.rss,s.issns])]);
 export async function initResearch(db:any){
  const existing=initialization.get(db);if(existing)return existing;
  const work=(async()=>{
   const saved=await db.prepare("SELECT value FROM research_settings WHERE key='reading_initialization'").first();
   if(saved?.value===initializationVersion)return;
   const pendingRepair=await repairLegacyFeedDescriptions(db),pendingRules=await refreshStoredRules(db);
-  await db.batch(RESEARCH_SOURCES.map(s=>db.prepare('INSERT INTO research_sources(id,publisher,name,issn,rss_url) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET publisher=excluded.publisher,name=excluded.name,issn=excluded.issn,rss_url=excluded.rss_url').bind(s.id,s.publisher,s.name,s.issn,s.rss)));
+  await db.batch(RESEARCH_SOURCES.map(s=>db.prepare('INSERT INTO research_sources(id,publisher,name,issn,rss_url) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET publisher=excluded.publisher,name=excluded.name,issn=excluded.issn,rss_url=excluded.rss_url').bind(s.id,s.publisher,s.name,s.issn,s.rss||'')));
   // Capped legacy backlogs must finish on later calls before the version is marked complete.
   if(!pendingRepair&&!pendingRules)await db.prepare("INSERT INTO research_settings(key,value) VALUES('reading_initialization',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(initializationVersion).run();
  })();initialization.set(db,work);try{await work}finally{initialization.delete(db)}
@@ -100,12 +100,38 @@ export async function savePaper(db:any,input:Paper,retrieved=stamp(),run?:{runId
 async function saveGroup(db:any,papers:Paper[],counts:{added:number;updated:number},run?:{runId:string;batchKey:string|null}){const result:Paper[]=[];const unique=[...new Map(papers.map(p=>[p.doi||p.url,p])).values()];for(let i=0;i<unique.length;i+=5){const saved=await Promise.all(unique.slice(i,i+5).map(p=>savePaper(db,p,stamp(),run)));for(const item of saved){counts.added+=item.added;counts.updated+=item.updated;result.push(item.paper);}}return result;}
 const ALLOWED=new Set(['api.crossref.org','api.openalex.org','ieeexplore.ieee.org','onlinelibrary.wiley.com','advanced.onlinelibrary.wiley.com','rss.sciencedirect.com','www.nature.com','nature.com','feeds.science.org']);
 function retryAfterMs(r:Response){const raw=r.headers.get('retry-after');if(!raw)return 0;const n=Number.isFinite(Number(raw))?Number(raw)*1000:Date.parse(raw)-Date.now();return Number.isFinite(n)?Math.max(0,n):0;}
-async function readURL(url:string,format:'json'|'xml',deadline=Date.now()+75000){
- let current=new URL(url);
+async function readURL(url:string,format:'json'|'xml',deadline=Date.now()+75000,db?:any,onRequest?:()=>Promise<void>):Promise<any>{
+ if(db&&new URL(url).hostname==='api.crossref.org'){
+  const at=stamp(),lease=new Date(deadline).toISOString(),key='crossref_http_lock';
+  const cooldown=await db.prepare("SELECT value FROM research_settings WHERE key='crossref_http_cooldown'").first();
+  if(cooldown&&Date.parse(cooldown.value)>Date.now())throw Error('HTTP 429 Crossref shared cooldown; deferred until '+cooldown.value);
+  const locked=await db.prepare('INSERT INTO research_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE research_settings.value<?').bind(key,lease,at).run();
+  if(!locked.meta?.changes)throw Error('Crossref shared request already in progress; deferred');
+  let requested=false;
+  try{
+   // Recheck under the shared lease: a previous reader may have published a cooldown
+   // after our optimistic read but before this request acquired the lock.
+   const currentCooldown=await db.prepare("SELECT value FROM research_settings WHERE key='crossref_http_cooldown'").first();
+   if(currentCooldown&&Date.parse(currentCooldown.value)>Date.now())throw Error('HTTP 429 Crossref shared cooldown; deferred until '+currentCooldown.value);
+   const next=await db.prepare("SELECT value FROM research_settings WHERE key='crossref_http_next'").first();const wait=Math.max(0,Date.parse(next?.value||'')-Date.now())||0;
+   if(Date.now()+wait>=deadline)throw Error('Collection time budget reached; Crossref request deferred');if(wait)await delay(wait);
+   await db.prepare("INSERT INTO research_settings(key,value) VALUES('crossref_http_next',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(new Date(Date.now()+1100).toISOString()).run();
+   await onRequest?.();requested=true;
+   return await readURL(url,format,deadline);
+  }catch(e){if((e as any).httpStatus===429)await db.prepare("INSERT INTO research_settings(key,value) VALUES('crossref_http_cooldown',?) ON CONFLICT(key) DO UPDATE SET value=max(research_settings.value,excluded.value)").bind(new Date(Date.now()+((e as any).retryAfterMs||60000)).toISOString()).run();throw e;}
+  finally{
+   // Conservatively space from completion, so a slow checkpoint cannot erase the
+   // real HTTP spacing. Keep the lease while publishing this shared boundary.
+   if(requested)await db.prepare("INSERT INTO research_settings(key,value) VALUES('crossref_http_next',?) ON CONFLICT(key) DO UPDATE SET value=max(research_settings.value,excluded.value)").bind(new Date(Date.now()+1100).toISOString()).run();
+   await db.prepare('DELETE FROM research_settings WHERE key=? AND value=?').bind(key,lease).run();
+  }
+ }
+
+ let current=new URL(url);const originalHost=current.hostname;
  for(let redirects=0;redirects<3;redirects++){
   if(current.protocol!=='https:'||!ALLOWED.has(current.hostname))throw Error('Unsupported metadata endpoint');
-  let r:Response|undefined;for(let attempt=0;attempt<2;attempt++){if(Date.now()>=deadline)throw Error('Collection time budget reached; remaining work deferred');r=await fetch(current,{redirect:'manual',headers:{Accept:format==='json'?'application/json':'application/rss+xml, application/xml, text/xml','User-Agent':'HKIS/1.0 (private scholarly metadata reader)'},signal:AbortSignal.timeout(Math.max(1,Math.min(25000,deadline-Date.now())))});if((r.status===429||r.status>=500)&&attempt===0){const wait=retryAfterMs(r)||2000;if(wait>5000){await r.body?.cancel();throw Error(`HTTP ${r.status}; retry deferred ${Math.ceil(wait/1000)} seconds`);}await r.body?.cancel();if(Date.now()+Math.max(1200,wait||2000)>=deadline)throw Error('Collection time budget reached; retry deferred');await delay(Math.max(1200,wait||2000));continue;}break;}
-  if(!r)throw Error('No response');if(r.status>=300&&r.status<400&&r.headers.get('location')){current=new URL(r.headers.get('location')!,current);await r.body?.cancel();continue;}if(!r.ok){const wait=retryAfterMs(r);await r.body?.cancel();throw Error(`HTTP ${r.status}${wait?'; retry deferred '+Math.ceil(wait/1000)+' seconds':''}`);}
+  let r:Response|undefined;for(let attempt=0;attempt<2;attempt++){if(Date.now()>=deadline)throw Error('Collection time budget reached; remaining work deferred');r=await fetch(current,{redirect:'manual',headers:{Accept:format==='json'?'application/json':'application/rss+xml, application/xml, text/xml','User-Agent':'HKIS/1.0 (private scholarly metadata reader)'},signal:AbortSignal.timeout(Math.max(1,Math.min(25000,deadline-Date.now())))});if(current.hostname!=='api.crossref.org'&&r.status>=500&&attempt===0){const wait=retryAfterMs(r)||2000;if(wait>5000){await r.body?.cancel();throw Error(`HTTP ${r.status}; retry deferred ${Math.ceil(wait/1000)} seconds`);}await r.body?.cancel();if(Date.now()+Math.max(1200,wait||2000)>=deadline)throw Error('Collection time budget reached; retry deferred');await delay(Math.max(1200,wait||2000));continue;}break;}
+  if(!r)throw Error('No response');if(r.status>=300&&r.status<400&&current.hostname==='api.crossref.org'){await r.body?.cancel();throw Error('Crossref redirect deferred; no unbudgeted retry');}if(r.status>=300&&r.status<400&&r.headers.get('location')){const target=new URL(r.headers.get('location')!,current);await r.body?.cancel();if(originalHost!=='api.crossref.org'&&target.hostname==='api.crossref.org')throw Error('Publisher redirect into Crossref is not an allowed feed');current=target;continue;}if(!r.ok){const wait=retryAfterMs(r);await r.body?.cancel();throw Object.assign(Error(`HTTP ${r.status}${wait?'; retry deferred '+Math.ceil(wait/1000)+' seconds':''}`),{httpStatus:r.status,retryAfterMs:wait});}
   const reader=r.body?.getReader();if(!reader)throw Error('Empty response');let length=0;const chunks:Uint8Array[]=[];while(true){const {done,value}=await reader.read();if(done)break;length+=value.length;if(length>10000000){await reader.cancel();throw Error('Metadata response too large');}chunks.push(value);}const bytes=new Uint8Array(length);let pos=0;for(const c of chunks){bytes.set(c,pos);pos+=c.length;}const body=new TextDecoder().decode(bytes);return format==='json'?JSON.parse(body):{body,url:current.href};
  }throw Error('Too many redirects');
 }
@@ -117,7 +143,7 @@ export async function syncSource(db:any,s:JournalSource,maxPages=1,batchKey:stri
  const deadline=Date.now()+75000;const runId=crypto.randomUUID();const lockKey='lock:'+s.id;const expires=new Date(Date.now()+10*60*1000).toISOString();
  const locked=await db.prepare('INSERT INTO research_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE research_settings.value < ?').bind(lockKey,expires,started).run();if(!locked.meta?.changes)return {sourceId:s.id,status:'busy',message:'This source is already refreshing'};
  await db.prepare("UPDATE research_runs SET finished_at=?,status='interrupted',details_json=? WHERE source_id=? AND status='running'").bind(started,JSON.stringify({error:'Prior request ended before completion; persisted cursor is retained for safe retry'}),s.id).run();
- await db.prepare('INSERT INTO research_runs(id,started_at,status,source_id,batch_key,entry_point) VALUES(?,?,?,?,?,?)').bind(runId,started,'running',s.id,batchKey,entryPoint).run();await writeLog(db,{component:'research',event:'collection_started',severity:'info',outcome:'started',taskId:runId,correlationId:runId,sourceId:s.id});const counts={added:0,updated:0};const warnings:string[]=[];let error:string|null=null,rssStatus='unavailable',rssCount=0,enriched=0,pending=false,fetched=0,filteredOut=0,registryReceived=0;
+ await db.prepare('INSERT INTO research_runs(id,started_at,status,source_id,batch_key,entry_point) VALUES(?,?,?,?,?,?)').bind(runId,started,'running',s.id,batchKey,entryPoint).run();await writeLog(db,{component:'research',event:'collection_started',severity:'info',outcome:'started',taskId:runId,correlationId:runId,sourceId:s.id});const counts={added:0,updated:0};const warnings:string[]=[];let error:string|null=null,rssStatus=s.rss?'unavailable':'not_configured',rssCount=0,enriched=0,pending=false,fetched=0,filteredOut=0,registryReceived=0,scopeUnresolved=0;
  try{
   const state=await db.prepare('SELECT * FROM research_sources WHERE id=?').bind(s.id).first();await db.prepare('UPDATE research_sources SET last_checked=? WHERE id=?').bind(started,s.id).run();
   const recent=monthWindow(new Date(started)),stateKey='crossref:'+s.id;
@@ -135,18 +161,18 @@ export async function syncSource(db:any,s:JournalSource,maxPages=1,batchKey:stri
    const job=nextCrossrefPage(crossref);if(!job)break;
    // Shared slot counter survives orchestrator restarts; conditional SQL is atomic across sources.
    const budgetKey='collection-budget:'+crossref.cycle.key;
-   const reserved=await db.prepare("INSERT INTO research_settings(key,value) VALUES(?,'1') ON CONFLICT(key) DO UPDATE SET value=CAST(CAST(research_settings.value AS INTEGER)+1 AS TEXT) WHERE CAST(research_settings.value AS INTEGER)<20").bind(budgetKey).run();
-   if(!reserved.meta?.changes){warnings.push('Crossref shared 20-page slot budget exhausted; remaining work deferred');break;}
+   const reserved=await db.prepare("INSERT INTO research_settings(key,value) VALUES(?,'1') ON CONFLICT(key) DO UPDATE SET value=CAST(CAST(research_settings.value AS INTEGER)+1 AS TEXT) WHERE CAST(research_settings.value AS INTEGER)<?").bind(budgetKey,RESEARCH_PAGE_BUDGET).run();
+   if(!reserved.meta?.changes){warnings.push('Crossref shared '+RESEARCH_PAGE_BUDGET+'-page slot budget exhausted; remaining work deferred');break;}
    const isHead=job.id===crossref.cycle.headId&&job.pages===0;
    const audit={lane:job.lane,reason:job.reason,head:isHead,windowId:job.id,page:job.pages+1,cursorBefore:await hash(job.cursor),cursorAfter:null as string|null,status:'attempted',received:0,added:0,updated:0};pages.push(audit);
    // Reserve before network IO: a crash/failure cannot silently exceed two attempts in this batch.
    reserveCrossrefPage(crossref,job,started);await persist();
    try{
-    const data=await readURL(crossrefURL(s.issn,job),'json',deadline),items=data.message?.items;
+    const data=await readURL(crossrefURL(s.issn,job),'json',deadline,db,async()=>{markCrossrefAttempt(crossref,job,stamp());await persist();}),items=data.message?.items;
     if(!Array.isArray(items))throw Error('Crossref returned invalid metadata');
     registryReceived+=items.length;audit.received=items.length;
     const candidates=items.map((w:any)=>fromCrossref(w,s)).filter(Boolean) as Paper[];
-    const papers=candidates.filter(p=>inUpdateWindow(p,recent)&&sourceAccepts(p,s));filteredOut+=candidates.length-papers.length;fetched+=papers.length;
+    const papers=candidates.filter(p=>inUpdateWindow(p,recent)&&sourceAccepts(p,s));filteredOut+=candidates.length-papers.length;scopeUnresolved+=candidates.filter(p=>inUpdateWindow(p,recent)&&!sourceAccepts(p,s)&&!p.abstract&&!p.keywords.length).length;fetched+=papers.length;
     const before={...counts};const saved=await saveGroup(db,papers,counts,{runId,batchKey});audit.added=counts.added-before.added;audit.updated=counts.updated-before.updated;
     // Persist ingestion before optional enrichment; a failed enrichment cannot strand a successfully stored page.
     const checkpoint=structuredClone(crossref),eventCount=coverageEvents.length;
@@ -161,14 +187,15 @@ export async function syncSource(db:any,s:JournalSource,maxPages=1,batchKey:stri
   if(coverage.expiredIncomplete)warnings.push('Crossref coverage has '+coverage.expiredIncomplete+' expired/discarded incomplete windows; see coverage ledger');
   // Publisher RSS is complementary: preserve valid records even if this channel is blocked.
   stages.crossref=error?'failed':pages.length?'stored':'budget_deferred';
-  if(pages.length&&Date.now()+5000<deadline)try{const xml=await readURL(s.rss,'xml',deadline);const allPapers=parsePublisherRSS(xml.body,s,xml.url);const matched=allPapers.filter(p=>inUpdateWindow(p,recent)&&sourceAccepts(p,s));filteredOut+=allPapers.length-matched.length;const papers=matched.sort((a,b)=>(Date.parse(b.publishedAt||'')||0)-(Date.parse(a.publishedAt||'')||0)).slice(0,150);if(allPapers.length>150)warnings.push('Publisher RSS bounded to latest 150 entries; Crossref incremental window remains cursor-complete');rssCount=papers.length;const rssSaved=await saveGroup(db,papers,counts,{runId,batchKey});enrichmentCandidates.push(...rssSaved);rssStatus='ok';stages.publisherRss='stored';await db.prepare('UPDATE research_sources SET rss_status=?,rss_error=NULL WHERE id=?').bind('ok',s.id).run();}catch(e){const message=String((e as Error).message).slice(0,200);stages.publisherRss='unavailable';warnings.push('Publisher RSS: '+message);await db.prepare('UPDATE research_sources SET rss_status=?,rss_error=? WHERE id=?').bind('unavailable',message,s.id).run();}
+  if(!s.rss){stages.publisherRss='not_configured';await db.prepare('UPDATE research_sources SET rss_status=?,rss_error=NULL WHERE id=?').bind('not_configured',s.id).run();}
+  if(s.rss&&pages.length&&Date.now()+5000<deadline)try{const xml=await readURL(s.rss,'xml',deadline);const allPapers=parsePublisherRSS(xml.body,s,xml.url);const matched=allPapers.filter(p=>inUpdateWindow(p,recent)&&sourceAccepts(p,s));filteredOut+=allPapers.length-matched.length;const papers=matched.sort((a,b)=>(Date.parse(b.publishedAt||'')||0)-(Date.parse(a.publishedAt||'')||0)).slice(0,150);if(allPapers.length>150)warnings.push('Publisher RSS bounded to latest 150 entries; Crossref incremental window remains cursor-complete');rssCount=papers.length;const rssSaved=await saveGroup(db,papers,counts,{runId,batchKey});enrichmentCandidates.push(...rssSaved);rssStatus='ok';stages.publisherRss='stored';await db.prepare('UPDATE research_sources SET rss_status=?,rss_error=NULL WHERE id=?').bind('ok',s.id).run();}catch(e){const message=String((e as Error).message).slice(0,200);stages.publisherRss='unavailable';warnings.push('Publisher RSS: '+message);await db.prepare('UPDATE research_sources SET rss_status=?,rss_error=? WHERE id=?').bind('unavailable',message,s.id).run();}
   if(stages.publisherRss==='not_attempted'&&pages.length){stages.publisherRss='time_budget_deferred';warnings.push('Publisher RSS: time_budget_deferred');}
   // Revisit a bounded oldest-checked pair, independently of index watermarks. Never touch old history.
   const recheckPossible=pages.length>0&&Date.now()+10000<deadline;const recheckRows=recheckPossible?(await db.prepare("SELECT * FROM research_papers WHERE source_id=? AND doi IS NOT NULL AND priority>=0 AND coalesce(metadata_checked_at,'')<? AND length(coalesce(nullif(json_extract(provenance_json,'$.publicationDates.online'),''),CASE WHEN date_precision='day' THEN published_at END))=10 AND date(coalesce(nullif(json_extract(provenance_json,'$.publicationDates.online'),''),CASE WHEN date_precision='day' THEN published_at END),'+0 days')=coalesce(nullif(json_extract(provenance_json,'$.publicationDates.online'),''),CASE WHEN date_precision='day' THEN published_at END) AND coalesce(nullif(json_extract(provenance_json,'$.publicationDates.online'),''),published_at)>=? AND coalesce(nullif(json_extract(provenance_json,'$.publicationDates.online'),''),published_at)<=? ORDER BY coalesce(metadata_checked_at,''),id LIMIT 2").bind(s.id,started,recent.startDate,recent.endDate).all()).results:[];
-  let rechecked=0;stages.metadataRecheck=!pages.length?'not_attempted':!recheckPossible?'time_budget_deferred':!recheckRows.length?'not_needed':'pending';for(const row of recheckRows){if(Date.now()+5000>=deadline){stages.metadataRecheck='time_budget_deferred';break;}if(!inUpdateWindow(rowPaper(row),recent))continue;try{const data=await readURL('https://api.crossref.org/works/'+encodeURIComponent(row.doi),'json',deadline);const paper=fromCrossref(data.message,s);if(!paper||paper.doi!==row.doi)throw Error('DOI metadata identity mismatch');const saved=await savePaper(db,paper,stamp(),{runId,batchKey});counts.updated+=saved.updated;rechecked++;stages.metadataRecheck='stored';enrichmentCandidates.push(saved.paper);}catch(e){stages.metadataRecheck='unavailable';warnings.push('Metadata recheck: '+String((e as Error).message).slice(0,160));break;}}
+  let rechecked=0;stages.metadataRecheck=!pages.length?'not_attempted':!recheckPossible?'time_budget_deferred':!recheckRows.length?'not_needed':'pending';for(const row of recheckRows){if(Date.now()+5000>=deadline){stages.metadataRecheck='time_budget_deferred';break;}if(!inUpdateWindow(rowPaper(row),recent))continue;try{const data=await readURL('https://api.crossref.org/works/'+encodeURIComponent(row.doi),'json',deadline,db);const paper=fromCrossref(data.message,s);if(!paper||paper.doi!==row.doi)throw Error('DOI metadata identity mismatch');const saved=await savePaper(db,paper,stamp(),{runId,batchKey});counts.updated+=saved.updated;rechecked++;stages.metadataRecheck='stored';enrichmentCandidates.push(saved.paper);}catch(e){stages.metadataRecheck='unavailable';warnings.push('Metadata recheck: '+String((e as Error).message).slice(0,160));break;}}
   if(enrichmentCandidates.length){if(Date.now()+10000<deadline){const extra=await enrichBatch(db,enrichmentCandidates,counts,{runId,batchKey},deadline-5000,env);enriched+=extra.enriched;warnings.push(...extra.failures);stages.openalex=extra.failures.length?'deferred':extra.enriched?'fields_added':'no_fields_added';}else{stages.openalex='time_budget_deferred';warnings.push('OpenAlex: time_budget_deferred; stored evidence retained');}}
   const count=(await db.prepare('SELECT count(*) n FROM research_papers WHERE source_id=? AND priority>=0').bind(s.id).first()).n;await db.prepare('UPDATE research_sources SET count=?,error=? WHERE id=?').bind(count,error,s.id).run();
-  const result={window:recent,stages,crossref:coverage,crossrefPages:pages,coverageEvents,rechecked,runId,batchKey,entryPoint,sourceId:s.id,status:error?'error':pending?'backfill_pending':coverage.expiredIncomplete?'coverage_incomplete':'ok',added:counts.added,updated:counts.updated,fetched,registryReceived,filteredOut,enriched,rssStatus,rssCount,pending,error,channels:{crossref:error?'failed':'ok',publisherRss:rssStatus,openalex:warnings.some(w=>w.startsWith('OpenAlex:'))?'unavailable':enriched?'fields_added':'no_fields_added'},warnings:[...new Set(warnings)],startedAt:started,finishedAt:stamp()};
+  const result={window:recent,stages,crossref:coverage,crossrefPages:pages,coverageEvents,rechecked,runId,batchKey,entryPoint,sourceId:s.id,status:error?'error':!pages.length?'budget_deferred':pending?'backfill_pending':coverage.expiredIncomplete?'coverage_incomplete':'ok',added:counts.added,updated:counts.updated,fetched,registryReceived,filteredOut,scopeUnresolved,enriched,rssStatus,rssCount,pending,error,channels:{crossref:error?'failed':pages.length?'ok':'not_attempted',publisherRss:rssStatus,openalex:warnings.some(w=>w.startsWith('OpenAlex:'))?'unavailable':enriched?'fields_added':'no_fields_added'},warnings:[...new Set(warnings)],startedAt:started,finishedAt:stamp()};
   await db.prepare('UPDATE research_runs SET finished_at=?,status=?,added=?,updated=?,details_json=? WHERE id=?').bind(result.finishedAt,result.status,counts.added,counts.updated,JSON.stringify(result),runId).run();await writeLog(db,{component:'research',event:'collection_finished',severity:error?'error':warnings.length?'warning':'info',outcome:error?'failed':warnings.length?'partial':pending?'backfill_pending':'ok',errorCode:error?'collection_failed':warnings.length?'partial_collection':undefined,taskId:runId,correlationId:runId,sourceId:s.id,durationMs:Date.now()-Date.parse(started),metadata:{...counts,fetched,filteredOut,registryReceived,enriched,rssCount,warnings:warnings.length,pending,rssOk:rssStatus==='ok',latestPages:pages.filter(p=>p.lane==='latest').length,historyPages:pages.filter(p=>p.lane==='history').length,latestPending:coverage.latestPending,historyPending:coverage.historyPending,expiredIncomplete:coverage.expiredIncomplete}});return result;
  }catch(e){await writeLog(db,{component:'research',event:'collection_failed',severity:'error',outcome:'failed',errorCode:'collection_failed',taskId:runId,correlationId:runId,sourceId:s.id,durationMs:Date.now()-Date.parse(started),metadata:counts});error=String((e as Error).message).slice(0,250);await db.prepare('UPDATE research_runs SET finished_at=?,status=?,details_json=? WHERE id=?').bind(stamp(),'error',JSON.stringify({error}),runId).run();await db.prepare('UPDATE research_sources SET error=? WHERE id=?').bind(error,s.id).run();return {runId,batchKey,entryPoint,sourceId:s.id,status:'error',error,...counts};}
  finally{await db.prepare('DELETE FROM research_settings WHERE key=? AND value=?').bind(lockKey,expires).run();}
@@ -183,9 +210,9 @@ export async function researchStatus(db:any,initialized=false){
   db.prepare('SELECT * FROM research_runs ORDER BY started_at DESC LIMIT 12').all(),
  ]);
  const lanes=new Map(laneResult.results.flatMap((r:any)=>{const value=parse(r.value,{});return value.version==='latest-first-v1'?[[r.key.slice(9),crossrefSummary(value)]]:[]}));
- const sources=sourceResult.results.map((s:any)=>{const {cursor,...safe}=s;const config=RESEARCH_SOURCES.find(c=>c.id===s.id);return {...safe,homepage:config?.homepage,publisherName:config?.publisherName||s.publisher,feedCoverage:config?.feedCoverage||'期刊 RSS 与 Crossref 元数据互补',topicFilter:!!config?.topicFilter,initialDays:config?.initialDays||45,verifiedAt:config?.verifiedAt||null,crossref:lanes.get(s.id)||null,backfillPending:(lanes.get(s.id) as any)?.pending??!!cursor}});
+ const sources=sourceResult.results.map((s:any)=>{const {cursor,...safe}=s;const config=RESEARCH_SOURCES.find(c=>c.id===s.id);return {...safe,homepage:config?.homepage,publisherName:config?.publisherName||s.publisher,rssConfigured:!!config?.rss,issns:config?.issns||[s.issn],feedCoverage:config?.feedCoverage||'期刊 RSS 与 Crossref 元数据互补',topicFilter:!!config?.topicFilter,initialDays:config?.initialDays||45,verifiedAt:config?.verifiedAt||null,crossref:lanes.get(s.id)||null,backfillPending:(lanes.get(s.id) as any)?.pending??!!cursor}});
  const counts=countResult.results;
- return {sources,counts,total:counts.reduce((n:number,r:any)=>n+r.total,0),schedule,window:monthWindow(),evaluation:'script-first-selective-ai',ruleVersion:RULE_VERSION,topics:TOPICS.map(({id,label,weight})=>({id,label,weight})),runs:runResult.results};
+ return {sources,configuredSources:RESEARCH_SOURCES.length,collectionPolicy:{pageAttemptsPerSlot:RESEARCH_PAGE_BUDGET,maxPagesPerSource:2,ordering:'oldest_actual_head_attempt_first',completeCatalog:false},counts,total:counts.reduce((n:number,r:any)=>n+r.total,0),schedule,window:monthWindow(),evaluation:'script-first-selective-ai',ruleVersion:RULE_VERSION,topics:TOPICS.map(({id,label,weight})=>({id,label,weight})),runs:runResult.results};
 }
 export async function researchApi(request:Request,env:any){const db=env.DB;if(!db)return json({error:'Database unavailable'},503);const u=new URL(request.url),path=u.pathname;await initResearch(db);
  if(path==='/api/site/research/processing'&&request.method==='GET')return json(await processingStatus(db,env));

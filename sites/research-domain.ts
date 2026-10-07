@@ -20,7 +20,11 @@ function dateParts(v:any):{date:string|null;precision:string|null}{
 }
 export function fromCrossref(w:any,s:JournalSource):Paper|null{
  if(w.type!=='journal-article'||!w.DOI||!w.title?.[0])return null;
- const title=clean(w.title[0]);if(/(?:table of contents|publication information|editorial board|list of reviewers|information for authors)/i.test(title))return null;if(/^(?:cover|front (?:matter|cover)|back (?:matter|cover)|table of contents|editorial board|issue information|author index|list of reviewers)$/i.test(title))return null;
+ // New journal manifests verify print/online ISSNs; never relabel a cross-journal record.
+ if(s.issns&&!arr(w.ISSN).some(value=>s.issns!.includes(String(value).toUpperCase())))return null;
+ const title=clean(w.title[0]);
+ if(s.issns&&/^(?:erratum|corrigendum|editorial|retraction|withdrawn)\b|^(?:(?:publisher|author)\s+)?correction(?:\s+to\b|:)|^(?:publication guidelines|meeting report)\b/i.test(title))return null;
+ if(/(?:table of contents|publication information|editorial board|list of reviewers|information for authors)/i.test(title))return null;if(/^(?:cover|front (?:matter|cover)|back (?:matter|cover)|table of contents|editorial board|issue information|author index|list of reviewers)$/i.test(title))return null;
  const d=dateParts(w['published-online']??w.published??w.issued);const source='crossref';const authors:Author[]=arr(w.author).map((a,i)=>({name:clean(a.name||[a.given,a.family].filter(Boolean).join(' ')),orcid:a.ORCID||null,first:a.sequence==='first'||(i===0&&!a.sequence),corresponding:null,affiliations:arr(a.affiliation).map(x=>clean(x.name)).filter(Boolean),source})).filter(a=>a.name);
  const abstract=clean(w.abstract)||null;const fields:any={metadataEvidence:mergeMetadata(null,[sourceMetadata('crossref',w,`https://api.crossref.org/works/${encodeURIComponent(normalizeDoi(w.DOI))}`,new Date().toISOString())],new Date().toISOString()),recordTypeSource:'crossref',title:source,authors:authors.length?source:null,affiliations:authors.some(a=>a.affiliations.length)?source:null,abstract:abstract?source:null,keywords:null,publishedAt:d.date?source:null,recordType:w.type,publisherName:clean(w.publisher)||s.publisherName||s.publisher,publisherMember:String(w.member||''),licenses:arr(w.license).map(l=>({url:l.URL,version:l['content-version']})),publicationDates:{online:dateParts(w['published-online']).date,print:dateParts(w['published-print']).date,issued:dateParts(w.issued).date}};
  return {doi:normalizeDoi(w.DOI),title,url:canonicalURL(w.resource?.primary?.URL)||`https://doi.org/${normalizeDoi(w.DOI)}`,publisher:s.publisher,journal:clean(w['container-title']?.[0])||s.name,sourceId:s.id,issn:s.issn,publishedAt:d.date,datePrecision:d.precision,authors,affiliations:[...new Set(authors.flatMap(a=>a.affiliations))],abstract,keywords:[],provenance:fields,sourceIndexedAt:w.indexed?.['date-time']||null,discovery:'crossref'};
@@ -30,7 +34,7 @@ function feedDate(raw:string){
  if(exact){const [,year,month,day]=exact;const date=[year,month,day].filter(Boolean).join('-');if(month&&(Number(month)<1||Number(month)>12))return {date:null,precision:null};if(day&&(!Number.isFinite(Date.parse(date+'T00:00:00Z'))||new Date(date+'T00:00:00Z').toISOString().slice(0,10)!==date))return {date:null,precision:null};return {date,precision:day?'day':month?'month':'year'};}
  const n=Date.parse(raw);return Number.isFinite(n)?{date:new Date(n).toISOString().slice(0,10),precision:'day'}:{date:null,precision:null};
 }
-export function parsePublisherRSS(xml:string,s:JournalSource,documentUrl=s.rss):Paper[]{
+export function parsePublisherRSS(xml:string,s:JournalSource,documentUrl=s.rss||s.homepage):Paper[]{
  if(/<!DOCTYPE|<!ENTITY/i.test(xml))throw Error('RSS entity declarations rejected');
  const d=new XMLParser({ignoreAttributes:false,attributeNamePrefix:'@',textNodeName:'#text',processEntities:true,htmlEntities:true}).parse(xml);
  if(!d.rss&&!d.feed&&!d['rdf:RDF'])throw Error('RSS endpoint returned non-feed content');

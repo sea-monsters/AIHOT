@@ -5,7 +5,7 @@ const DAY=86400000,MAX_LATEST=64,MAX_HISTORY=40,MAX_LEDGER=128;
 type Window=ReturnType<typeof monthWindow>;
 export type Scan={id:string;issn?:string;lane:'latest'|'history';reason:string;pubFrom:string;pubTo:string;indexFrom:string|null;indexTo:string;cursor:string;pages:number;status:'pending'|'complete';createdAt:string};
 export type Coverage={id:string;lane:string;reason:string;pubFrom:string;pubTo:string;indexFrom:string|null;indexTo:string;pages:number;status:string;at:string};
-export type CrossrefState={version:string;headThrough:string|null;headCheckedThrough:string|null;latestWatermark:string|null;watermarkBlocked:boolean;latest:Scan[];history:Scan[];publicationThrough:string;continuationTurn:number;lastContinuationAttemptAt:string|null;cycle:{key:string;pages:number;headId:string|null};ledger:Coverage[];expiredIncomplete:number;completed:number};
+export type CrossrefState={version:string;headThrough:string|null;lastHeadAttemptAt?:string|null;headCheckedThrough:string|null;latestWatermark:string|null;watermarkBlocked:boolean;latest:Scan[];history:Scan[];publicationThrough:string;continuationTurn:number;lastContinuationAttemptAt:string|null;cycle:{key:string;pages:number;headId:string|null};ledger:Coverage[];expiredIncomplete:number;completed:number};
 const iso=(time:number)=>new Date(time).toISOString();
 const validTime=(value:any)=>typeof value==='string'&&Number.isFinite(Date.parse(value));
 const validDay=(value:any)=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value+'T00:00:00Z'))&&new Date(value+'T00:00:00Z').toISOString().slice(0,10)===value;
@@ -15,9 +15,9 @@ function record(state:CrossrefState,job:Scan,status:string,at:string,events:Cove
 function compactLatest(state:CrossrefState){while(state.latest[0]?.status==='complete'){const job=state.latest.shift()!;if(!state.watermarkBlocked)state.latestWatermark=job.indexTo;}}
 export function prepareCrossref(raw:any,legacy:any,legacyWindow:any,recent:Window,at:string,batchKey:string|null){
  const events:Coverage[]=[];let state:CrossrefState;
- if(raw?.version===CROSSREF_VERSION)state=raw;
+ if(raw?.version===CROSSREF_VERSION){state=raw;if(state.lastHeadAttemptAt===undefined)state.lastHeadAttemptAt=state.cycle.pages>0?state.headThrough:null;}
  else{
-  state={version:CROSSREF_VERSION,headThrough:null,headCheckedThrough:null,latestWatermark:null,watermarkBlocked:false,latest:[],history:[],publicationThrough:recent.endDate,continuationTurn:0,lastContinuationAttemptAt:null,cycle:{key:'',pages:0,headId:null},ledger:[],expiredIncomplete:0,completed:0};
+  state={version:CROSSREF_VERSION,headThrough:null,lastHeadAttemptAt:null,headCheckedThrough:null,latestWatermark:null,watermarkBlocked:false,latest:[],history:[],publicationThrough:recent.endDate,continuationTurn:0,lastContinuationAttemptAt:null,cycle:{key:'',pages:0,headId:null},ledger:[],expiredIncomplete:0,completed:0};
   // Keep a compatible legacy query byte-for-byte; its old watermark is not evidence of a completed new lane.
   if(legacy?.cursor&&legacyWindow?.version===PIPELINE_VERSION&&validDay(legacyWindow.startDate)&&validDay(legacyWindow.endDate)&&validTime(legacy.window_start)&&validTime(legacy.window_end)){
    const job=scan('history','legacy_cursor',legacyWindow.startDate,legacyWindow.endDate,legacy.window_start,legacy.window_end,at);job.cursor=legacy.cursor;state.history.push(job);
@@ -51,7 +51,8 @@ export function nextCrossrefPage(state:CrossrefState):Scan|null{
  const job=state.continuationTurn%2===0?(latest||history):(history||latest);
  return job||null;
 }
-export function reserveCrossrefPage(state:CrossrefState,job:Scan,at:string){state.cycle.pages++;if(!(job.id===state.cycle.headId&&job.pages===0)){state.continuationTurn++;state.lastContinuationAttemptAt=at;}}
+export function reserveCrossrefPage(state:CrossrefState,_job:Scan,_at:string){state.cycle.pages++;}
+export function markCrossrefAttempt(state:CrossrefState,job:Scan,at:string){if(job.id===state.cycle.headId&&job.pages===0)state.lastHeadAttemptAt=at;else{state.continuationTurn++;state.lastContinuationAttemptAt=at;}}
 export function crossrefURL(issn:string,job:Scan){const u=new URL(`https://api.crossref.org/journals/${job.issn||issn}/works`);u.searchParams.set('filter',`type:journal-article,from-pub-date:${job.pubFrom},until-pub-date:${job.pubTo}${job.indexFrom?',from-index-date:'+job.indexFrom.slice(0,19):''},until-index-date:${job.indexTo.slice(0,19)}`);u.searchParams.set('rows','100');u.searchParams.set('sort','indexed');u.searchParams.set('order','desc');u.searchParams.set('cursor',job.cursor);return u.href;}
 export function commitCrossrefPage(state:CrossrefState,job:Scan,itemCount:number,nextCursor:any,at:string,events:Coverage[]){
  if(itemCount>=100&&(typeof nextCursor!=='string'||!nextCursor||nextCursor===job.cursor))throw Error('Crossref cursor did not advance; window retained');
@@ -60,4 +61,4 @@ export function commitCrossrefPage(state:CrossrefState,job:Scan,itemCount:number
  if(itemCount<100){job.status='complete';record(state,job,'complete',at,events);if(job.lane==='history')state.history=state.history.filter(j=>j.id!==job.id);compactLatest(state);}
  else{job.cursor=nextCursor;if(job.lane==='history')state.history=[...state.history.filter(j=>j.id!==job.id),job];}
 }
-export function crossrefSummary(state:CrossrefState){return {version:state.version,headCheckedThrough:state.headCheckedThrough,headPlannedThrough:state.headThrough,latestWatermark:state.latestWatermark,watermarkBlocked:state.watermarkBlocked,latestPending:state.latest.filter(j=>j.status==='pending').length,historyPending:state.history.length,expiredIncomplete:state.expiredIncomplete,completedWindows:state.completed,lastContinuationAttemptAt:state.lastContinuationAttemptAt,cycle:{...state.cycle,headId:undefined},pending:state.latest.some(j=>j.status==='pending')||state.history.length>0,coverage:state.ledger.slice(-12)};}
+export function crossrefSummary(state:CrossrefState){return {version:state.version,lastHeadAttemptAt:state.lastHeadAttemptAt===undefined?(state.cycle.pages?state.headThrough:null):state.lastHeadAttemptAt,headCheckedThrough:state.headCheckedThrough,headPlannedThrough:state.headThrough,latestWatermark:state.latestWatermark,watermarkBlocked:state.watermarkBlocked,latestPending:state.latest.filter(j=>j.status==='pending').length,historyPending:state.history.length,expiredIncomplete:state.expiredIncomplete,completedWindows:state.completed,lastContinuationAttemptAt:state.lastContinuationAttemptAt,cycle:{...state.cycle,headId:undefined},pending:state.latest.some(j=>j.status==='pending')||state.history.length>0,coverage:state.ledger.slice(-12)};}

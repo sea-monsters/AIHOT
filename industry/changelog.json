@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-06T16:48:01Z",
+  "latestVersion": "2026-10-07T12:37:31Z",
   "releases": [
+    {
+      "id": "journal-source-expansion-20261007",
+      "kind": "feature",
+      "at": "2026-10-07T12:37:31Z",
+      "basis": "record",
+      "title": "增加 IOP、Elsevier、ACS、AIP 与 SPIE 相关期刊",
+      "body": [
+        "保留原17刊，新增11本器件、存储、工艺、成像与模拟相关期刊；按精确刊号读取注册元数据，未验证RSS不编造地址。",
+        "沿用关键词与评分规则，题名未命中且缺少摘要的记录标明主题证据不足；未来卷期与在线发表分开，缺失字段和未核实JIF保持空缺。",
+        "按已批准方案提高服务端共享分页尝试上限至31，每刊最多2次，并加入跨刊共享限流与实际尝试时间轮换；原定时任务的调用上限须独立确认，不据此声称每批全刊完成。"
+      ],
+      "sources": [
+        {
+          "label": "新增期刊、核实样例与覆盖限制",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-source-expansion.md"
+        }
+      ]
+    },
     {
       "id": "reading-stat-edge-20261007",
       "kind": "fix",

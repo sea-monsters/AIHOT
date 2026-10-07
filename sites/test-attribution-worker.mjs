@@ -36,8 +36,8 @@ try{
  const active=call();await headWait;const busy=await(await call(source,false)).json();assert.equal(busy.status,'busy');releaseHead();const first=await(await active).json();assert.equal(first.entryPoint,'owner_web');assert.equal(first.batchKey,null);
  const second=await(await call(source,false)).json();assert.equal(second.entryPoint,'service');assert.equal(second.crossref.cycle.pages,2);
  const before=net;const capped=await(await call()).json();assert.equal(capped.crossrefPages.length,0);assert.equal(net,before);
- await db.prepare("UPDATE research_settings SET value='19' WHERE key LIKE 'collection-budget:%'").run();
- const contenders=await Promise.all(RESEARCH_SOURCES.slice(1,3).map(async(s,i)=> (await call(s,i===0)).json()));assert.equal(contenders.reduce((n,r)=>n+r.crossrefPages.length,0),1);assert.equal((await db.prepare("SELECT value FROM research_settings WHERE key LIKE 'collection-budget:%'").first()).value,'20');
+ await db.prepare("UPDATE research_settings SET value='30' WHERE key LIKE 'collection-budget:%'").run();
+ const contenders=await Promise.all(RESEARCH_SOURCES.slice(1,3).map(async(s,i)=> (await call(s,i===0)).json()));assert.equal(contenders.reduce((n,r)=>n+r.crossrefPages.length,0),1);assert.equal((await db.prepare("SELECT value FROM research_settings WHERE key LIKE 'collection-budget:%'").first()).value,'31');
  assert.equal((await db.prepare('SELECT count(*) n FROM research_batches').first()).n,0);assert.equal((await db.prepare('SELECT count(*) n FROM ai_receipts').first()).n,0);
- console.log('ATTRIBUTION D1 OK: legacy schema upgrade, atomic equal-time/slot/midnight first-seen races, correct daily cohort, real request entry points, overlapping source lock, shared durable 20/2 budgets, no scheduled lifecycle fabrication, zero paid calls; outbound fixtures only');
+ console.log('ATTRIBUTION D1 OK: legacy schema upgrade, atomic equal-time/slot/midnight first-seen races, correct daily cohort, real request entry points, overlapping source lock, shared durable 31/2 budgets, no scheduled lifecycle fabrication, zero paid calls; outbound fixtures only');
 }finally{releaseHead();await mf.dispose()}

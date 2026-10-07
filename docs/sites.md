@@ -3,11 +3,13 @@
 品牌：HK的自动情报站；英文名 HK's Intelligent Station；文字 Logo HKIS。
 原始基线：sea-monsters/AIHOT，885b736dc0fd3ef3d4c9c70af2bc3a981a99ff38。
 
+本轮扩源、精确刊号、样例与预算边界见 [期刊扩展](research-source-expansion.md)。
+
 ## 当前可用
 
 - React Router SSR、原响应式界面、主题切换、详情页、原文跳转、账户论文收藏（旧订阅本机收藏保留）
 - Workers 原生服务、D1 数据库和发布时的增量 Drizzle 迁移
-- IEEE、Wiley、Elsevier、Nature 与 Science / AAAS 的 17 本已配置期刊，先进逻辑/DRAM/NAND/新型器件/工艺机理/CIS/TCAD 的真实元数据、可用摘要与字段溯源
+- IEEE、Wiley、Elsevier、Nature、Science / AAAS、IOP、ACS、AIP 与 SPIE 的 28 本已配置期刊，先进逻辑/DRAM/NAND/新型器件/工艺机理/CIS/TCAD 的真实元数据、可用摘要与字段溯源
 - 明确区分实际摘要、作者关键词、系统主题标签，以及透明的相关度/阅读优先级规则
 - `/hot` 每周热点：近 7 自然日（UTC+08）归组和带引用的摘要摘录；已核实年度 JIF 排序，未核实指标单列
 - `/settings` 和侧栏底部 Agent 对话（手机底部「助手」）：所有者手动配置接入点/API key/模型/思考等级，按需检索、摘要分析、当前前 4 篇筛选，以及须再次确认的关键词/期望频次建议

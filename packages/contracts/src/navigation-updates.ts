@@ -1,14 +1,14 @@
 /** Stable page keys. Increment only a page's version when its actual content or interpretation changes. */
 export const UPDATE_PAGES = [
  {key:'home',path:'/',label:'首页',version:3},
- {key:'research',path:'/research',label:'论文情报',version:1},
+ {key:'research',path:'/research',label:'论文情报',version:2},
  {key:'all',path:'/all',label:'研究进展',version:1},
  {key:'hot',path:'/hot',label:'热点榜',version:1},
  {key:'daily',path:'/daily',label:'论文日报',version:2},
  {key:'topics',path:'/topics',label:'主题',version:2},
  {key:'starred',path:'/starred',label:'收藏',version:1},
  {key:'settings',path:'/settings',label:'网站设置',version:1},
- {key:'agent',path:'/agent',label:'运行说明',version:2},
+ {key:'agent',path:'/agent',label:'运行说明',version:3},
  {key:'about',path:'/about',label:'关于',version:2},
  {key:'changelog',path:'/changelog',label:'更新日志',version:1},
  {key:'feedback',path:'/feedback',label:'反馈',version:1},

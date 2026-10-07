@@ -24,7 +24,7 @@ export async function batchCoverage(db:any,key:string,cutoff:string){
  const batch=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();const expected=parse(batch?.sources_json,RESEARCH_SOURCES.map(s=>s.id));
  const rows=(await db.prepare('SELECT id,source_id,started_at,finished_at,status,entry_point,details_json FROM research_runs WHERE batch_key=? AND started_at<? ORDER BY started_at,id').bind(key,cutoff).all()).results;
  const last=new Map<string,any>();for(const r of rows)last.set(r.source_id,r);const missing=expected.filter((id:string)=>!last.has(id));
- const completeSources=expected.filter((id:string)=>{const r=last.get(id),d=parse(r?.details_json,{});return r&&r.status==='ok'&&r.finished_at&&r.finished_at<cutoff&&d.rssStatus==='ok'});
+ const completeSources=expected.filter((id:string)=>{const r=last.get(id),d=parse(r?.details_json,{});return r&&r.status==='ok'&&r.finished_at&&r.finished_at<cutoff&&['ok','not_configured'].includes(d.rssStatus)});
  const complete=!!batch&&batch.status==='finished'&&batch.finished_at&&batch.finished_at<cutoff&&completeSources.length===expected.length;
  return {key,recorded:!!batch,status:complete?'complete':batch?'partial':'missing',startedAt:batch?.started_at||null,finishedAt:batch?.finished_at||null,expectedSources:expected.length,attemptedSources:last.size,completeSources:completeSources.length,missingSources:missing,runs:rows.map((r:any)=>({id:r.id,sourceId:r.source_id,entryPoint:r.entry_point||'legacy_unknown',status:r.status,startedAt:r.started_at,finishedAt:r.finished_at,channels:parse(r.details_json,{}).channels||null}))};
 }
