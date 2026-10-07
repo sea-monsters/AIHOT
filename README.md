@@ -1,188 +1,104 @@
-> **此 fork 包含 Sites 原生适配。** 当前能力、与原版的差异、构建和验证方法见 [docs/sites.md](docs/sites.md)。现已提供半导体器件/CIS/TCAD 论文情报、每周热点汇总和可自行配置接入点的按需 AI 助手；原 AI 示例 RSS 另行保留。
+# HKIS · 研究情报站
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.png">
-    <img src="docs/assets/banner-light.png" alt="AIHOT：每个行业，都可以有自己的 AIHOT。很多条信源流进中间的精选，再分给法律、人力资源、金融等各个行业" width="100%">
-  </picture>
-</p>
+面向半导体器件、图像传感器（CIS）与 TCAD 的研究情报工作台。将期刊元数据、可用摘要、分类与关键词整理成可追溯的论文库，帮助阅读、筛选和跟踪研究进展。
 
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-176b75?style=flat-square" alt="MIT License"></a>
-  <img src="https://img.shields.io/badge/Node.js-24-176b75?style=flat-square&logo=nodedotjs&logoColor=white" alt="Node.js 24">
-  <img src="https://img.shields.io/badge/PostgreSQL-17-176b75?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL 17">
-  <img src="https://img.shields.io/badge/Docker-Compose-176b75?style=flat-square&logo=docker&logoColor=white" alt="Docker Compose">
-  <a href="https://aihot.news"><img src="https://img.shields.io/badge/demo-aihot.news-202a30?style=flat-square" alt="aihot.news"></a>
-</p>
+本仓库基于 [AIHOT](https://github.com/KKKKhazix/AIHOT) 定制，主要运行于 **ChatGPT Sites / Cloudflare Workers + D1**。下文描述本分支的功能与运行边界；源码、部署版本和外部任务是否已生效需要分别核实。
 
-<p align="center">
-  <b>一个自己找热点、自己写日报的网站框架。</b><br>
-  把信源换成你的，把精选标准换成你的 KnowHow，它就是你的行业热点站。
-</p>
+## 功能
 
-<p align="center">
-  <a href="#跑起来">跑起来</a> ·
-  <a href="docs/customize.md">改成你的行业</a> ·
-  <a href="#它是怎么工作的">它是怎么工作的</a> ·
-  <a href="#文档">文档</a> ·
-  <a href="https://github.com/KKKKhazix/AIHOT/discussions">社区交流</a>
-</p>
+- **论文情报**：按来源、研究方向、关键词、发表或采集日期筛选；保留 DOI、作者、机构、日期精度和字段来源；支持跨库逐字段核对
+- **分类与关键词**：覆盖先进逻辑、DRAM、NAND、新型器件、工艺与机理、CIS、TCAD 等方向；区分作者关键词、系统派生标签和摘要证据
+- **阅读与收藏**：账户级已读、未读、收藏及批量操作；单篇状态与页面更新提示独立
+- **研究进展与热点**：基于已收录论文和关键词展示进展、近七日统计及相关论文，支持按研究方向查看
+- **可配置 AI**：接入点、模型、协议、思考等级和请求预算由所有者显式设置；按需检索与摘要分析；默认无凭证且关闭，不暗中更换模型
+- **学术与网页检索**：Semantic Scholar、OpenAlex 与 AnySearch 分别配置；查询结果、论文库和网页证据保持来源区分
+- **私有 RSS / MCP**：读取已保存的论文、进展、归档、关键词、阅读记录与能力说明；不通过读取接口采集、调用模型或写入设置
+- **运行与诊断**：来源覆盖、真实采集批次、缺口、更新日志与脱敏运行日志
 
-<br>
+### 早晚简报与精华摘要
 
-## 这是什么
+当前源码按以下分工运行；实例部署、实际来源覆盖与定时任务状态应分别通过真实回读确认：
 
-[AIHOT](https://aihot.news) 是我做的一个 AI 热点网站。它每天从一批信源里收资料，用大模型先筛一遍、再独立打两次分，挑出真正值得看的，写成中文标题和摘要；把不同来源说的同一件事聚成一个事件，按有多少人在说排出热点；每天早上出一份日报。
+- 首页展示最近一批已保存的进展简报
+- 日报页按 UTC+08 日期显示 08 / 20 两个采集窗口的简报。采集统计与已完成分析明确分开，没有分析时不补造文字
+- 已授权助手根据冻结的本批新增论文证据保存分析与逐条引用；站内打开或刷新页面不会生成内容或新增模型调用
+- 原阅读优先级 **严格大于 75** 的日报保留为独立的「精华内容摘要」，历史内容不重算
+- 日期页成功加载并可见后确认该日期的内容版本；空日也可读过，同日新内容出现后会重新提示
 
-这个仓库是它的完整框架：网站、后台、精选流程、聚簇和热度算法，**所有提示词的原文和入选门槛**，都在这里。
+实现契约见 [早晚简报与日期阅读](docs/batch-progress-briefs.md)。
 
-## 为什么开源
+## 论文来源与覆盖边界
 
-这半年，很多做法律、做 HR、做金融、做贵金属的朋友问我，能不能也给他们的行业做一个。
+当前源码配置 **32 本期刊、9 个出版来源组**：IEEE、Wiley、Elsevier、Nature、Science / AAAS、IOP、ACS、AIP、SPIE。来源以精确刊号和已核验地址限定，目录见 [期刊扩展与采集边界](docs/research-source-expansion.md)。
 
-我做不了。我不懂你们的行业，不知道哪些信源有用，也不知道什么样的消息，对你们来说才叫热点。
+- Crossref 用于期刊发现与元数据读取；已核验的出版商 RSS 和精确 DOI 跨库查询用于有限补充
+- 只保存来源实际返回的元数据和可用摘要。出版商简介不冒充摘要，未核实的指标保持缺失，不抓取付费全文
+- 来源可能延迟登记、缺摘要或没有关键词；按题名与摘要筛选可能漏收。配置了期刊不代表每一轮都成功抓取，也不代表完整文献覆盖
+- 源码每个 08 / 20 窗口最多 **35 次 Crossref 分页尝试、每刊最多 2 次**，共享限流与冷却。RSS、DOI 核对等请求另计，35 不是所有网络请求总数
+- 出版社默认间隔和单刊覆盖只决定既有窗口内是否到期，不会创建任意时间的调度。外部任务的次数上限需独立更新并读回确认，发布源码不会自动修改它
 
-但你们懂。
+## 架构与目录
 
-既然我没办法满足所有人，那就把火种交到大家自己手上。
+| 路径 | 作用 |
+| --- | --- |
+| `apps/web/` | React / React Router SSR、论文阅读、页面与交互 |
+| `sites/` | Workers 入口、D1 领域服务、采集、AI、只读出口与隔离测试 |
+| `drizzle/` | Sites / D1 增量迁移 |
+| `industry/` | 站点文案、分类、主题、品牌与更新日志 |
+| `packages/contracts/` | 共享接口契约 |
+| `packages/backend/`、`apps/api/`、`apps/worker/` | 保留的上游 Node / PostgreSQL 代码及共用模块 |
+| `docs/` | 功能边界、部署与验证记录 |
 
-## 说在前面
+Sites 使用自己的 Workers / D1 运行层。保留的 Node / PostgreSQL / pg-boss 后端不会随 Sites 自动启动；上游的公开新闻出口、全文翻译、事件聚类和原版管理后台也不因此变成本站已启用功能。
 
-- **我不是专业的开发者。** 我是设计师出身，半年前还看不太懂代码。这套代码是我和 AI 一起重写的，比以前干净了很多，但一定还有写得不好的地方。发现问题欢迎提 Issue，我不一定能很快回复，先说声抱歉。
-- **这是一份快照。** 它来自 AIHOT 正在线上跑的代码，不是精心打磨的通用框架。以后 AIHOT 的更新，我会尽量同步过来，但没法保证每一次都同步。
-- **里面没有 AIHOT 的信源名单和运营数据。** 仓库带了 18 个公开的海外 AI 资讯源做示范，够你跑起来看效果；真正的信源，要换成你自己行业的。
-- **请不要用 AIHOT 的名字和 Logo。** 换上你自己的名字，它就是你的站。
+## 开发与验证
 
-## 它是怎么工作的
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/how-dark.png">
-  <img src="docs/assets/how-light.png" alt="六步：采集、预筛、两次评分、写作、聚簇、热点与成刊" width="100%">
-</picture>
-
-一条资料从信源进来，先判重，再预筛；可能重要的独立打两次分，过了门槛才进精选；然后写中文标题和摘要，和别的报道聚成事件，算进热度，最后进日报。每一步的提示词都在 [`industry/prompts/`](industry/prompts/)，改标准不用改代码。详见 [精选与校准](docs/selection.md)。
-
-### 聚簇与热点
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/cluster-dark.png">
-  <img src="docs/assets/cluster-light.png" alt="五个来源的报道聚成一个事件，事件进入当前热点榜" width="100%">
-</picture>
-
-同一件事，官网发一篇、媒体转十篇、X 上吵一天，读者只需要看到一次。AIHOT 把它们聚成一个**事件**：先用标题摘要的向量在最近两周里找候选，再让模型判断是同一件事、后续进展，还是两件事；拿不准的合并，换一家模型再确认一遍。
-
-**热度**按事件算，不按文章算：48 小时内，每个独立来源只算一次，24 小时减半。重复抓取不会多算，一家媒体发十篇也只算一次，所以排在前面的，是真正有很多人在说的事。
-
-### 速度
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/perf-dark.png">
-  <img src="docs/assets/perf-light.png" alt="AIHOT 线上实测：页面中位数 10 毫秒，95% 在 50 毫秒内；接口中位数 6 毫秒，95% 在 12 毫秒内；文章页 95% 在 14 毫秒内" width="100%">
-</picture>
-
-## 你会得到什么
-
-| | |
-|---|---|
-| **六种信源** | RSS、网页列表、JSON 接口、X 账号、微信公众号，以及你自己脚本推送进来的内容。信源分级（官方一手 / 媒体个人），抓取频率按产出自动调整 |
-| **精选** | 预筛，同一份评分标准独立打两次分，再按信源分级的门槛决定入选。提示词和门槛全部公开，全部可以改；用你自己标注的样本在 SelectBench 里校准 |
-| **写作** | 中文标题、答案先行的摘要、推荐理由、标签，外文全文翻译；防止模型把原文没提到的公司写进标题 |
-| **聚簇** | 不同来源报道的同一件事聚成一个事件，后续进展挂在同一个事件下，事件页有综述；人工改过的归属不会被覆盖 |
-| **热点** | 按事件算热度：独立来源越多越靠前，X 上的讨论也算进来；和 6 小时前比，涨得快的标上升，新出现的标“新” |
-| **日报、周报、月报** | 每天 08:00 出日报，每周一出周报，每月 1 日出月报，按分类分节，带导语 |
-| **主题与搜索** | 公司、方向、内容形态三类主题页；标题摘要搜索和全文相关搜索 |
-| **给 Agent 用** | RSS（精选、全部、全文、日报）、公开 API、MCP、`llms.txt`，同一份内容给人看也给 Agent 用 |
-| **后台** | 信源管理与试抓、内容诊断、精选评测、每一步单独换模型、付费服务的预算熔断、运行记录与告警 |
-| **AI 专属模块** | 模型榜（汇总多家公开评测，方法公开）和 Codex 重置监控。别的行业一个开关关掉 |
-
-## 看一眼
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/shots-dark.png">
-  <img src="docs/assets/shots-light.png" alt="首页的当前热点与精选，关于页的信源河" width="100%">
-</picture>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/board-dark.png">
-  <img src="docs/assets/board-light.png" alt="模型榜" width="100%">
-</picture>
-
-<p align="center"><sub>截图来自用示范信源跑起来的本地站，站名是默认的 MyHOT。</sub></p>
-
-## 跑起来
-
-想创建自己的独立站点，可以先点 [Use this template](https://github.com/KKKKhazix/AIHOT/generate)，再克隆你生成的仓库。想持续合并上游更新或贡献代码，建议先 Fork。下面的命令适合直接试用。
-
-需要 [Docker](https://docs.docker.com/get-docker/)，和一个 OpenAI 兼容的模型 API Key（DeepSeek、千问、智谱都可以）。
+需要 **Node.js 24.11+** 和 npm。先安装依赖，再运行静态检查与不访问外部服务的测试：
 
 ```bash
-git clone https://github.com/KKKKhazix/AIHOT.git myhot
-cd myhot
-node scripts/init-env.ts --llm-key <你的模型 API Key>
-docker compose up -d --build
+npm ci
+npm run typecheck
+node --test sites/*.test.ts sites/*.test.mjs
+node --test sites/ai/*.test.ts sites/scholarly/*.test.ts sites/anysearch/*.test.ts
 ```
 
-打开 <http://localhost:3000>。后台在 `/admin`，管理员密码在 `.env` 的 `ADMIN_PASSWORD` 里。一两分钟后开始有内容，第一次导入的资料大约半小时处理完。
+在已经为本项目配置 Sites 托管的环境中构建：
 
-机器上没有 Node、服务器在中国大陆、要配域名和 HTTPS，见 [部署](docs/deploy.md)。
-
-## 把它改成你的行业
-
-最省事的办法：打开你的 Agent（Claude Code、Codex 都可以），把这个仓库交给它，然后说：
-
-```text
-请读 AGENTS.md 和 docs/customize.md，把这个站改成「法律」行业的热点站。
-我关心的是：……（你想盯哪些信源，你觉得什么消息重要、什么不重要，越具体越好）。
+```bash
+npm run build
+node sites/test-worker.mjs
+node sites/test-hkis-worker.mjs
 ```
 
-要改的东西几乎都在 [`industry/`](industry/) 这一个文件夹里，代码基本不用动：
+构建使用本机未跟踪的 `.openai/hosting.json`，输出 `dist/server/index.js` 与 `dist/client/`，数据库逻辑绑定为 `DB`。托管配置、身份配置和加密密钥应由部署环境安全提供，不能提交到仓库。没有托管配置时不能把完整构建命令当作开箱即用的部署流程。
 
-| 文件 | 改什么 |
-|---|---|
-| `site.ts` | 站名、行业词、首页文案、关于页 |
-| `taxonomy.ts`、`topics.json` | 分类、标签、主题 |
-| `sources.json` | 首次启动时导入的信源 |
-| `prompts/` | 精选标准和写作要求。**你的行业 KnowHow，就写在这里** |
-| `selection.ts` | 入选门槛 |
-| `features.ts` | 模型榜、Codex 重置监控的开关 |
-| `brand/`、`pages/` | 图标、使用规则和隐私说明 |
+`npm run dev:web` 启动前端开发工具，默认使用原 Node API 代理，不能据此验证完整 Sites 身份与 D1 行为。Workers 路径使用隔离 Worker / D1 测试，并在受保护的 Sites 部署中验收。原 Node / PostgreSQL 自托管方式见 [部署文档](docs/deploy.md)，其数据库与运行方式需要单独配置。
 
-最值得花时间的是评分标准（`prompts/selection-score.md`）和门槛：拿一两百条你自己标注过的资料，用 `scripts/eval-selection.ts` 跑一遍，看它选得准不准，再回去改。怎么做写在 [精选与校准](docs/selection.md) 里。
+- D1 schema 变更通过 `npm run db:generate` 生成并审查增量迁移，不改写已发布迁移
+- 改动同时维护 `industry/changelog.json`，执行 `npm run check:changelog`
+- Worker 测试使用隔离数据库和合成内容，不等于生产服务或真实供应商连通性验证
+- 原 PostgreSQL 集成测试需要独立测试库。不得把未运行的测试或不同缓存契约的测试写成全套通过
 
-## 文档
+## 安全、隐私与费用
 
-| 文档 | 内容 |
-|---|---|
-| [把它改成你的行业](docs/customize.md) | 站名、分类、信源、提示词、门槛、品牌，一步一步来 |
-| [信源](docs/sources.md) | 六种信源怎么配，分级和全文，外部推送接口 |
-| [精选与校准](docs/selection.md) | 一条资料怎么变成精选，怎么用自己的样本校准 |
-| [事件归组与关系评测](docs/grouping.md) | 事件关系怎么判断，怎么用自己的 pairwise gold set 评测 |
-| [部署](docs/deploy.md) | Docker、域名和 HTTPS、中国大陆、更新、备份、花多少钱 |
-| [架构](docs/architecture.md) | 三个进程、几条不变的规则、目录、对外出口 |
-| [模型榜与 Codex 重置监控](docs/leaderboard.md) | 两个 AI 专属模块 |
+- 本适配依赖可信 Sites dispatcher 身份边界，并在应用层限制所有者。不能直接把原始 Worker 暴露到无相同身份校验的公网
+- 所有者写操作验证身份与同源条件；凭证仅在服务端加密保存，不进入浏览器持久存储、仓库或日志
+- 浏览论文与读取 RSS / MCP 不触发模型调用。真实连接测试、主动分析和已授权后台流程可能产生费用
+- 付费请求发送前留存回执并预占额度；超时和未知结果不会自动重发；请求次数或 token 上限不是金额保证
+- RSS / MCP 仍受部署平台与所有者身份保护，不能承诺任意外部阅读器或 MCP 客户端可直接订阅
+- AI 的引用匹配只证明片段存在，不能证明解释或结论正确；规则分和摘要评估都不等于论文质量鉴定
+- 编写公开文档与测试时，使用通用说明、公开资料或合成样例。请勿提交真实账号、私有站点地址、凭证、收藏、聊天记录、原始诊断或个人截图
 
-技术栈：Node.js 24 · TypeScript · React Router（服务端渲染）· Fastify · PostgreSQL · pg-boss · Tailwind CSS · Docker Compose。
+协议与边界见 [私有 RSS / MCP](docs/research-integrations.md)、[AI 助手](docs/ai-assistant.md) 和 [论文元数据](docs/paper-metadata.md)。
 
-## 交流与贡献
+## 性能说明
 
-部署和使用问题到 [问答区](https://github.com/KKKKhazix/AIHOT/discussions/categories/q-a)，新想法到 [想法交流区](https://github.com/KKKKhazix/AIHOT/discussions/categories/ideas)，欢迎在 [作品展示区](https://github.com/KKKKhazix/AIHOT/discussions/categories/show-and-tell) 分享你做出的行业热点站。
+项目包含按需读取、有界缓存、查询与序列化优化，以及可选的本地性能诊断。实际速度受数据量、部署区域、网络、缓存、D1 和第三方服务影响。
 
-发现 Bug 或有明确的功能建议，可以 [提交 Issue](https://github.com/KKKKhazix/AIHOT/issues/new/choose)。准备改代码前，先看 [贡献说明](CONTRIBUTING.md)；安全漏洞请走 [私密报告入口](SECURITY.md)。
+本仓库不沿用上游实例的毫秒级宣传数据，也不将隔离测试耗时当作线上承诺。比较必须固定版本、数据、缓存条件、测量结束点与样本数；方法见 [性能测量协议](docs/performance-profile.md)。
 
-## 最后
+## 上游与许可证
 
-AIHOT 曾经只是我无数个深夜里，一个很小、很小的念头。
+感谢 [AIHOT](https://github.com/KKKKhazix/AIHOT) 及其贡献者提供开源基础。本 fork 保留上游版权与 **MIT License**，详见 [LICENSE](LICENSE) 和 [NOTICE](NOTICE)。第三方字体、图片与品牌素材遵守各自条款；AIHOT 的名称与标识不随代码许可证授权。
 
-我不知道它会被改成什么样子，会走到多远的地方。但这可能就是开源最浪漫的地方。
-
-剩下的路，就交给你们了。
-
-<p align="right">—— 数字生命卡兹克</p>
-
-## 许可
-
-代码使用 [MIT 许可证](LICENSE)。AIHOT 的名字和 Logo 不在许可范围内。字体、模型厂商和评测来源的标志各有自己的许可和商标归属，见 [NOTICE](NOTICE)。
-
----
-
-<sub>**In English:** AIHOT ([aihot.news](https://aihot.news)) is an AI news site that collects from many sources, lets a language model filter and score every item twice, writes Chinese headlines and summaries, clusters reports of the same story into one event, ranks events by how many independent sources discuss them, and publishes a daily briefing. This repository is its complete framework, including every prompt and threshold. Hand it to your coding agent with `AGENTS.md` and `docs/customize.md` to turn it into a news site for your own field. The documentation is in Chinese.</sub>
+后续更新采用兼容性审查与选择性移植。记录见 [上游同步](docs/upstream-sync.md)，其中明确区分完整合并基线与已审查提交，不把未迁移功能记为已合入。

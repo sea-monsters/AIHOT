@@ -1,5 +1,5 @@
 /** Shared, read-only publication contract. RSS and MCP must use this exact boundary. */
-export const HKIS_SECTIONS=['papers','progress','daily','keywords','reader','changelog','status','capabilities'] as const;
+export const HKIS_SECTIONS=['papers','progress','daily','briefs','keywords','reader','changelog','status','capabilities'] as const;
 export type HkisSection=typeof HKIS_SECTIONS[number];
 export type HkisQuery={section:HkisSection;limit:number;cursor?:string;date_since?:string;date?:string;id?:string;q?:string;topic?:string;publisher?:string;min?:number;keyword?:string;state?:string;basis?:string;metric?:string};
 export type HkisEntry={id:string;title:string;url:string;updatedAt:string|null;summary:string;keywords:string[];data:unknown};
@@ -19,7 +19,7 @@ export function publicationQuery(input:unknown):HkisQuery {
  if(out.state&&!['read','unread','favorite','all'].includes(out.state))throw new PublicationError('invalid_state');
  if(out.basis&&!['updated','collection','publication'].includes(out.basis))throw new PublicationError('invalid_basis');
  if(out.metric&&!['rule','ai'].includes(out.metric))throw new PublicationError('invalid_metric');
- const perSection:Record<HkisSection,string[]>={papers:['id','q','topic','publisher','min','keyword'],progress:['id','q','topic','publisher','min','date','basis'],daily:['date'],keywords:['keyword','topic','publisher','basis','metric'],reader:['id','q','topic','publisher','min','state'],changelog:[],status:[],capabilities:[]};
+ const perSection:Record<HkisSection,string[]>={papers:['id','q','topic','publisher','min','keyword'],progress:['id','q','topic','publisher','min','date','basis'],daily:['date'],briefs:['date'],keywords:['keyword','topic','publisher','basis','metric'],reader:['id','q','topic','publisher','min','state'],changelog:[],status:[],capabilities:[]};
  for(const key of Object.keys(out))if(!['section','limit','cursor','date_since'].includes(key)&&!perSection[section].includes(key))throw new PublicationError('argument_not_supported_for_section');
  return out;
 }

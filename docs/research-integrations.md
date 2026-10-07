@@ -4,8 +4,8 @@
 
 ## 接入与鉴权
 
-- RSS/XML：`https://myhot-research.sea0monsters15.chatgpt.site/feeds/research.xml`
-- MCP：`https://myhot-research.sea0monsters15.chatgpt.site/mcp`，stateless Streamable HTTP POST；JSON-RPC 2.0。支持 initialize、ping、tools/list、tools/call、无响应通知；不提供 GET SSE、会话 ID、任务、资源写入。
+- RSS/XML：`/feeds/research.xml`
+- MCP：`/mcp`，stateless Streamable HTTP POST；JSON-RPC 2.0。支持 initialize、ping、tools/list、tools/call、无响应通知；不提供 GET SSE、会话 ID、任务、资源写入。
 - 公开能力说明：`/api/site/integrations`，只含接口结构，没有私有论文、收藏或设置。托管私有边界仍可能要求登录才能打开。
 - MCP 使用原 Site 自动提供的私有插件与托管 OAuth。在 ChatGPT / Codex 的 Plugins → Personal → Created by you 找到该 Site，按平台的 Install / Connect 流程授权。首次连接由用户完成；本站不生成长期 API key，不替用户配置本地 MCP，不另建 OAuth App。
 - 官方已说明的是 Site 插件连接流程：[Hosting a plugin with ChatGPT Sites](https://help.openai.com/en/articles/20001547-hosting-a-plugin-with-chatgpt-sites)。尚无本轮核实的通用外部 MCP 客户端动态注册/授权说明，亦未确认同一 OAuth 可授权 RSS GET。匿名发现检查遇到 Cloudflare 403 Error 1010，未绕过，不能据此断言平台无 OAuth。

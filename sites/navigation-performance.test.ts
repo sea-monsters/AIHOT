@@ -49,7 +49,7 @@ test('daily calendar performs only a bounded month metadata read',async()=>{
  const result=await dailyCalendarRead(db,new URLSearchParams('month=2026-09&date=2026-10-03'),at);
  assert.equal(queries.length,1);assert.ok(!queries[0]!.includes('SELECT *'));
  assert.deepEqual(binds,[['2026-09-01','2026-09-31']]);assert.deepEqual(Object.keys(result).sort(),['days','month','today']);
- assert.deepEqual(result.days,[{date:'2026-09-02',status:'completed',count:3,updatedAt:'fixture'}]);
+ assert.deepEqual(result.days,[{date:'2026-09-02',status:'completed',count:3,briefCount:undefined,revision:undefined,updatedAt:'fixture'}]);
 });
 
 test('calendar validates month bounds without reading report groups or schedule',async()=>{
@@ -67,7 +67,7 @@ test('initialized calendar endpoint remains read-only and never reads report bod
   const res=await researchApi(new Request('https://local.test/api/site/research/daily/calendar?month=2026-09'),{DB:f.db});
   assert.equal(res.status,200);assert.equal(res.headers.get('Cache-Control'),'no-store');
   assert.deepEqual(Object.keys(await res.json()).sort(),['days','month','today']);
-  assert.ok(f.queries.every(q=>q.startsWith('SELECT')));assert.equal(f.queries.length,2);
+  assert.ok(f.queries.every(q=>/^(SELECT|WITH)\b/.test(q)));assert.equal(f.queries.length,2);
   assert.ok(f.queries.every(q=>!q.includes('research_daily_groups')&&!q.includes('SELECT * FROM research_daily')));
  }finally{f.sql.close()}
 });

@@ -1,8 +1,58 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-07T12:37:31Z",
+  "latestVersion": "2026-10-07T13:53:10Z",
   "releases": [
+    {
+      "id": "upstream-source-map-safety-20261007",
+      "kind": "fix",
+      "basis": "record",
+      "at": "2026-10-07T13:53:10Z",
+      "title": "审查上游10项更新，择取构建依赖安全修复",
+      "body": [
+        "选择性采用source-map-js 1.2.2，修复恶意source map的计算放大与禁用eval环境下的崩溃；仅更新此锁文件条目，不整份覆盖依赖。",
+        "旧版专项行为测试为1/5通过，更新后5/5通过；本站线上论文接口未被证实存在此类source map输入风险。",
+        "其余原PostgreSQL、模块调度、MCP开发依赖与原生媒体更新逐项审查并记录未采用理由；不改变当前Sites数据、权限、模型或任务边界。"
+      ],
+      "sources": [
+        {
+          "label": "逐项适用性与验证说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/upstream-sync.md"
+        },
+        {
+          "label": "本轮采用的上游安全更新",
+          "url": "https://github.com/KKKKhazix/AIHOT/commit/e4478cb6654d441eb7089ea74fccbd0ecad072dc"
+        }
+      ]
+    },
+    {
+      "id": "batch-brief-publisher-settings-20261007",
+      "kind": "feature",
+      "at": "2026-10-07T13:37:45Z",
+      "basis": "record",
+      "title": "早晚进展简报、日期已读与紧凑设置",
+      "body": [
+        "首页显示最近一批进展简报，日报按早晚分列；原阅读优先级>75日报独立为精华内容摘要。简报基于真实批次证据保存，待分析统计与已保存分析明确区分，不因刷新增加模型费用。",
+        "日期页成功可见加载后即可已读，空日也适用；同日晚间出现新简报仍会重新提示，个人论文已读和收藏不变。",
+        "期刊按出版社分组设置默认间隔，保留旧单刊覆盖；在现有08/20窗口按到期状态采集。日志改为紧凑列表，详细诊断默认折叠、展开当前行。",
+        "新增JVST A/B、ACS Applied Materials & Interfaces和Advanced Materials，合计32刊；按用户批准将服务端分页上限增至35，每刊仍最多2页。原采集任务外层上限需独立修改验证，新刊首次采集尚未伪报成功。",
+        "项目README改为公开通用说明，保留来源与许可证，不在项目简介中公开私人实例信息。"
+      ],
+      "sources": [
+        {
+          "label": "早晚简报、已读与设置边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/batch-progress-briefs.md"
+        },
+        {
+          "label": "来源与分页预算",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-source-expansion.md"
+        },
+        {
+          "label": "上游审查与选择性适配",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/upstream-sync.md"
+        }
+      ]
+    },
     {
       "id": "journal-source-expansion-20261007",
       "kind": "feature",

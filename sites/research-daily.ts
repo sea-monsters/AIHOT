@@ -1,3 +1,5 @@
+import {briefDto} from './research-briefs.ts';
+import {dailyDateRevision} from './daily-visits.ts';
 import {cohortExpression} from './research-attribution.ts';
 import {AIError,KIMI_CODE_ENDPOINT,encryptionReady} from './ai/security.ts';
 import {providerCall} from './ai/provider.ts';
@@ -97,23 +99,26 @@ function publicGroup(r:any){const input=parse(r.input_json),config=parse(r.confi
 export async function dailyCalendarRead(db:any,params:URLSearchParams,at=new Date()){
  const today=collectedDay(at.toISOString())!;
  const inputMonth=params.get('month')||today.slice(0,7),month=/^(?:19\d{2}|[2-9]\d{3})-(?:0[1-9]|1[0-2])$/.test(inputMonth)?inputMonth:today.slice(0,7);
- const days=(await db.prepare('SELECT date,status,selection_json,updated_at FROM research_daily WHERE date>=? AND date<=? ORDER BY date').bind(month+'-01',month+'-31').all()).results.map((r:any)=>({date:r.date,status:r.status,count:parse(r.selection_json).eligible||0,updatedAt:r.updated_at}));
+ const days=(await db.prepare(`WITH dates AS (SELECT date FROM research_daily UNION SELECT date FROM research_briefs) SELECT dates.date,r.status,r.selection_json,r.updated_at,coalesce(v.revision,0)+CASE WHEN r.date IS NOT NULL THEN 1 ELSE 0 END revision,(SELECT count(*) FROM research_briefs b WHERE b.date=dates.date) brief_count FROM dates LEFT JOIN research_daily r ON r.date=dates.date LEFT JOIN daily_content_versions v ON v.date=dates.date WHERE dates.date>=? AND dates.date<=? ORDER BY dates.date`).bind(month+'-01',month+'-31').all()).results.map((r:any)=>({date:r.date,status:r.status||'brief',count:parse(r.selection_json||'{}').eligible||0,briefCount:r.brief_count,revision:r.revision,updatedAt:r.updated_at}));
  return {today,month,days};
 }
 export async function dailyRead(db:any,params:URLSearchParams,at=new Date()){
  const today=collectedDay(at.toISOString())!;
- const latest=params.get('latest')==='1'&&!params.has('date')?await db.prepare('SELECT date FROM research_daily WHERE date<=? ORDER BY date DESC LIMIT 1').bind(today).first():null;
+ const latest=params.get('latest')==='1'&&!params.has('date')?await db.prepare('SELECT date FROM (SELECT date FROM research_daily UNION SELECT date FROM research_briefs) WHERE date<=? ORDER BY date DESC LIMIT 1').bind(today).first():null;
  const requested=params.get('date')||latest?.date||today,invalidDate=!validDay(requested),date=invalidDate?today:requested;
+ const dateRevision=await dailyDateRevision(db,date);
  const [calendar,row,schedule]=await Promise.all([
   dailyCalendarRead(db,params,at),
   invalidDate?Promise.resolve(null):db.prepare('SELECT * FROM research_daily WHERE date=?').bind(date).first(),
   researchSchedule(db),
  ]);
+ const [briefRows,batchRows]=await Promise.all([db.prepare('SELECT * FROM research_briefs WHERE date=? ORDER BY slot').bind(date).all(),db.prepare('SELECT key,slot,status,started_at,finished_at FROM research_batches WHERE date=? ORDER BY slot').bind(date).all()]);
+ const briefs=briefRows.results.map(briefDto),batches=batchRows.results;
  const {month,days}=calendar,selection=row?parse(row.selection_json):null;
  const [groups,evidenceCoverage]=row?await Promise.all([
   db.prepare('SELECT * FROM research_daily_groups WHERE date=? ORDER BY ordinal').bind(date).all().then((r:any)=>r.results.map(publicGroup)),
   selection.evidenceCoverage?Promise.resolve(selection.evidenceCoverage):dailyEvidenceCoverage(db,date),
  ]):[[],null];
  const report=row?{diagnostics:{evidenceCoverage,reconstructed:!selection.evidenceCoverage,countsMatchArchive:evidenceCoverage.totalCandidates===selection.newPapers},date:row.date,sourceDate:row.source_date,cutoff:row.cutoff,status:row.status,coverage:parse(row.coverage_json),selection,paperIds:parse(row.paper_ids_json,[]),contentHash:row.content_hash,schema:row.schema_version,prompt:row.prompt_version,revision:row.revision,createdAt:row.created_at,updatedAt:row.updated_at,finishedAt:row.finished_at,groups}:null;
- return {today,date,month,invalidDate,days,report,window:dailyWindow(at,date),schedule,limits:DAILY_LIMITS,method:'AI-frozen-daily',timezone:'Asia/Singapore'};
+ return {today,date,month,invalidDate,days,report,briefs,batches,dateRevision,window:dailyWindow(at,date),schedule,limits:DAILY_LIMITS,method:'AI-frozen-daily',timezone:'Asia/Singapore'};
 }

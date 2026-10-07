@@ -149,7 +149,7 @@ test("home HTML and HEAD stay private and noindex; q no longer redirects to all"
     assertPrivate(res);
     assert.equal(res.headers.get("Location"), null);
     const body = await res.text();
-    assert.match(body, /最新论文日报/);
+    assert.match(body, /最新进展简报/);
     assert.match(body, /name="robots" content="noindex, nofollow"/);
   }
   const data = await fetch(`${origin}/_.data?q=search&_routes=root`, { redirect: "manual" });

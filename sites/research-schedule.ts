@@ -14,5 +14,5 @@ export async function researchSchedule(db:any){
  const row=await db.prepare("SELECT value FROM research_settings WHERE key='schedule'").first();let value:any={};try{value=row?JSON.parse(row.value):{}}catch{}
  const enabled=value.enabled===true&&typeof value.id==='string'&&!!value.id&&typeof value.schedule==='string'&&!!value.schedule;
  const timezone=value.schedule?.match(/^DTSTART;TZID=([^:;\r\n]+):/m)?.[1]||value.timezone||null;
- return {...value,timezone,enabled,intervalHours:12,status:enabled?'enabled':String(value.status||'not_configured'),message:enabled?`已记录每 12 小时的外部调度（${timezone||'时区未验证'}）；期望间隔不会改变实际任务。`:'每 12 小时采集尚未启用：还没有已验证并关联到本站的定时任务。期望间隔只保存偏好。'};
+ return {...value,timezone,enabled,intervalHours:12,status:enabled?'enabled':String(value.status||'not_configured'),message:enabled?`已记录每 12 小时的外部调度（${timezone||'时区未验证'}）；期刊间隔在这两个检查窗口内决定是否到期，不改变外部触发时刻。`:'每 12 小时采集尚未启用：还没有已验证并关联到本站的定时任务。间隔配置会保留，须由已授权采集任务检查到期来源。'};
 }

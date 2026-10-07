@@ -23,7 +23,7 @@ const hotResponse=await mf.dispatchFetch('https://local.test/hot');const hot=awa
 const paperResponse=await mf.dispatchFetch('https://local.test/research/'+saved.id);assert.equal(paperResponse.status,200);assert.ok((await paperResponse.text()).includes('id="abstract"'));console.log('WEEKLY WORKER OK: empty, unknown JIF, missing abstract, exact citations, detail anchor');
 for(const path of ['/all']){const response=await mf.dispatchFetch('https://local.test'+path);const html=await response.text();assert.equal(response.status,200);assert.ok(html.includes(fixture.title));assert.ok(html.includes('/research/'+saved.id));assert.ok(html.includes('单篇 AI 分析'));assert.ok(!html.includes('示范 RSS 订阅'));assert.ok(!html.includes('class="ai-bubble"'));assert.equal((html.match(/data-ai-entry/g)||[]).length,2);assert.equal((html.match(/<dialog/g)||[]).length,2);}
 const daily=await (await mf.dispatchFetch('https://local.test/api/site/research/daily')).json();assert.equal(daily.report,null);assert.equal(daily.method,'AI-frozen-daily');
-const emptyDaily=await (await mf.dispatchFetch('https://local.test/daily/2000-01-01')).text();assert.ok(emptyDaily.includes('尚无日报归档'));
+const emptyDaily=await (await mf.dispatchFetch('https://local.test/daily/2000-01-01')).text();assert.ok(emptyDaily.includes('尚无精华归档'));
 console.log('RESEARCH VIEWS OK: real paper data, empty day, exact links, sidebar/mobile entries, two distinct dialogs, no demo RSS');
 const aiHeaders={'oai-authenticated-user-id':'test-owner','oai-authenticated-user-email':'owner@example.org'};
 assert.equal((await mf.dispatchFetch('https://local.test/api/site/ai/settings')).status,403);

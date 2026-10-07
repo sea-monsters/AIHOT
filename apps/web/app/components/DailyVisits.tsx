@@ -1,0 +1,11 @@
+import {useEffect,useState} from 'react';
+import {observeVisiblePage} from '../lib/visible-page-read';
+export type DailyVisit={date:string;seenRevision:number;visitedAt:string};
+const event='hkis:daily-visit';
+export function useDailyVisit(date:string,revision:number,enabled:boolean){
+ const [seen,setSeen]=useState(''),[error,setError]=useState('');const key=date+':'+revision;
+ useEffect(()=>{setError('');if(!enabled)return;let active=true;return (()=>{const stop=observeVisiblePage(async()=>{try{const res=await fetch('/api/site/research/daily/visits',{method:'PUT',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','X-HKIS-Request':'1'},body:JSON.stringify({date,revision})});if(!res.ok)throw Error();const visit:DailyVisit=await res.json();if(active){setSeen(key);window.dispatchEvent(new CustomEvent(event,{detail:visit}));try{localStorage.setItem('hkis-daily-visit-sync',String(Date.now()))}catch{}}return true}catch{if(active)setError('本次日期阅读状态尚未保存；重新聚焦页面可重试');return false}});return()=>{active=false;stop()}})()},[date,revision,enabled,key]);
+ return {acknowledged:seen===key,error};
+}
+export function useDailyVisits(month:string){const [visits,setVisits]=useState<Record<string,DailyVisit>>({}),[error,setError]=useState('');
+ useEffect(()=>{let active=true;const abort=new AbortController();const merge=(rows:DailyVisit[])=>setVisits(old=>{const next={...old};for(const row of rows)if(!next[row.date]||next[row.date].seenRevision<=row.seenRevision)next[row.date]=row;return next});const load=async()=>{try{const r=await fetch('/api/site/research/daily/visits?month='+month,{credentials:'same-origin',cache:'no-store',signal:abort.signal});if(!r.ok)throw Error();const data=await r.json();if(active){merge(data.visits);setError('')}}catch{if(active&&!abort.signal.aborted)setError('日期阅读状态暂未同步')}};void load();const update=(e:Event)=>merge([(e as CustomEvent<DailyVisit>).detail]),storage=(e:StorageEvent)=>{if(e.key==='hkis-daily-visit-sync')void load()};window.addEventListener(event,update);window.addEventListener('storage',storage);window.addEventListener('focus',load);return()=>{active=false;abort.abort();window.removeEventListener(event,update);window.removeEventListener('storage',storage);window.removeEventListener('focus',load)}},[month]);return {visits,error};}

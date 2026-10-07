@@ -1,5 +1,5 @@
 // Shared durable Crossref page-attempt cap; changing this requires owner approval.
-export const RESEARCH_PAGE_BUDGET=31;
+export const RESEARCH_PAGE_BUDGET=35;
 export const PUBLISHERS:string[]=['IEEE','Wiley','Elsevier','Nature','Science','IOP','ACS','AIP','SPIE'];
 export type Publisher = 'IEEE'|'Wiley'|'Elsevier'|'Nature'|'Science'|'IOP'|'ACS'|'AIP'|'SPIE';
 export interface JournalSource {id:string;publisher:Publisher;name:string;issn:string;issns?:string[];rss:string|null;homepage:string;topicFilter?:boolean;initialDays?:number;publisherName?:string;feedCoverage?:string;verifiedAt?:string}
@@ -32,6 +32,10 @@ export const RESEARCH_SOURCES:JournalSource[]=[
  {"id":"aip-aed","publisher":"AIP","name":"APL Electronic Devices","issn":"2995-8423","issns":["2995-8423"],"homepage":"https://pubs.aip.org/aip/aed","publisherName":"AIP Publishing","feedCoverage":"未来 CMOS、新型存储、器件制造与模型；期刊级 Crossref，未配置已验证 RSS","rss":null,"topicFilter":true,"verifiedAt":"2026-10-07"},
  {"id":"acs-nanoletters","publisher":"ACS","name":"Nano Letters","issn":"1530-6984","issns":["1530-6984","1530-6992"],"homepage":"https://pubs.acs.org/journal/nalefd","publisherName":"American Chemical Society","feedCoverage":"纳米电子器件与新材料；排除无关生物/能源方向；期刊级 Crossref，未配置已验证 RSS","rss":null,"topicFilter":true,"verifiedAt":"2026-10-07"},
  {"id":"spie-jei","publisher":"SPIE","name":"Journal of Electronic Imaging","issn":"1017-9909","issns":["1017-9909","1560-229X"],"homepage":"https://www.spiedigitallibrary.org/journals/journal-of-electronic-imaging","publisherName":"SPIE","feedCoverage":"电子成像与传感器；不默认纳入纯图像算法；期刊级 Crossref，未配置已验证 RSS","rss":null,"topicFilter":true,"verifiedAt":"2026-10-07"},
+ {"id": "aip-jvsta", "publisher": "AIP", "name": "Journal of Vacuum Science & Technology A", "issn": "0734-2101", "issns": ["0734-2101", "1520-8559"], "homepage": "https://pubs.aip.org/avs/jva", "publisherName": "AVS / AIP Publishing", "feedCoverage": "薄膜沉积、原子层工艺、等离子刻蚀与材料界面；期刊级 Crossref，RSS 正文尚未核实", "rss": null, "topicFilter": true, "verifiedAt": "2026-10-07"},
+ {"id": "aip-jvstb", "publisher": "AIP", "name": "Journal of Vacuum Science & Technology B", "issn": "2166-2746", "issns": ["2166-2746", "2166-2754"], "homepage": "https://pubs.aip.org/avs/jvb", "publisherName": "AVS / AIP Publishing", "feedCoverage": "微纳制造、光刻、半导体器件与计量；只用当前刊号，不混入历史刊名，RSS 正文尚未核实", "rss": null, "topicFilter": true, "verifiedAt": "2026-10-07"},
+ {"id": "acs-ami", "publisher": "ACS", "name": "ACS Applied Materials & Interfaces", "issn": "1944-8244", "issns": ["1944-8244", "1944-8252"], "homepage": "https://pubs.acs.org/journal/aamick", "publisherName": "American Chemical Society", "feedCoverage": "电子材料、薄膜、界面、器件与存储；保留主题过滤，排除无关生物/能源/催化内容；未配置已验证 RSS", "rss": null, "topicFilter": true, "verifiedAt": "2026-10-07"},
+ {"id": "wiley-am", "publisher": "Wiley", "name": "Advanced Materials", "issn": "0935-9648", "issns": ["0935-9648", "1521-4095"], "homepage": "https://advanced.onlinelibrary.wiley.com/journal/15214095", "publisherName": "Wiley", "feedCoverage": "半导体、薄膜、传感、光电子功能材料；按主题筛选，排除无关生物/能源方向；未配置已验证 RSS", "rss": null, "topicFilter": true, "verifiedAt": "2026-10-07"},
 ];
 export const TOPICS=[
  {id:'cis',label:'图像传感器 / CIS / PPD',weight:55,pattern:/\b(?:image sensors?|CMOS imag(?:e|ing)|pinned photodiodes?|single.photon avalanche|SPAD|event.based (?:vision|sensor)|pixel (?:noise|sensor))\b/i},

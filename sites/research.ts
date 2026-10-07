@@ -1,3 +1,4 @@
+import {intervalPlan} from './research-intervals.ts';
 import {paperMetadata,mergeMetadata} from './paper-metadata.ts';
 import {providerRequest} from './scholarly/provider.ts';
 import {paperCategories,matchesPaperQuery} from './paper-keywords.ts';
@@ -140,6 +141,7 @@ async function enrichBatch(db:any,papers:Paper[],counts:{added:number;updated:nu
  return {enriched,failures};
 }
 export async function syncSource(db:any,s:JournalSource,maxPages=1,batchKey:string|null=null,entryPoint:CollectionEntryPoint='internal',started=stamp(),env:any={}){
+ if(batchKey||entryPoint==='service'){const plan=await intervalPlan(db,new Date(started)),due=plan.sources.find(p=>p.id===s.id);if(!plan.value.verified)return {sourceId:s.id,status:'interval_owner_ambiguous',pending:false};if(!due?.due)return {sourceId:s.id,status:'not_due',pending:false,interval:due}}
  const deadline=Date.now()+75000;const runId=crypto.randomUUID();const lockKey='lock:'+s.id;const expires=new Date(Date.now()+10*60*1000).toISOString();
  const locked=await db.prepare('INSERT INTO research_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE research_settings.value < ?').bind(lockKey,expires,started).run();if(!locked.meta?.changes)return {sourceId:s.id,status:'busy',message:'This source is already refreshing'};
  await db.prepare("UPDATE research_runs SET finished_at=?,status='interrupted',details_json=? WHERE source_id=? AND status='running'").bind(started,JSON.stringify({error:'Prior request ended before completion; persisted cursor is retained for safe retry'}),s.id).run();
@@ -210,7 +212,8 @@ export async function researchStatus(db:any,initialized=false){
   db.prepare('SELECT * FROM research_runs ORDER BY started_at DESC LIMIT 12').all(),
  ]);
  const lanes=new Map(laneResult.results.flatMap((r:any)=>{const value=parse(r.value,{});return value.version==='latest-first-v1'?[[r.key.slice(9),crossrefSummary(value)]]:[]}));
- const sources=sourceResult.results.map((s:any)=>{const {cursor,...safe}=s;const config=RESEARCH_SOURCES.find(c=>c.id===s.id);return {...safe,homepage:config?.homepage,publisherName:config?.publisherName||s.publisher,rssConfigured:!!config?.rss,issns:config?.issns||[s.issn],feedCoverage:config?.feedCoverage||'期刊 RSS 与 Crossref 元数据互补',topicFilter:!!config?.topicFilter,initialDays:config?.initialDays||45,verifiedAt:config?.verifiedAt||null,crossref:lanes.get(s.id)||null,backfillPending:(lanes.get(s.id) as any)?.pending??!!cursor}});
+ const intervals=await intervalPlan(db);
+ const sources=sourceResult.results.map((s:any)=>{const {cursor,...safe}=s;const config=RESEARCH_SOURCES.find(c=>c.id===s.id);return {...safe,refresh:intervals.sources.find(p=>p.id===s.id),homepage:config?.homepage,publisherName:config?.publisherName||s.publisher,rssConfigured:!!config?.rss,issns:config?.issns||[s.issn],feedCoverage:config?.feedCoverage||'期刊 RSS 与 Crossref 元数据互补',topicFilter:!!config?.topicFilter,initialDays:config?.initialDays||45,verifiedAt:config?.verifiedAt||null,crossref:lanes.get(s.id)||null,backfillPending:(lanes.get(s.id) as any)?.pending??!!cursor}});
  const counts=countResult.results;
  return {sources,configuredSources:RESEARCH_SOURCES.length,collectionPolicy:{pageAttemptsPerSlot:RESEARCH_PAGE_BUDGET,maxPagesPerSource:2,ordering:'oldest_actual_head_attempt_first',completeCatalog:false},counts,total:counts.reduce((n:number,r:any)=>n+r.total,0),schedule,window:monthWindow(),evaluation:'script-first-selective-ai',ruleVersion:RULE_VERSION,topics:TOPICS.map(({id,label,weight})=>({id,label,weight})),runs:runResult.results};
 }

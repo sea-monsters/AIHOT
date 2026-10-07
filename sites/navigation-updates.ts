@@ -6,7 +6,7 @@ const own=(key:UpdatePageKey)=>key==='settings'||key==='starred';
 function database(env:any){if(!env.DB)throw new AIError('database_unavailable',503,'更新提示暂不可用');return env.DB.withSession?env.DB.withSession('first-primary'):env.DB}
 export async function contentRevision(db:any,key:UpdatePageKey,ownerId=''):Promise<PageRevision>{
  const withDate=['home','daily'].includes(key);
- const row=await db.prepare(withDate?'SELECT (SELECT revision FROM navigation_content WHERE scope=? AND page_key=?) revision,(SELECT max(date) FROM research_daily) latest_date':'SELECT revision FROM navigation_content WHERE scope=? AND page_key=?').bind(own(key)?ownerId:'',key==='home'?'daily':key).first();
+ const row=await db.prepare(withDate?'SELECT (SELECT revision FROM navigation_content WHERE scope=? AND page_key=?) revision,(SELECT max(date) FROM (SELECT date FROM research_daily UNION SELECT date FROM research_briefs)) latest_date':'SELECT revision FROM navigation_content WHERE scope=? AND page_key=?').bind(own(key)?ownerId:'',key==='home'?'daily':key).first();
  const version=key==='changelog'?Date.parse(CHANGELOG.latestVersion):UPDATE_PAGES.find(p=>p.key===key)!.version;
  return {key,revision:Number(row?.revision||0),version,...(withDate?{latestDate:row?.latest_date||null}:{})};
 }
@@ -15,7 +15,7 @@ async function pageList(db:any,id:string){
  const [seen,content,latest]=await db.batch([
   db.prepare('SELECT page_key,seen_revision,seen_version,enabled FROM navigation_seen WHERE owner_id=?').bind(id),
   db.prepare('SELECT scope,page_key,revision FROM navigation_content WHERE scope=? OR scope=?').bind('',id),
-  db.prepare('SELECT max(date) date FROM research_daily'),
+  db.prepare('SELECT max(date) date FROM (SELECT date FROM research_daily UNION SELECT date FROM research_briefs)'),
  ]);
  return Object.fromEntries(UPDATE_PAGES.map(p=>{const r=seen.results.find((r:any)=>r.page_key===p.key),scope=own(p.key)?id:'',key=p.key==='home'?'daily':p.key;
   const revision=content.results.find((r:any)=>r.scope===scope&&r.page_key===key);

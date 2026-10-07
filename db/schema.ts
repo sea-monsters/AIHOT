@@ -51,3 +51,9 @@ export const researchAttributionRepairs=sqliteTable('research_attribution_repair
 
 // One bounded keyword maintenance pass; separate from paper ingestion and daily cohorts.
 export const researchKeywordJobs=sqliteTable('research_keyword_jobs',{id:text('id').primaryKey(),ownerId:text('owner_id').notNull(),paperIds:text('paper_ids_json').notNull(),cursor:integer('cursor').notNull().default(0),requests:integer('requests').notNull().default(0),status:text('status').notNull(),leaseUntil:text('lease_until'),createdAt:text('created_at').notNull(),updatedAt:text('updated_at').notNull(),errorCode:text('error_code')});
+
+// Batch-level progress is separate from the immutable >75 daily selection archive.
+export const researchBriefs=sqliteTable('research_briefs',{batchKey:text('batch_key').primaryKey(),date:text('date').notNull(),slot:integer('slot').notNull(),status:text('status').notNull(),summary:text('summary').notNull(),evidence:text('evidence_json').notNull(),contentHash:text('content_hash').notNull(),revision:integer('revision').notNull().default(1),method:text('method').notNull(),createdAt:text('created_at').notNull(),updatedAt:text('updated_at').notNull()},t=>[index('idx_research_briefs_date').on(t.date,t.slot),index('idx_research_briefs_updated').on(t.updatedAt,t.batchKey)]);
+export const dailyContentVersions=sqliteTable('daily_content_versions',{date:text('date').primaryKey(),revision:integer('revision').notNull().default(0)});
+export const dailyVisits=sqliteTable('daily_visits',{ownerId:text('owner_id').notNull(),date:text('date').notNull(),seenRevision:integer('seen_revision').notNull(),visitedAt:text('visited_at').notNull()},t=>[primaryKey({columns:[t.ownerId,t.date]})]);
+export const researchBriefEvidence=sqliteTable('research_brief_evidence',{batchKey:text('batch_key').notNull(),paperId:text('paper_id').notNull(),evidence:text('evidence_json').notNull()},t=>[primaryKey({columns:[t.batchKey,t.paperId]})]);

@@ -1,3 +1,4 @@
+import {publisherGroups} from '../research-intervals.ts';
 import {researchSchedule} from '../research-schedule.ts';
 import {search as searchWeb} from '../anysearch/provider.ts';
 import {validateQuery,validateLimit} from '../anysearch/domain.ts';
@@ -8,18 +9,19 @@ export const EMPTY_PREFS={keywords:[] as string[],excludedKeywords:[] as string[
 export async function preferences(db:any,id:string){const r=await db.prepare('SELECT * FROM ai_preferences WHERE owner_id=?').bind(id).first();return {value:r?JSON.parse(r.value_json):structuredClone(EMPTY_PREFS),revision:r?.revision||0}}
 function keywords(a:any){if(!Array.isArray(a)||a.length>30||a.some(v=>typeof v!=='string'||v.trim().length<1||v.length>80||/[\x00-\x1f]/.test(v)))throw new AIError('invalid_preferences',400,'关键词最多 30 个，每个 1–80 字');return [...new Set(a.map((v:string)=>v.trim()))]}
 export function cleanPreferences(value:any){
- if(!value||typeof value!=='object'||Object.keys(value).some(k=>!['keywords','excludedKeywords','sourceIntervals'].includes(k)))throw new AIError('invalid_preferences',400,'只能修改关注词、排除词和期望采集间隔');
+ if(!value||typeof value!=='object'||Object.keys(value).some(k=>!['keywords','excludedKeywords','sourceIntervals','publisherIntervals'].includes(k)))throw new AIError('invalid_preferences',400,'只能修改关注词、排除词和期望采集间隔');
  const intervals=value.sourceIntervals;if(!intervals||typeof intervals!=='object'||Array.isArray(intervals))throw new AIError('invalid_preferences',400,'采集间隔格式无效');
  const sourceIntervals:Record<string,number>={};for(const [key,hours] of Object.entries(intervals)){if(!RESEARCH_SOURCES.some(s=>s.id===key)||!Number.isInteger(hours)||Number(hours)<1||Number(hours)>168)throw new AIError('invalid_interval',400,'只能设置已配置期刊，间隔为 1–168 小时');sourceIntervals[key]=Number(hours)}
- return {keywords:keywords(value.keywords),excludedKeywords:keywords(value.excludedKeywords),sourceIntervals};
+ const publisherIntervals:Record<string,number>={};if(value.publisherIntervals!==undefined){if(!value.publisherIntervals||typeof value.publisherIntervals!=='object'||Array.isArray(value.publisherIntervals))throw new AIError('invalid_interval',400,'出版社间隔格式无效');for(const [key,hours] of Object.entries(value.publisherIntervals)){if(!PUBLISHERS.includes(key)||!Number.isInteger(hours)||Number(hours)<1||Number(hours)>168)throw new AIError('invalid_interval',400,'出版社间隔为 1–168 小时');publisherIntervals[key]=Number(hours)}}
+ return {keywords:keywords(value.keywords),excludedKeywords:keywords(value.excludedKeywords),sourceIntervals,...(value.publisherIntervals!==undefined?{publisherIntervals}:{})};
 }
-export async function preferenceStatus(db:any,id:string){return {...await preferences(db,id),sources:RESEARCH_SOURCES.map(s=>({id:s.id,name:s.name})),scheduler:await researchSchedule(db)}}
+export async function preferenceStatus(db:any,id:string){const p=await preferences(db,id);return {...p,groups:publisherGroups(p.value),sources:RESEARCH_SOURCES.map(s=>({id:s.id,name:s.name,publisher:s.publisher})),scheduler:await researchSchedule(db)}}
 export async function propose(db:any,id:string,after:any){
- const prefs=await preferences(db,id),value=cleanPreferences(after);if(JSON.stringify(value)===JSON.stringify(prefs.value))throw new AIError('no_changes',400,'配置没有变化');
+ const prefs=await preferences(db,id),value=cleanPreferences({...after,...(after.publisherIntervals===undefined&&prefs.value.publisherIntervals?{publisherIntervals:prefs.value.publisherIntervals}:{})});if(JSON.stringify(value)===JSON.stringify(prefs.value))throw new AIError('no_changes',400,'配置没有变化');
  const pid=crypto.randomUUID(),createdAt=stamp(),expiresAt=new Date(Date.now()+15*60000).toISOString();
  await db.prepare('INSERT OR IGNORE INTO ai_preferences(owner_id,value_json,revision) VALUES(?,?,0)').bind(id,JSON.stringify(EMPTY_PREFS)).run();
  await db.prepare("INSERT INTO ai_proposals(id,owner_id,before_json,after_json,revision,status,created_at,expires_at) VALUES(?,?,?,?,?,'pending',?,?)").bind(pid,id,JSON.stringify(prefs.value),JSON.stringify(value),prefs.revision,createdAt,expiresAt).run();
- return {id:pid,before:prefs.value,after:value,status:'pending',expiresAt,schedulerNotice:'采集间隔为期望值，保存不会创建或修改外部定时任务；实际状态以采集状态为准。'};
+ return {id:pid,before:prefs.value,after:value,status:'pending',expiresAt,schedulerNotice:'采集间隔在现有08/20检查窗口内决定是否到期；保存不会新增或修改外部触发时刻。'};
 }
 export async function resolveProposal(db:any,id:string,pid:string,action:string){
  if(!['confirm','cancel'].includes(action))throw new AIError('invalid_action',400,'请选择确认或取消');
@@ -30,7 +32,8 @@ export async function resolveProposal(db:any,id:string,pid:string,action:string)
  const current=await preferences(db,id);if(current.revision!==p.revision)throw new AIError('proposal_conflict',409,'配置已变化，请基于最新配置重新生成建议');
  await db.batch([
   db.prepare("UPDATE ai_preferences SET value_json=?,revision=revision+1 WHERE owner_id=? AND revision=? AND EXISTS(SELECT 1 FROM ai_proposals WHERE id=? AND owner_id=? AND status='pending' AND expires_at>=?)").bind(p.after_json,id,p.revision,pid,id,stamp()),
-  db.prepare("UPDATE ai_proposals SET status='applied' WHERE id=? AND owner_id=? AND status='pending' AND EXISTS(SELECT 1 FROM ai_preferences WHERE owner_id=? AND revision=? AND value_json=?)").bind(pid,id,id,p.revision+1,p.after_json)
+  db.prepare("UPDATE ai_proposals SET status='applied' WHERE id=? AND owner_id=? AND status='pending' AND EXISTS(SELECT 1 FROM ai_preferences WHERE owner_id=? AND revision=? AND value_json=?)").bind(pid,id,id,p.revision+1,p.after_json),
+  db.prepare("INSERT INTO research_settings(key,value) SELECT 'collection_intervals',json_object('sourceIntervals',json(coalesce(json_extract(value_json,'$.sourceIntervals'),'{}')),'publisherIntervals',json(coalesce(json_extract(value_json,'$.publisherIntervals'),'{}'))) FROM ai_preferences WHERE owner_id=? AND revision=? AND value_json=? AND EXISTS(SELECT 1 FROM ai_proposals WHERE id=? AND owner_id=? AND status='applied') ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(id,p.revision+1,p.after_json,pid,id)
  ]);
  const done=await db.prepare('SELECT status FROM ai_proposals WHERE id=? AND owner_id=?').bind(pid,id).first();if(done.status!=='applied')throw new AIError('proposal_conflict',409,'配置已变化或建议已取消，请重新生成');
  return {status:'applied',preferences:await preferenceStatus(db,id)};

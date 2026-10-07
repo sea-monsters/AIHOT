@@ -1,5 +1,37 @@
 # 上游同步记录
 
+## 2026-10-07 · 第四轮上游审查与构建依赖安全修复
+
+GitHub 固定窗口为 `2b80294859160a727e0749f7b8b6232c2812fdf4` → `8e34e05feb161cb5838e592ee22715f791c7f814`，新增 **10** 个提交；2026-10-07 13:46 UTC 复核上游 HEAD 未变。[比较范围](https://github.com/KKKKhazix/AIHOT/compare/2b80294859160a727e0749f7b8b6232c2812fdf4...8e34e05feb161cb5838e592ee22715f791c7f814)。选择性审查截至 **8e34e05**；最后完整 merge 基线仍为 **cf8f8d0**，不添加虚假的第二父提交，历史未采用项目继续以本记录判断。
+
+### 本轮实际适用内容
+
+择取 `e4478cb` 的 `source-map-js` **1.2.1 → 1.2.2** 锁文件更新，仅改变这一依赖，不覆盖上游整份 lockfile。它是当前 PostCSS 构建链依赖；[官方发布说明](https://github.com/7rulnik/source-map-js/releases/tag/v1.2.2) 与[逐文件差异](https://github.com/7rulnik/source-map-js/compare/v1.2.1...v1.2.2)说明此版本修复禁止字符串代码生成时的排序崩溃，以及恶意 indexed sourcemap 导致的放大计算/内存风险（CVE-2026-93749）。没有证据表明本站在线论文读取接口直接接收此类 source map，不能把构建链风险描述成已证实的在线漏洞。
+
+新增 5 项离线行为回归：非法 offset、直接与嵌套累计行数上限、嵌套 source 列表读取次数、禁止字符串代码生成时的排序，以及普通 source map 映射兼容性。旧 1.2.1 实测前 4 项失败，正常映射通过；测试只构造有界样例，不执行大内存放大。安装后的1.2.2已通过5/5专项测试；整体验证仍须以本次发布的最终记录为准。
+
+### 逐提交判定（原始 UTC committer 时间）
+
+- [`e4478cb`](https://github.com/KKKKhazix/AIHOT/commit/e4478cb6654d441eb7089ea74fccbd0ecad072dc) · 2026-10-06T17:56:26Z · **择取**：上述 source-map-js 安全与 CSP 兼容更新，保留本站其余依赖和构建配置
+- [`852dd14`](https://github.com/KKKKhazix/AIHOT/commit/852dd145df873d080eeebe0fd986f321f19ae326) · 2026-10-06T20:00:41Z · **不迁移**：将 PG `latestCompositeCondition` 的内层别名从 x 改为 scope_analysis，避免关联条件被同名别名遮蔽，并测试各文章最新修订。Sites 论文读取没有此 fact_articles/analyses 事件候选计数路径；不套用不同表结构，也不声称修复未部署的旧 Node 代码
+- [`879afa3`](https://github.com/KKKKhazix/AIHOT/commit/879afa3a37bc0bdb50461bd32fc24609a7f271d3) · 2026-10-07T06:00:15Z · **暂缓**：MCP client 2.1.0 → 2.2.0 是开发依赖；本站只在原 Node `scripts/mcp-check.ts` 使用，Sites MCP 为独立 Worker 实现。官方 2.2 改变列表自动续页并强化 OAuth issuer 绑定，不能把升级等同于私有 Site 外部鉴权已连通；本轮无需引入并行 core 版本
+- [`14fe1da`](https://github.com/KKKKhazix/AIHOT/commit/14fe1da0505e0d55ec982e64e9872d3a39c45c42) · 2026-10-07T06:06:55Z · **暂缓**：sharp 0.35.5 / libvips 1.3.4 作用于原 Node 媒体代理、分享图与管理设置；Sites 论文路径不运行这些 native 模块。本轮不扩大原生平台安装与图片回归范围，不声称此补丁无价值或没有安全影响
+- [`31fa181`](https://github.com/KKKKhazix/AIHOT/commit/31fa181eb230fde0a56bf5d07701d4396f03d2b7) · 2026-10-07T06:06:55Z · **随 sharp 暂缓**：只将升级后的清单约束保持为精确版本；本站原有 0.35.4 已是精确约束
+- [`4b59ead`](https://github.com/KKKKhazix/AIHOT/commit/4b59ead39a836cb0665a4dd7898691377480b091) · 2026-10-07T06:12:00Z · **不迁移**：PG 管理运行概览只显示仍注册的 pg-boss 调度，历史 timeline 保留。Sites 运行状态从真实 research_batches/research_runs 和调度回读读取，无 pgboss.schedule；不得靠过滤历史失败让当前覆盖看似完整
+- [`85826c6`](https://github.com/KKKKhazix/AIHOT/commit/85826c6adc23a05d0e25c9ff136b857c41bebb2d) · 2026-10-07T06:12:00Z · **不迁移**：为原模块提供 currentJobs 名单，保留 worker 外的现役任务。Sites 没有该模块注册表，外部任务也不能根据源码配置假定已启用；继续要求真实任务回读
+- [`e8c5b56`](https://github.com/KKKKhazix/AIHOT/commit/e8c5b56fb8760e32dacfb6a0905ff4061c9ba965) · 2026-10-07T06:19:36Z · **不直接迁移**：原全文/引用翻译在 PG 业务结果事务中完成相关付费回执，失败后复用 received 答案。Sites 无 translate_body/quote_translations；其 ai_receipts 记录传输结果，业务完成态在独立分析/日报记录中。不能套用 PG completed 状态、自动重试或新增付费请求，现有 unknown 不重发保持
+- [`812fe05`](https://github.com/KKKKhazix/AIHOT/commit/812fe0516c99d4727794d55844dd221d2b075268) · 2026-10-07T06:24:41Z · **审查、不迁移**：模块 MCP smoke 只有 schema 接受空对象时才空参调用，否则使用显式 checkArgs 或只检查发现。本站原 smoke 没有模块循环，Sites 两个只读工具已有固定契约与实参回归；不导入 upstream SERVER_MODULES 或把 discovery-only 误记为业务调用通过
+- [`8e34e05`](https://github.com/KKKKhazix/AIHOT/commit/8e34e05feb161cb5838e592ee22715f791c7f814) · 2026-10-07T06:33:07Z · **不迁移**：原图片代理日志增加图片 URL 的哈希和模式，仍是 Node req.log 路径。Sites 不运行该代理，现有固定枚举/关联哈希脱敏日志保留，不引入原始异常、URL 或图片请求
+
+### 范围与验证边界
+
+不重复摘取前轮已经移植的 Atom text / XML Base / HTML 解析能力。没有从上游覆盖 Sites owner 鉴权、D1 schema、私有缓存、来源、模型、日程、请求预算或不可变归档。README 与项目描述另按本站实际范围重写，保留 LICENSE / NOTICE 和上游来源说明，不放实例地址或私人数据。
+
+本条不把审查、依赖安装、离线测试、生产部署和真实外部任务首次运行混为同一状态。本轮typecheck/build、477项站点与Web回归，以及7组隔离Worker/D1测试通过；专项source-map回归5/5包含于上述测试。未经独立PostgreSQL测试库验证的旧后端集成测试不计为通过。生产部署与首次简报写入另以部署/回读回执为准。
+
+---
+
+
 ## 2026-10-06 · 第三轮选择性适配 / 性能测量基线
 
 本轮固定审查窗口为 `290822424c0bd30841ac771ff74774041bbb842b` → `2b80294859160a727e0749f7b8b6232c2812fdf4`，GitHub 比较确认新增 **19** 个提交；2026-10-06 11:12 UTC 再核实上游 HEAD 未变。[上游范围](https://github.com/KKKKhazix/AIHOT/compare/290822424c0bd30841ac771ff74774041bbb842b...2b80294859160a727e0749f7b8b6232c2812fdf4)。完整 merge 基线仍为 **cf8f8d0**；本次选择性审查截至 **2b80294**，不加虚假第二父提交。
