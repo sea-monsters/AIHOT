@@ -1,3 +1,4 @@
+import {collectionControl} from './research-collection-control.ts';
 import {intervalPlan} from './research-intervals.ts';
 import {prepareBrief} from './research-briefs.ts';
 import {collectionCycle} from './research-crossref.ts';
@@ -11,8 +12,8 @@ export async function startBatch(db:any,slot:number,at=new Date()){
  if(![8,20].includes(slot)||localHour(at)!==slot)throw new AIError('batch_window',409,'只可在 UTC+08 的 08 点或 20 点窗口开始对应采集批次');
  const date=collectedDay(at.toISOString())!,key=date+'/'+String(slot).padStart(2,'0');
  const plan=await intervalPlan(db,at);if(!plan.value.verified)throw new AIError('interval_owner_ambiguous',409,'无法确认采集间隔所属账户，请由所有者保存配置');
- await db.prepare("INSERT OR IGNORE INTO research_batches(key,date,slot,status,sources_json,started_at) VALUES(?,?,?,'running',?,?)").bind(key,date,slot,JSON.stringify(plan.sources.filter(s=>s.due).map(s=>s.id)),at.toISOString()).run();
- const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();return {batchKey:key,status:row.status,startedAt:row.started_at};
+ await db.prepare("INSERT OR IGNORE INTO research_batches(key,date,slot,status,sources_json,started_at) VALUES(?,?,?,'running',?,?)").bind(key,date,slot,JSON.stringify(plan.sources.filter(s=>s.due).sort((a,b)=>String(a.lastAttempt||'').localeCompare(String(b.lastAttempt||''))||a.id.localeCompare(b.id)).map(s=>s.id)),at.toISOString()).run();
+ const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();return {batchKey:key,status:row.status,startedAt:row.started_at,collectionControl:await collectionControl(db,key,at)};
 }
 export async function validateBatch(db:any,key:any,at=new Date()){
  if(key===undefined||key===null)return null;

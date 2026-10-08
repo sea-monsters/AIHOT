@@ -85,13 +85,13 @@ test('first-save membership failure rolls back paper and source record in the sa
  await assert.rejects(savePaper(f.db,paper(),'2026-10-04T12:00:00Z',{runId:'web',batchKey:null}),/fixture rollback/);
  assert.equal((await f.db.prepare('SELECT count(*) n FROM research_papers').first()).n,0);assert.equal((await f.db.prepare('SELECT count(*) n FROM research_records').first()).n,0);
 }finally{f.sql.close()}});
-test('API batch validation and slot budget use one captured request start across 20:00 boundary',async t=>{const f=fixture(),original=globalThis.fetch;try{
+test('expired batch is stopped without a new slot reservation across 20:00 boundary',async t=>{const f=fixture(),original=globalThis.fetch;try{
  await initResearch(f.db);await startBatch(f.db,8,new Date('2026-10-04T00:00:00Z'));
  t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-04T11:59:59.999Z')});
  const prepare=f.db.prepare.bind(f.db);let crossed=false;f.db.prepare=(q:string)=>{const s=prepare(q),first=s.first.bind(s);s.first=async()=>{const result=await first();if(!crossed&&q==='SELECT * FROM research_batches WHERE key=?'){crossed=true;t.mock.timers.tick(2)}return result};return s};
  globalThis.fetch=async url=>String(url).includes('api.crossref.org')?Response.json({message:{items:[]}}):new Response('<rss><channel/></rss>');
  const response=await researchApi(new Request('https://local.test/api/site/research/sync',{method:'POST',body:JSON.stringify({sourceId:RESEARCH_SOURCES[0]!.id,maxPages:1,batchKey:'2026-10-04/08'})}),{DB:f.db});const result=await response.json();
- assert.equal(response.status,200);assert.equal(result.startedAt,'2026-10-04T11:59:59.999Z');assert.equal(result.batchKey,'2026-10-04/08');assert.equal(result.crossref.cycle.key,'2026-10-04/08');assert.equal(crossed,true);
+ assert.equal(response.status,200);assert.equal(result.status,'collection_stopped');assert.equal(result.collectionControl.reason,'time_budget');assert.equal(crossed,true);assert.equal(f.sql.prepare("SELECT count(*) n FROM research_settings WHERE key LIKE 'collection-budget:%'").get()!.n,0);
 }finally{t.mock.timers.reset();globalThis.fetch=original;f.sql.close()}});
 test('consumed one-shot maintenance endpoint is absent from the final application',async()=>{const f=fixture();try{
  const env={DB:f.db,HKIS_OWNER_EMAIL:'owner@example.org'};for(const method of ['GET','POST']){const r=await researchApi(new Request('https://local.test/api/site/research/attribution/repair-once',{method,headers:{origin:'https://local.test','oai-authenticated-user-id':'owner','oai-authenticated-user-email':'owner@example.org','content-type':'application/json'},...(method==='POST'?{body:'{}'}:{})}),env);assert.equal(r.status,404)}

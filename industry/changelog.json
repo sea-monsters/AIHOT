@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-07T13:53:10Z",
+  "latestVersion": "2026-10-08T00:29:20Z",
   "releases": [
+    {
+      "id": "crossref-slot-stop-20261008",
+      "kind": "fix",
+      "basis": "record",
+      "at": "2026-10-08T00:29:20Z",
+      "title": "采集共享限流停止与首轮覆盖保护",
+      "body": [
+        "Crossref 返回限流后保存当前早晚窗口的停止状态；后续调用不再反复联网或消耗未尝试来源的分页额度，保留已有游标和真实缺口。",
+        "批次冻结到期来源并提供服务器确定性下一来源；所有来源首轮尝试前阻止提前续页，明确返回停止原因及冷却时间。",
+        "保持32刊、35次分页、每刊2次和原有模型预算，不改动定时任务；离线验证不代表真实供应商已恢复，下一自然批次仍需观察。"
+      ],
+      "sources": [
+        {
+          "label": "采集控制与覆盖边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-ingestion.md"
+        }
+      ]
+    },
     {
       "id": "upstream-source-map-safety-20261007",
       "kind": "fix",

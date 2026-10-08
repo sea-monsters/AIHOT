@@ -127,3 +127,9 @@ Primary source verification:
 - https://api.crossref.org/journals/1095-9203/works?rows=1 ; https://api.crossref.org/journals/2375-2548/works?rows=1
 
 Scheduling remains a separate, verified native Sites operation. The settings and collection views read the same saved schedule receipt. They cannot create or enable a scheduler by changing an interval or by opening a page. The existing service-authenticated writer is verified independently, and only a real linked enabled task with its ID/timing/readback may be mirrored as enabled.
+
+### 2026-10-08 server-side collection control
+
+Read `collectionControl` on every start/status/sync result, including HTTP 200. If `stop` is true, stop all sync calls for this slot and finish the batch; keep partial coverage. Do not wait out a 429 and resume the same slot. `retryAt` remains a provider boundary, not permission to resume a stopped slot.
+
+For a full frozen batch, prefer sync with `{batchKey,maxPages:1}` and no sourceId: the server selects `nextSourceId` deterministically, first one page for every due source and then at most one continuation each. An explicit sourceId is never replaced; `head_pass_pending` means move to the returned nextSourceId rather than retrying that continuation. Each batched call is capped at one page even if maxPages is larger. The existing private refresh helper uses automatic selection for full batches, while explicit sourceIds retain their requested scope. At most 35 calls and the existing time budgets still apply. No saved schedule is changed by this code release.

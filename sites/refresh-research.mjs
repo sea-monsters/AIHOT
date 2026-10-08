@@ -1,4 +1,4 @@
-import {collectResearch} from './research-refresh-plan.ts';
+import {collectResearch,collectResearchBatch} from './research-refresh-plan.ts';
 // Secret-bearing input stays in memory/stdin, never argv, source, or disk.
 process.stdout.write('Ready for private update JSON on stdin (input hidden).\n');
 if(process.stdin.isTTY)process.stdin.setRawMode(true);
@@ -13,8 +13,8 @@ if(input.readOnly){console.log(JSON.stringify(before));process.exit(0)}
 if(input.processOnly){console.log(JSON.stringify({processing:await call('/api/site/research/process',{maxPapers:Math.min(3,Math.max(0,Number(input.maxPapers??1)))})}));console.log(JSON.stringify({verified:await call('/api/site/research/processing')}));process.exit(0)}
 const ids=input.sourceIds||before.sources.map(s=>s.id);const started=Date.now();
 const localHour=new Date(started+8*3600000).getUTCHours();const maxMs=localHour===8?260000:330000;
-const results=await collectResearch(before.sources.filter(s=>ids.includes(s.id)),async sourceId=>{
- const result=await call('/api/site/research/sync',{sourceId,maxPages:1,...(input.batchKey?{batchKey:input.batchKey}:{})});console.log(JSON.stringify(result));return result;
-},{maxPagesPerSource:Math.min(2,Math.max(1,Number(input.maxPagesPerSource)||1)),maxMs});
+const options={maxPagesPerSource:Math.min(2,Math.max(1,Number(input.maxPagesPerSource)||1)),maxMs};
+const sync=async sourceId=>{const result=await call('/api/site/research/sync',{maxPages:1,...(sourceId?{sourceId}:{}),...(input.batchKey?{batchKey:input.batchKey}:{})});console.log(JSON.stringify(result));return result;};
+const results=input.batchKey&&!input.sourceIds?await collectResearchBatch(()=>sync(),options):await collectResearch(before.sources.filter(s=>ids.includes(s.id)),sync,options);
 if(input.processAI!==false&&Date.now()-started<=540000-240000){console.log(JSON.stringify({processing:await call('/api/site/research/process',{maxPapers:Math.min(3,Math.max(0,Number(input.maxPapers??3)))})}));}
 const after=await call('/api/site/research/status');console.log(JSON.stringify({verification:{total:after.total,counts:after.counts,sources:after.sources,schedule:after.schedule,processing:after.processing},runs:results.length}));

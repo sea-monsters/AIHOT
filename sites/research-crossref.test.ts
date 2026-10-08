@@ -4,8 +4,8 @@ import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,readdirSync} from 'node:fs';
 import {monthWindow,PIPELINE_VERSION} from './research-pipeline.ts';
 import {prepareCrossref,nextCrossrefPage,reserveCrossrefPage,markCrossrefAttempt,crossrefURL,commitCrossrefPage,crossrefSummary,collectionCycle,type CrossrefState} from './research-crossref.ts';
-import {collectResearch} from './research-refresh-plan.ts';
-import {initResearch,syncSource,researchStatus} from './research.ts';
+import {collectResearch,collectResearchBatch} from './research-refresh-plan.ts';
+import {initResearch,syncSource,researchStatus,researchApi} from './research.ts';
 import {RESEARCH_SOURCES,RESEARCH_PAGE_BUDGET} from './research-config.ts';
 const t='2026-10-04T00:00:00.000Z',later='2026-10-04T12:00:00.000Z';
 const prepare=(raw:any=null,at=t,legacy:any={},window:any={})=>prepareCrossref(raw,legacy,window,monthWindow(new Date(at)),at,null);
@@ -36,3 +36,55 @@ test('unstarted publication catchups coalesce under scarce global continuation b
 test('stale/alternating batch keys cannot reopen the same canonical slot budget',()=>{let {state}=prepare(null,later);for(const batchKey of ['2026-10-04/20','2026-10-04/08',null,'2026-10-04/20']){state=prepareCrossref(state,{}, {},monthWindow(new Date(later)),later,batchKey).state;while(nextCrossrefPage(state))page(state,100,'cursor-'+state.cycle.pages,later);assert.equal(state.cycle.pages,2);}assert.equal(state.latest[0]!.pages,2);});
 test('shared persistent 35-page slot cap applies across sources and orchestration restarts',async()=>{const f=fixture(),original=globalThis.fetch;let lists=0;try{await initResearch(f.db);globalThis.fetch=async(url:any)=>{const u=new URL(String(url));if(u.hostname==='api.crossref.org'){lists++;return Response.json({message:{items:[]}})}return new Response('<rss><channel/></rss>')};for(const source of RESEARCH_SOURCES)await syncSource(f.db,source,1);assert.equal(lists,RESEARCH_SOURCES.length);for(const source of RESEARCH_SOURCES)await syncSource(f.db,source,1);assert.equal(lists,RESEARCH_PAGE_BUDGET);const row=await f.db.prepare("SELECT value FROM research_settings WHERE key LIKE 'collection-budget:%'").first();assert.equal(row.value,String(RESEARCH_PAGE_BUDGET));for(const source of RESEARCH_SOURCES)await syncSource(f.db,source,2);assert.equal(lists,RESEARCH_PAGE_BUDGET);}finally{globalThis.fetch=original;f.sql.close()}});
 test('failed durable checkpoint cannot expose an advanced watermark and safe retry is idempotent',async()=>{const f=fixture(),original=globalThis.fetch,prepareDB=f.db.prepare,source=RESEARCH_SOURCES[0]!;let fail=true,lists=0;try{await initResearch(f.db);f.db.prepare=function(q:string){const statement=prepareDB(q),run=statement.run;statement.run=async function(){if(fail&&q.startsWith('INSERT INTO research_settings')&&this.args[0]==='crossref:'+source.id&&JSON.parse(this.args[1]).headCheckedThrough){fail=false;throw Error('fixture checkpoint write failed');}return run.call(this)};return statement;};globalThis.fetch=async(url:any)=>{const u=new URL(String(url));if(u.hostname==='api.crossref.org'){lists++;return Response.json({message:{items:[record('10.9999/checkpoint')]}})}return new Response('<rss><channel/></rss>')};const failed:any=await syncSource(f.db,source);assert.equal(failed.status,'error');assert.equal(failed.crossref.latestWatermark,null);assert.equal(failed.crossref.headCheckedThrough,null);const persisted=JSON.parse((await f.db.prepare('SELECT value FROM research_settings WHERE key=?').bind('crossref:'+source.id).first()).value);assert.equal(persisted.latest[0].cursor,'*');assert.equal(persisted.latest[0].pages,0);const first=await f.db.prepare('SELECT first_seen FROM research_papers').first();const retried:any=await syncSource(f.db,source);assert.equal(retried.added,0);assert.equal(retried.updated,0);assert.ok(retried.crossref.latestWatermark);assert.equal((await f.db.prepare('SELECT count(*) n FROM research_papers').first()).n,1);assert.equal((await f.db.prepare('SELECT first_seen FROM research_papers').first()).first_seen,first.first_seen);assert.ok(lists>=2);}finally{globalThis.fetch=original;f.sql.close()}});
+
+test('Nature 429 publishes a machine-readable slot stop; all subsequent sources preserve budgets and cursors',async()=>{
+ const f=fixture(),original=globalThis.fetch,nature=RESEARCH_SOURCES.find(s=>s.id==='nature')!;let requests=0;
+ try{await initResearch(f.db);globalThis.fetch=async()=>{requests++;return new Response('',{status:429,headers:{'retry-after':'120'}})};
+ const first:any=await syncSource(f.db,nature,2);assert.equal(requests,1);assert.equal(first.collectionControl.stop,true);assert.equal(first.collectionControl.reason,'crossref_rate_limit');assert.ok(first.collectionControl.retryAt);assert.equal(first.crossrefPages.length,1);assert.equal(first.crossref.latestWatermark,null);assert.equal(first.stages.publisherRss,'rate_limit_deferred');
+ const stored=f.sql.prepare("SELECT value FROM research_settings WHERE key='crossref:nature'").get()!.value;
+ // Even after the provider's cooldown elapses, this slot must not be resumed by a later caller.
+ f.sql.prepare("UPDATE research_settings SET value='2000-01-01T00:00:00Z' WHERE key='crossref_http_cooldown'").run();
+ for(const source of [nature,RESEARCH_SOURCES[0]!]){const next:any=await syncSource(f.db,source,2);assert.equal(next.status,'collection_stopped');assert.equal(next.collectionControl.stop,true);assert.deepEqual(next.crossrefPages,[])}
+ assert.equal(requests,1);assert.equal(f.sql.prepare("SELECT value FROM research_settings WHERE key='crossref:nature'").get()!.value,stored);assert.equal(f.sql.prepare("SELECT value FROM research_settings WHERE key LIKE 'collection-budget:%'").get()!.value,'1');assert.equal(f.sql.prepare('SELECT count(*) n FROM research_runs').get()!.n,1);
+ }finally{globalThis.fetch=original;f.sql.close()}
+});
+test('batched calls freeze due membership and prevent continuation before all first passes, even maxPages2',async()=>{
+ const f=fixture(),original=globalThis.fetch,a=RESEARCH_SOURCES[0]!,b=RESEARCH_SOURCES[1]!,at=new Date(),key=collectionCycle(at.toISOString(),null);let requests=0;
+ try{await initResearch(f.db);f.sql.prepare("INSERT INTO research_batches(key,date,slot,status,sources_json,started_at) VALUES(?,?,?,'running',?,?)").run(key,key.slice(0,10),Number(key.slice(-2)),JSON.stringify([a.id,b.id]),at.toISOString());globalThis.fetch=async(url:any)=>{if(new URL(String(url)).hostname==='api.crossref.org')requests++;return new URL(String(url)).hostname==='api.crossref.org'?Response.json({message:{items:[]}}):new Response('<rss><channel/></rss>')};
+ const first:any=await syncSource(f.db,a,2,key);assert.equal(first.crossrefPages.length,1);assert.equal(first.collectionControl.nextSourceId,b.id);
+ const blocked:any=await syncSource(f.db,a,2,key);assert.equal(blocked.status,'head_pass_pending');assert.equal(requests,1);
+ const omitted:any=await syncSource(f.db,RESEARCH_SOURCES[2]!,1,key);assert.equal(omitted.status,'not_due');assert.equal(requests,1);
+ await syncSource(f.db,b,2,key);assert.equal(requests,2);const history:any=await syncSource(f.db,a,2,key);assert.equal(history.crossrefPages.length,1);assert.equal(history.crossrefPages[0].lane,'history');assert.equal(requests,3);await syncSource(f.db,a,2,key);assert.equal(requests,3);
+ }finally{globalThis.fetch=original;f.sql.close()}
+});
+test('preflight shared cooldown and expired collection deadline consume no calls, attempts, or source state',async()=>{
+ const f=fixture(),original=globalThis.fetch,at=new Date(),key=collectionCycle(at.toISOString(),null);try{await initResearch(f.db);globalThis.fetch=async()=>{throw Error('must not fetch')};f.sql.prepare("INSERT INTO research_settings(key,value) VALUES('crossref_http_cooldown',?)").run(new Date(at.getTime()+60000).toISOString());let result:any=await syncSource(f.db,RESEARCH_SOURCES[0]!);assert.equal(result.collectionControl.reason,'crossref_cooldown');f.sql.prepare("DELETE FROM research_settings WHERE key='crossref_http_cooldown'").run();f.sql.prepare("INSERT INTO research_batches(key,date,slot,status,sources_json,started_at) VALUES(?,?,?,'running',?,?)").run(key,key.slice(0,10),Number(key.slice(-2)),JSON.stringify([RESEARCH_SOURCES[0]!.id]),new Date(at.getTime()-540001).toISOString());result=await syncSource(f.db,RESEARCH_SOURCES[0]!,1,key);assert.equal(result.collectionControl.reason,'time_budget');assert.equal(f.sql.prepare('SELECT count(*) n FROM research_runs').get()!.n,0);assert.equal(f.sql.prepare("SELECT count(*) n FROM research_settings WHERE key LIKE 'crossref:%' OR key LIKE 'collection-budget:%'").get()!.n,0);}finally{globalThis.fetch=original;f.sql.close()}
+});
+test('orchestrator honors structured global stop even when HTTP200 has no error text',async()=>{const called:string[]=[];const result=await collectResearch([{id:'a'},{id:'b'}],async id=>{called.push(id);return {pending:true,status:'backfill_pending',collectionControl:{stop:true,reason:'crossref_rate_limit'}}},{maxPagesPerSource:2,maxMs:260000});assert.deepEqual(called,['a']);assert.equal(result.length,1)});
+
+
+test('server auto-next tolerates stale explicit order, freezes membership and skips exhausted empty history',async()=>{
+ const f=fixture(),original=globalThis.fetch,[a,b]=RESEARCH_SOURCES,at=new Date(),key=collectionCycle(at.toISOString(),null);const fetched:string[]=[];
+ try{await initResearch(f.db);f.sql.prepare("INSERT INTO research_batches(key,date,slot,status,sources_json,started_at) VALUES(?,?,?,'running',?,?)").run(key,key.slice(0,10),Number(key.slice(-2)),JSON.stringify([a!.id,b!.id]),at.toISOString());
+ globalThis.fetch=async(url:any)=>{const u=new URL(String(url));if(u.hostname==='api.crossref.org'){fetched.push(u.pathname);return Response.json({message:{items:[]}})}return new Response('<rss><channel/></rss>')};
+ const call=async(sourceId?:string)=>{const r=await researchApi(new Request('https://local.test/api/site/research/sync',{method:'POST',body:JSON.stringify({batchKey:key,maxPages:2,...(sourceId?{sourceId}:{})})}),{DB:f.db});assert.equal(r.status,200);return r.json()};
+ const stale=await call(b!.id);assert.equal(stale.sourceId,b!.id);assert.equal(stale.crossrefPages.length,1);assert.equal((await call(b!.id)).status,'head_pass_pending');
+ // A later settings edit cannot add the other thirty sources to this frozen batch.
+ f.sql.prepare("INSERT INTO research_settings(key,value) VALUES('collection_intervals','{}')").run();
+ const first=await call();assert.equal(first.sourceId,a!.id);const second=await call(),third=await call();assert.notEqual(second.sourceId,third.sourceId);assert.equal(second.crossrefPages[0].lane,'history');assert.equal(third.crossrefPages[0].lane,'history');const stopped=await call();assert.equal(stopped.collectionControl.reason,'sources_exhausted');assert.equal(fetched.length,4);assert.equal(new Set(fetched).size,2);
+ }finally{globalThis.fetch=original;f.sql.close()}
+});
+
+
+test('shared lease deferral cannot spend budget or advance the batch to continuation',async()=>{
+ const f=fixture(),original=globalThis.fetch,[a,b]=RESEARCH_SOURCES,at=new Date(),key=collectionCycle(at.toISOString(),null);let requests=0;
+ try{await initResearch(f.db);f.sql.prepare("INSERT INTO research_batches(key,date,slot,status,sources_json,started_at) VALUES(?,?,?,'running',?,?)").run(key,key.slice(0,10),Number(key.slice(-2)),JSON.stringify([a!.id,b!.id]),at.toISOString());globalThis.fetch=async(url:any)=>{if(new URL(String(url)).hostname==='api.crossref.org'){requests++;return Response.json({message:{items:[]}})}return new Response('<rss><channel/></rss>')};await syncSource(f.db,a!,1,key);
+ f.sql.prepare("INSERT INTO research_settings(key,value) VALUES('crossref_http_lock',?)").run(new Date(Date.now()+60000).toISOString());const blocked:any=await syncSource(f.db,b!,1,key);assert.equal(blocked.crossref.cycle.pages,0);assert.equal(blocked.crossref.lastHeadAttemptAt,null);assert.deepEqual(blocked.crossrefPages,[]);assert.equal(blocked.collectionControl.pass,'head');assert.equal(blocked.collectionControl.nextSourceId,b!.id);assert.equal(f.sql.prepare("SELECT value FROM research_settings WHERE key LIKE 'collection-budget:%'").get()!.value,'1');assert.equal((await syncSource(f.db,a!,1,key) as any).status,'head_pass_pending');assert.equal(requests,1);
+ f.sql.prepare("DELETE FROM research_settings WHERE key='crossref_http_lock'").run();await syncSource(f.db,b!,1,key);assert.equal(requests,2);
+ }finally{globalThis.fetch=original;f.sql.close()}
+});
+test('full batch client follows server plan independently of current due list, with 35-call and time bounds',async()=>{
+ let calls=0;const result=await collectResearchBatch(async()=>{calls++;return {collectionControl:{stop:calls===4,pass:calls<3?'head':'continuation'}}},{maxPagesPerSource:2,maxMs:260000});assert.equal(result.length,4);
+ calls=0;assert.equal((await collectResearchBatch(async()=>{calls++;return {collectionControl:{stop:false,pass:'head'}}},{maxPagesPerSource:2,maxMs:260000})).length,35);
+ let time=0;assert.equal((await collectResearchBatch(async()=>{time+=100;return {collectionControl:{stop:false,pass:'head'}}},{maxPagesPerSource:2,maxMs:150,now:()=>time})).length,2);
+});

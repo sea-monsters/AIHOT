@@ -71,3 +71,15 @@ Scheduling remains a separate, verified native Sites operation. The settings and
 增量迁移只追加独立候选分组、入口标识和审计表。已确认的一条缺口采用限定目标指纹、原始run时间证据、原值与未归档源日检查的单次所有者修复；只补候选分组并记录审计，不改原始batch、首见时间、调用入口或任何历史日报。临时修复入口在执行验证后移除，不提供通用回填接口。
 
 验证：`node --test sites/research-attribution.test.ts sites/research-daily.test.ts sites/research-crossref.test.ts sites/research-pipeline.test.ts sites/research.test.ts`；`node sites/test-attribution-worker.mjs`覆盖真实隔离D1增量升级、跨slot/午夜/同毫秒并发、来源锁和20/2共享预算。所有供应商响应均为fixture；没有生产试抓或付费模型调用。原PostgreSQL集成测试未运行（无测试库）；旧web公共缓存6项失败基线不代表本站新测试失败，也不能据此宣称全套全绿。
+
+### 共享限流与确定性批次控制（2026-10-08）
+
+Nature 与其他期刊共用 Crossref 的租约、间隔和冷却。单次 429 不能据此归因为 Nature RSS、刊号或出版商自身故障，也不能保证代码更新能消除供应商限流。
+
+- 每次 sync 在创建运行、准备窗口和预留分页额度前检查共享冷却、当前窗口停止标记和总页数。Crossref 分页或 DOI 核对返回 429 后，保存当前 08/20 窗口的停止标记；同窗口之后的调用不再联网，不更新未尝试来源的检查时间，不消耗分页额度。下个窗口仍遵守实际 Retry-After。
+- 响应使用 `collectionControl.stop`、`reason`、`scope`、`retryAt` 与 `nextAction` 明确控制流程。HTTP 200 只说明工具调用已返回，不代表采集成功；有 `stop:true` 应结束采集并正常保存批次真实覆盖。不睡眠后在同窗口重启、不换来源继续碰限流。
+- 批次开始时冻结 due 来源，并按真实首轮尝试时间升序排列（空值优先，id 打破并列）；返回下一来源和阶段。绑定 batchKey 的调用固定只做一页，首轮还未覆盖全部冻结来源时，不允许对已尝试来源提前续页。批次内不因设置变化扩大冻结范围。
+- `POST /api/site/research/sync` 可仅传 `batchKey` 和 `maxPages:1`，由服务器从冻结清单选择下一来源，所有首轮完成后再按最老续页尝试时间选择第二轮。显式 sourceId 仍精确指向该来源，不会偷偷替换；提前续页返回 `head_pass_pending` 与 `nextSourceId`。状态接口也按同一真实首轮时间排序。
+- 服务器检查批次开始后的早间 260 秒 / 晚间 330 秒预算；单源请求的 75 秒截止也被收紧到批次截止；数据库保存和批次收尾仍可能有少量耗时，因此不是硬中断承诺。外部总流程仍须守住 540 秒，保留处理和完成批次的时间。
+- 35 次分页尝试 / 每刊 2 次、32 本期刊、月内窗口、每日本站共享 30 次 AI 调用以及优先级严格大于 75 的精华规则均不变。DOI/RSS 请求不是额外分页额度，但共享 Crossref 冷却。不改变调度或已保存任务提示词。
+- 这些保护保留游标、已有论文和不完整覆盖账本；离线合成 429、空分页与预算测试只证明控制逻辑，不等于下一自然批次、真实来源恢复或完整收录已验证。
