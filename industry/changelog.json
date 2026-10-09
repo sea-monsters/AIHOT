@@ -8,23 +8,23 @@
       "kind": "feature",
       "basis": "record",
       "at": "2026-10-09T14:04:34Z",
-      "title": "Selective batch tracking and cross-exit research classification",
+      "title": "批次缺期跟踪与跨出口研究分类",
       "body": [
-        "Added read-only 08/20 batch and brief missingness tracking from 2026-10-07/20 with a two-hour grace boundary, a strict durable historical schedule contract, independent tracking_cursor/tracking_limit pages, verified-schedule unknown state, exact same-batch publication resolution, bounded detail pages, and full aggregate counts.",
-        "Completed deterministic theme, alias, multi-membership, empty-result and invalid-parameter regression across the API, RSS and MCP exits. Legacy API topic filtering remains separate from dynamic theme filtering; unknown legacy topics return 400.",
-        "Measured the upstream shared-chunk experiment with three repeated cold and hot route samples. It reduced JS request count but had no stable ready-time or byte improvement, so the fork features/admin and minShareCount-4 configuration remains unchanged."
+        "新增只读的 08/20 批次与简报缺期跟踪，覆盖 2026-10-07/20 起的记录，采用两小时宽限边界、严格且持久化的历史调度契约、独立的 tracking_cursor/tracking_limit 分页、未有已核验调度时的 unknown 状态、同批发布的精确消除规则、有限明细分页和完整聚合计数。",
+        "完成 API、RSS 和 MCP 各出口上的确定性主题、别名、多类别归属、空结果和无效参数回归。旧 API 的 topic 筛选仍与动态主题筛选分离；未知旧主题返回 400。",
+        "以三轮重复的冷/热路由样本测量上游共享分包实验。实验减少了 JS 请求数，但 ready 时间和字节数没有稳定改善，因此不采用实验，fork 仍保持排除 features/admin、minShareCount-4 的配置。"
       ],
       "sources": [
         {
-          "label": "Selective adaptation record",
+          "label": "选择性适配记录",
           "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/upstream-sync.md"
         },
         {
-          "label": "Upstream sync record",
+          "label": "上游同步记录",
           "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/upstream-sync.md"
         },
         {
-          "label": "Chunk experiment reference",
+          "label": "分包实验参考",
           "url": "https://github.com/KKKKhazix/AIHOT/commit/ff232714c6e879381ce50515963560c09a38255e"
         }
       ]
