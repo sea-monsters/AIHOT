@@ -184,3 +184,9 @@ Original Node/PostgreSQL functionality stays in the original backend; this merge
 - Web suite: 10 pass, 6 pre-existing cache-contract failures (Sites routes do not use the original synthetic HTTP API fixtures)
 - PostgreSQL integration coverage requires an isolated PostgreSQL test database; none is available in this executor. The attempted aggregate run cannot validate database-dependent tests
 - No paid provider calls or live credentials are used by validation
+
+## 2026-10-09 — selective HKIS adaptation
+
+The Sites fork retained the current upstream window as selective reference only. P1 adds durable 08/20 batch/brief missingness tracking from `2026-10-07/20` in the existing UTC+08:00 domain, with a two-hour grace boundary, verified-schedule `unknown` handling, exact same-batch publication resolution, and full cursor counts for old debt. P2 completes the shared research-theme/alias/category regression across API, RSS, and MCP; legacy API `topic` remains distinct from dynamic `theme`/MCP `topic`, and invalid legacy topics now return 400. P3 tested the upstream shared-chunk shape in isolation and did not adopt it because request-count savings did not produce stable ready-time or byte savings. See [`docs/hkis-selective-adaptation-2026-10-09.md`](hkis-selective-adaptation-2026-10-09.md) for the measurements and limits.
+
+Validation used deterministic local fixtures, no paid model calls, no live scholarly requests, and no Sites deployment. The current fork chunk rule remains `features/admin` excluded with `minShareCount: 4`; no PostgreSQL, old backend, UI contract, owner-private authentication, 35-call budget, 429 stop boundary, or model budget was changed.

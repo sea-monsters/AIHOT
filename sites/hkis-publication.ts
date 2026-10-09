@@ -10,6 +10,7 @@ import {readKeywordMap} from './keyword-map.ts';
 import {dailyRead} from './research-daily.ts';
 import {TOPICS,PUBLISHERS,RESEARCH_SOURCES,RESEARCH_PAGE_BUDGET} from './research-config.ts';
 import {extractedKeywords,evidenceExcerpt} from './weekly.ts';
+import {briefMissingness} from './research-batches.ts';
 export const HKIS_ORIGIN='https://myhot-research.sea0monsters15.chatgpt.site';
 export const HKIS_CAPABILITIES={version:'hkis-read-v1',readOnly:true,authentication:'Sites managed OAuth / authenticated owner; no public data access',rss:'/feeds/research.xml',mcp:'/mcp',sections:HKIS_SECTIONS,limit:{default:25,max:50},dateTimezone:'UTC+08:00',dateSince:'Inclusive ISO UTC material-update timestamp; deduplicate by stable ID and update time',pagination:'Bounded keyset pages, not an immutable database snapshot; concurrent changes can require a fresh poll',externalClients:'Generic external MCP/RSS authentication compatibility is not verified. No anonymous feed, query token, or exported session.',omitted:['collection','model_calls','config_writes','read_or_favorite_writes','credentials','raw_runtime_logs','chat_history'],researchThemes:RESEARCH_THEMES,topicParameter:'Research theme ID or documented alias; categories are first three evidence-based keywords',coverage:[{page:'/topics',section:'status',scope:'researchThemes with counts'},{page:'/research',section:'papers'},{page:'/all',section:'progress'},{page:'/daily',section:'briefs'},{page:'/daily',section:'daily',scope:'精华内容摘要，阅读优先级严格 >75'},{page:'/hot',section:'keywords'},{page:'/starred',section:'reader'},{page:'/changelog',section:'changelog'},{page:'/settings',section:'status',scope:'safe capability and coverage summary only'}]};
 const stamp=(v:any)=>v&&Number.isFinite(Date.parse(v))?new Date(v).toISOString():null;
@@ -41,8 +42,14 @@ export async function readHkis(db:any,ownerId:string,q:HkisQuery,at=new Date()){
   }
   if(query.section==='briefs'){
    const where=['updated_at<=?'],binds:any[]=[window.snapshotAt];if(query.date){where.push('date=?');binds.push(query.date)}if(query.date_since){where.push('updated_at>=?');binds.push(query.date_since)}if(window.after){where.push("(updated_at<? OR (updated_at=? AND 'brief:'||batch_key<?))");binds.push(window.after[0],window.after[0],window.after[1])}
-   const rows=(await db.prepare('SELECT * FROM research_briefs WHERE '+where.join(' AND ')+' ORDER BY updated_at DESC,batch_key DESC LIMIT ?').bind(...binds,query.limit+1).all()).results;
-   return {items:rows.map((r:any)=>({id:'brief:'+r.batch_key,title:r.date+' '+(r.slot===8?'早间':'晚间')+'进展简报',url:link('/daily?date='+r.date+'#brief-'+r.slot),updatedAt:r.updated_at,summary:r.summary,keywords:parseBrief(r).evidence.topics?.map((x:any)=>x.label)||[],data:parseBrief(r)})),coverage:{scope:'entire_recorded_new_paper_batch',threshold:null,method:'assistant-reviewed; pending records are labeled statistics',noModelCallsOnRead:true}};
+   const countWhere=window.after?where.slice(0,-1):where,countBinds=window.after?binds.slice(0,-3):binds;
+   const [rows,total,tracking]=await Promise.all([
+    db.prepare('SELECT * FROM research_briefs WHERE '+where.join(' AND ')+' ORDER BY updated_at DESC,batch_key DESC LIMIT ?').bind(...binds,query.limit+1).all(),
+    db.prepare('SELECT count(*) n FROM research_briefs WHERE '+countWhere.join(' AND ')).bind(...countBinds).first(),
+    briefMissingness(db,at),
+   ]);
+   const result=rows.results;
+   return {items:result.map((r:any)=>({id:'brief:'+r.batch_key,title:r.date+' '+(r.slot===8?'早间':'晚间')+'进展简报',url:link('/daily?date='+r.date+'#brief-'+r.slot),updatedAt:r.updated_at,summary:r.summary,keywords:parseBrief(r).evidence.topics?.map((x:any)=>x.label)||[],data:parseBrief(r)})),coverage:{scope:'entire_recorded_new_paper_batch',threshold:null,method:'assistant-reviewed; pending records are labeled statistics',noModelCallsOnRead:true,total:Number((total as any)?.n||0),returned:Math.min(result.length,query.limit),hasMore:result.length>query.limit,briefTracking:{...tracking.counts,trackingStart:tracking.trackingStart,gaps:tracking.gaps.map((g:any)=>g.batchKey)}}};
   }
   if(query.section==='daily'){
    const where=['updated_at<=?'],binds:any[]=[window.snapshotAt];if(query.date){where.push('date=?');binds.push(query.date)}if(query.date_since){where.push('updated_at>=?');binds.push(query.date_since)}if(window.after){where.push("(updated_at<? OR (updated_at=? AND 'daily:'||date<?))");binds.push(window.after[0],window.after[0],window.after[1])}

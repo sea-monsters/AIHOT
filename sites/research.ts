@@ -6,7 +6,7 @@ import {paperCategories,matchesPaperQuery} from './paper-keywords.ts';
 import {matchesResearchTheme,themeSummaries,resolveResearchTheme} from './research-topics.ts';
 import {dailyCohortKey,collectionEntryPoint,type CollectionEntryPoint} from './research-attribution.ts';
 import {prepareCrossref,nextCrossrefPage,reserveCrossrefPage,markCrossrefAttempt,crossrefURL,commitCrossrefPage,crossrefSummary} from './research-crossref.ts';
-import {startBatch,finishBatch,validateBatch} from './research-batches.ts';
+import {startBatch,finishBatch,validateBatch,briefMissingness} from './research-batches.ts';
 import {dailyRead,dailyCalendarRead,generateDaily} from './research-daily.ts';
 import {AIError} from './ai/security.ts';
 import {processingStatus,processRecent,attachAnalyses,currentAnalysisKey} from './research-processing.ts';
@@ -214,19 +214,20 @@ export async function syncSource(db:any,s:JournalSource,maxPages=1,batchKey:stri
 }
 export async function researchStatus(db:any,initialized=false){
  if(!initialized)await initResearch(db);
- const [laneResult,sourceResult,countResult,schedule,runResult]=await Promise.all([
+ const [laneResult,sourceResult,countResult,schedule,runResult,briefTracking]=await Promise.all([
   db.prepare("SELECT key,value FROM research_settings WHERE key LIKE 'crossref:%'").all(),
   db.prepare('SELECT * FROM research_sources ORDER BY publisher,name').all(),
   db.prepare("SELECT publisher,count(*) total,sum(CASE WHEN abstract IS NOT NULL AND length(abstract)>0 THEN 1 ELSE 0 END) abstracts,sum(CASE WHEN authors_json!='[]' THEN 1 ELSE 0 END) authors,sum(CASE WHEN affiliations_json!='[]' THEN 1 ELSE 0 END) affiliations,sum(CASE WHEN keywords_json!='[]' THEN 1 ELSE 0 END) authorKeywords,sum(CASE WHEN priority>=45 THEN 1 ELSE 0 END) recommended FROM research_papers WHERE priority>=0 GROUP BY publisher").all(),
   researchSchedule(db),
   db.prepare('SELECT * FROM research_runs ORDER BY started_at DESC LIMIT 12').all(),
+  briefMissingness(db),
  ]);
  const lanes=new Map(laneResult.results.flatMap((r:any)=>{const value=parse(r.value,{});return value.version==='latest-first-v1'?[[r.key.slice(9),crossrefSummary(value)]]:[]}));
  const intervals=await intervalPlan(db);
  const sources=sourceResult.results.map((s:any)=>{const {cursor,...safe}=s;const config=RESEARCH_SOURCES.find(c=>c.id===s.id);return {...safe,refresh:intervals.sources.find(p=>p.id===s.id),homepage:config?.homepage,publisherName:config?.publisherName||s.publisher,rssConfigured:!!config?.rss,issns:config?.issns||[s.issn],feedCoverage:config?.feedCoverage||'期刊 RSS 与 Crossref 元数据互补',topicFilter:!!config?.topicFilter,initialDays:config?.initialDays||45,verifiedAt:config?.verifiedAt||null,crossref:lanes.get(s.id)||null,backfillPending:(lanes.get(s.id) as any)?.pending??!!cursor}});
  const counts=countResult.results;
  sources.sort(headOrder);
- return {collectionControl:await collectionControl(db,null),sources,configuredSources:RESEARCH_SOURCES.length,collectionPolicy:{pageAttemptsPerSlot:RESEARCH_PAGE_BUDGET,maxPagesPerSource:2,ordering:'oldest_actual_head_attempt_first',completeCatalog:false},counts,total:counts.reduce((n:number,r:any)=>n+r.total,0),schedule,window:monthWindow(),evaluation:'script-first-selective-ai',ruleVersion:RULE_VERSION,topics:TOPICS.map(({id,label,weight})=>({id,label,weight})),runs:runResult.results};
+ return {collectionControl:await collectionControl(db,null),sources,configuredSources:RESEARCH_SOURCES.length,collectionPolicy:{pageAttemptsPerSlot:RESEARCH_PAGE_BUDGET,maxPagesPerSource:2,ordering:'oldest_actual_head_attempt_first',completeCatalog:false},counts,total:counts.reduce((n:number,r:any)=>n+r.total,0),schedule,window:monthWindow(),evaluation:'script-first-selective-ai',ruleVersion:RULE_VERSION,topics:TOPICS.map(({id,label,weight})=>({id,label,weight})),runs:runResult.results,briefTracking};
 }
 export async function researchApi(request:Request,env:any){const db=env.DB;if(!db)return json({error:'Database unavailable'},503);const u=new URL(request.url),path=u.pathname;await initResearch(db);
  if(path==='/api/site/research/processing'&&request.method==='GET')return json(await processingStatus(db,env));
@@ -266,7 +267,7 @@ export async function researchApi(request:Request,env:any){const db=env.DB;if(!d
   const analysis=['completed','queued','insufficient','rules_only','unknown','failed'].includes(u.searchParams.get('analysis')||'')?u.searchParams.get('analysis')!:'';const aiTopic=TOPICS.some(t=>t.id===u.searchParams.get('aiTopic'))?u.searchParams.get('aiTopic')!:'';
   if(analysis){where+=' AND EXISTS(SELECT 1 FROM research_analyses a WHERE a.paper_id=research_papers.id AND a.content_hash=research_papers.content_hash AND a.config_hash=? AND a.schema_version=? AND a.status=? AND a.id=(SELECT b.id FROM research_analyses b WHERE b.paper_id=a.paper_id AND b.content_hash=a.content_hash AND b.config_hash=a.config_hash AND b.schema_version=a.schema_version ORDER BY b.updated_at DESC,b.id DESC LIMIT 1))';binds.push(activeAnalysisKey,ANALYSIS_SCHEMA,analysis);}
   if(aiTopic){where+=" AND EXISTS(SELECT 1 FROM research_analyses a WHERE a.paper_id=research_papers.id AND a.content_hash=research_papers.content_hash AND a.config_hash=? AND a.schema_version=? AND a.status='completed' AND EXISTS(SELECT 1 FROM json_each(a.result_json,'$.topics') topic_entry WHERE topic_entry.value=?) AND a.id=(SELECT b.id FROM research_analyses b WHERE b.paper_id=a.paper_id AND b.content_hash=a.content_hash AND b.config_hash=a.config_hash AND b.schema_version=a.schema_version ORDER BY b.updated_at DESC,b.id DESC LIMIT 1))";binds.push(activeAnalysisKey,ANALYSIS_SCHEMA,aiTopic);}
-  if(PUBLISHERS.includes(publisher)){where+=' AND publisher=?';binds.push(publisher);}if(TOPICS.some(t=>t.id===topic)){where+=' AND topics_json LIKE ?';binds.push('%"'+topic+'"%');}where+=' AND priority>=?';binds.push(min);
+  if(PUBLISHERS.includes(publisher)){where+=' AND publisher=?';binds.push(publisher);}if(topic&&!TOPICS.some(t=>t.id===topic))return json({error:'Unknown research topic'},400);if(topic){where+=' AND topics_json LIKE ?';binds.push('%"'+topic+'"%');}where+=' AND priority>=?';binds.push(min);
   const keyword=u.searchParams.get('keyword')||'',theme=u.searchParams.get('theme')||'';
   if(theme&&!resolveResearchTheme(theme))return json({error:'Unknown research theme'},400);
   if(keyword||theme||q){const candidates=(await db.prepare('SELECT * FROM research_papers WHERE '+where).bind(...binds).all()).results.map(decodePaperRow);const ids=(await attachAnalyses(db,candidates,activeAnalysisKey)).filter((p:any)=>(!q||matchesPaperQuery(p,q,p.categories))&&(!theme||matchesResearchTheme(p,theme,p.categories))&&(!keyword||p.categories.some((k:any)=>k.id===keyword||k.label.toLowerCase()===keyword.toLowerCase())||keyword==='unclassified'&&!p.categories.length)).map((p:any)=>p.id);where+=' AND id IN (SELECT value FROM json_each(?))';binds.push(JSON.stringify(ids));}

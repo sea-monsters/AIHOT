@@ -1,8 +1,34 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-08T00:29:20Z",
+  "latestVersion": "2026-10-09T14:04:34Z",
   "releases": [
+    {
+      "id": "hkis-selective-adaptation-20261009",
+      "kind": "feature",
+      "basis": "record",
+      "at": "2026-10-09T14:04:34Z",
+      "title": "Selective batch tracking and cross-exit research classification",
+      "body": [
+        "Added read-only 08/20 batch and brief missingness tracking from 2026-10-07/20 with a two-hour grace boundary, verified-schedule unknown state, exact same-batch publication resolution, and full historical cursor counts.",
+        "Completed deterministic theme, alias, multi-membership, empty-result and invalid-parameter regression across the API, RSS and MCP exits. Legacy API topic filtering remains separate from dynamic theme filtering; unknown legacy topics return 400.",
+        "Measured the upstream shared-chunk experiment with three repeated cold and hot route samples. It reduced JS request count but had no stable ready-time or byte improvement, so the fork features/admin and minShareCount-4 configuration remains unchanged."
+      ],
+      "sources": [
+        {
+          "label": "Selective adaptation record",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/upstream-sync.md"
+        },
+        {
+          "label": "Upstream sync record",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/upstream-sync.md"
+        },
+        {
+          "label": "Chunk experiment reference",
+          "url": "https://github.com/KKKKhazix/AIHOT/commit/ff232714c6e879381ce50515963560c09a38255e"
+        }
+      ]
+    },
     {
       "id": "crossref-slot-stop-20261008",
       "kind": "fix",
