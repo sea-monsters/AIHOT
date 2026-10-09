@@ -3,7 +3,7 @@ import { strict as assert } from 'node:assert';
 import { readFile } from 'node:fs/promises';
 import { CHANGELOG } from '../industry/changelog.ts';
 import { validateChangelog, changelogDays } from '../packages/contracts/src/changelog.ts';
-import { categoryKey, groupEntriesByKind } from '../apps/web/app/features/changelog/disclosure.ts';
+import { categoryKey, groupEntriesByKind, latestReadReady } from '../apps/web/app/features/changelog/disclosure.ts';
 import { siteApi } from './api.ts';
 const copy = () => structuredClone(CHANGELOG);
 
@@ -41,6 +41,17 @@ test('date and kind categories are stable and lossless for every release', () =>
     assert.equal(groupedEntry.body.length, entry.body.length, entry.id);
     assert.equal(groupedEntry.sources.length, entry.sources.length, entry.id);
   }
+});
+test('latest changelog read requires its expanded category and rejects historical hashes', () => {
+  const latest = { id: 'latest', date: '2026-10-09', kind: 'feature' as const };
+  const open = { [categoryKey(latest.date, latest.kind)]: true };
+  assert.equal(latestReadReady(latest, open, false, ''), false);
+  assert.equal(latestReadReady(latest, {}, true, ''), false);
+  assert.equal(latestReadReady(latest, open, true, ''), true);
+  assert.equal(latestReadReady(latest, open, true, '#change-latest'), true);
+  assert.equal(latestReadReady(latest, open, true, '#d-2026-10-09'), true);
+  assert.equal(latestReadReady(latest, open, true, '#d-2026-10-08'), false);
+  assert.equal(latestReadReady(latest, open, true, '#change-history'), false);
 });
 test('all twelve upstream source commits predate fork integration and include correct range', () => {
   const entry = CHANGELOG.releases.find(entry => entry.at === '2026-10-01T02:27:00Z')!;

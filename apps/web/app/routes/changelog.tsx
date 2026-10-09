@@ -12,7 +12,7 @@ import { pageMeta } from "../lib/seo";
 import {RailDisclosure} from "../components/ui/AdaptiveRail";
 import {ChangelogCalendar} from '../features/changelog/Calendar';
 import {calendarToday,updateDays} from '../features/changelog/calendar-domain';
-import {anchorEntries,categoryKey,groupEntriesByKind,toggleCategory} from "../features/changelog/disclosure";
+import {anchorEntries,categoryKey,groupEntriesByKind,latestReadReady,toggleCategory} from "../features/changelog/disclosure";
 import { Inline, dateHeading } from "../features/changelog/text";
 
 export function headers() {
@@ -82,10 +82,9 @@ export default function ChangelogPage() {
   const location=useLocation(),navigate=useNavigate();
   const [today,setToday]=useState(data.calendarToday),[month,setMonth]=useState(data.calendarToday.slice(0,7));
   const [target,setTarget]=useState<{hash:string;sequence:number}|null>(null);
-  const latest=data.releases[0];const [latestVisible,setLatestVisible]=useState(false);
-  useEffect(()=>{setLatestVisible(false);if(!latest||kind&&kind!==latest.kind)return;const target=document.getElementById('change-'+latest.id);if(!target)return;const observer=new IntersectionObserver(entries=>setLatestVisible(entries.some(e=>e.isIntersecting)),{threshold:0.15});observer.observe(target);return()=>observer.disconnect()},[latest?.id,kind]);
-  const latestHash=!location.hash||location.hash==='#change-'+latest?.id||location.hash==='#d-'+beijingDate(latest.at);
-  usePageRead(data.pageUpdate,latestVisible&&latestHash);
+  const latest=data.releases[0];const latestDate=latest&&beijingDate(latest.at);const latestCategory=latest&&latestDate?categoryKey(latestDate,latest.kind):null;const [latestVisible,setLatestVisible]=useState(false);
+  useEffect(()=>{setLatestVisible(false);if(!latest||!latestCategory||!expanded[latestCategory]||kind&&kind!==latest.kind)return;const target=document.getElementById('change-'+latest.id);if(!target)return;const observer=new IntersectionObserver(entries=>setLatestVisible(entries.some(e=>e.isIntersecting)),{threshold:0.15});observer.observe(target);return()=>observer.disconnect()},[latest?.id,latestCategory,latestCategory?expanded[latestCategory]:false,kind]);
+  usePageRead(data.pageUpdate,latestReadReady(latest&&latestDate?{id:latest.id,date:latestDate,kind:latest.kind}:undefined,expanded,latestVisible,location.hash));
   const calendarDays=useMemo(()=>updateDays(data.releases),[data.releases]);
   useEffect(()=>{const current=calendarToday();setToday(current);setMonth(value=>value===data.calendarToday.slice(0,7)?current.slice(0,7):value)},[data.calendarToday]);
   function reveal(hash:string){const ids=anchorEntries(hash,data.releases);if(ids.length){setKind(null);const keys=data.releases.filter(entry=>ids.includes(entry.id)).map(entry=>categoryKey(beijingDate(entry.at),entry.kind));setExpanded(v=>({...v,...Object.fromEntries(keys.map(key=>[key,true]))}));setTarget(v=>({hash,sequence:(v?.sequence??0)+1}))}}

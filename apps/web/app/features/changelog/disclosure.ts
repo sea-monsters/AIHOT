@@ -8,6 +8,10 @@ export function anchorEntries(hash:string,releases:{id:string;at:string}[]){
 export function toggleEntry(open:Record<string,boolean>,id:string){return {...open,[id]:!open[id]}}
 export function toggleCategory(open:Record<string,boolean>,id:string){return {...open,[id]:!open[id]}}
 export function categoryKey(date:string,kind:ChangeKind){return `${date}:${kind}`}
+export function latestReadReady(latest:{id:string;date:string;kind:ChangeKind}|undefined,expanded:Record<string,boolean>,visible:boolean,hash:string){
+ if(!latest||!visible||!expanded[categoryKey(latest.date,latest.kind)])return false;
+ return !hash||hash===`#change-${latest.id}`||hash===`#d-${latest.date}`;
+}
 export function groupEntriesByKind(entries:ChangeRelease[],order:readonly ChangeKind[]=['feature','fix','upstream']){
  const grouped=new Map<ChangeKind,ChangeRelease[]>();
  for(const entry of entries)grouped.set(entry.kind,[...(grouped.get(entry.kind)??[]),entry]);
