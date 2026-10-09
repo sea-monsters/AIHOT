@@ -13,18 +13,27 @@ This record covers the selective Sites adaptation on fork baseline
   `collection_incomplete`, and `analysis_missing`. An `awaiting_analysis`
   placeholder from `prepareBrief` is not completion; only a published brief
   with the exact same `batch_key` clears analysis debt.
-- A normal two-hour grace period is applied at the exact slot cutoff. If an
-  absent batch has no verified scheduler evidence, the result is `unknown`, not
-  a fabricated failure. A later slot/day cannot hide an earlier slot.
-- Brief listing now returns the full filtered count plus cursor/`hasMore` data,
-  and includes the tracking summary. Status and brief reads perform no writes,
-  outbound requests, or model calls; paused/model-disabled state does not clear
-  a gap.
+- A normal two-hour grace period is applied at the exact slot cutoff. A slot is
+  actionable only when the saved receipt contains the exact `hkis-batch-v1`
+  UTC+08 08/20 contract and an effective historical period. `enabled` is the
+  current state, not historical proof: pausing closes the current period but
+  preserves the prior interval. A generic iCal mirror, or a past with no
+  durable interval evidence, remains `unknown`; a later slot/day cannot hide an
+  earlier slot.
+- Coverage and publication are independent. A partial batch with an
+  `awaiting_analysis` brief remains collection-incomplete and carries analysis
+  debt; a published brief for that same partial batch clears only the analysis
+  debt. Brief listing returns bounded cursor pages while its counts come from a
+  single aggregate query over the full tracked range, without a giant key list
+  or per-batch reads. Status and brief reads perform no writes, outbound
+  requests, or model calls.
 
 Regression coverage in `sites/batch-missingness.test.ts` includes the grace
 cutoff, no-schedule unknown state, collection-versus-analysis separation,
 same-batch resolution, late-batch non-masking, month/year rollover, the
-pre-start boundary, idempotent reads, and more-than-one-page historical debt.
+pre-start boundary, paused historical intervals, idempotent reads, and
+more-than-one-page historical debt. `sites/research-pipeline.test.ts` also
+verifies that pausing the mirrored task does not erase its verified interval.
 
 ## P2 — classification contract across exits
 

@@ -7,6 +7,7 @@ import {RESEARCH_SOURCES} from './research-config.ts';
 import {collectedDay} from './research-views.ts';
 import {dailyWindow,localHour} from './daily-domain.ts';
 import {AIError} from './ai/security.ts';
+import {batchScheduleContract} from './research-schedule.ts';
 const parse=(s:any,f:any)=>{try{return JSON.parse(s)}catch{return f}};
 
 // Brief tracking starts with the first shared evening slot that the verified
@@ -16,76 +17,140 @@ const parse=(s:any,f:any)=>{try{return JSON.parse(s)}catch{return f}};
 export const BRIEF_TRACKING_START_KEY='2026-10-07/20';
 export const BRIEF_TRACKING_START_AT='2026-10-07T20:00:00+08:00';
 export const BRIEF_MISSING_GRACE_MS=2*60*60*1000;
-const BRIEF_SLOTS=[8,20] as const;
 const BRIEF_GAP_STATES=['collection_missing','collection_incomplete','analysis_missing','unknown'] as const;
+const BRIEF_SLOT_MS=12*60*60*1000;
+const BRIEF_PAGE_LIMIT=25;
+const BRIEF_PAGE_MAX=50;
 
 type BriefGapState=typeof BRIEF_GAP_STATES[number]|'complete'|'within_grace';
+type BriefTrackingOptions={limit?:number;cursor?:string};
 
 function slotAt(key:string){
  const [date,rawSlot]=key.split('/');
  return Date.parse(`${date}T${rawSlot}:00:00+08:00`);
 }
-function nextLocalDate(date:string){
- return collectedDay(new Date(Date.parse(`${date}T00:00:00+08:00`)+86400000).toISOString())!;
+function slotKeyFromIndex(index:number){
+ const instant=new Date(Date.parse(BRIEF_TRACKING_START_AT)+index*BRIEF_SLOT_MS),date=collectedDay(instant.toISOString())!,hour=(instant.getUTCHours()+8)%24;
+ return `${date}/${String(hour).padStart(2,'0')}`;
 }
-function expectedBriefKeys(at:Date){
- const now=at.getTime(),start=Date.parse(BRIEF_TRACKING_START_AT);if(!Number.isFinite(now)||now<start)return [] as string[];
- const today=collectedDay(at.toISOString())!,keys:string[]=[];
- for(let date=BRIEF_TRACKING_START_KEY.slice(0,10);date<=today;date=nextLocalDate(date))for(const slot of BRIEF_SLOTS){
-  const key=`${date}/${String(slot).padStart(2,'0')}`,scheduled=slotAt(key);
-  if(key>=BRIEF_TRACKING_START_KEY&&scheduled<=now)keys.push(key);
- }
- return keys;
+function slotIndex(key:string){
+ const start=Date.parse(BRIEF_TRACKING_START_AT),instant=slotAt(key),index=Math.round((instant-start)/BRIEF_SLOT_MS);
+ if(!/^\d{4}-\d{2}-\d{2}\/(08|20)$/.test(key)||!Number.isFinite(instant)||!Number.isFinite(index)||index<0||Math.abs(start+index*BRIEF_SLOT_MS-instant)>1)return null;
+ return index;
+}
+function lastSlotIndex(at:Date){return Math.floor((at.getTime()-Date.parse(BRIEF_TRACKING_START_AT))/BRIEF_SLOT_MS)}
+function schedulePeriods(value:any,schedule:string,timezone:string|null){
+ const claimed=value?.contract,parsed=timezone&&typeof schedule==='string'?batchScheduleContract(schedule,timezone):null,periods=Array.isArray(claimed?.periods)?claimed.periods.map((p:any)=>({from:p?.from||null,to:p?.to||null})).filter((p:any)=>typeof p.from==='string'&&Number.isFinite(Date.parse(p.from))&&(p.to==null||Number.isFinite(Date.parse(p.to)))):[];
+ const valid=!!parsed&&claimed?.version===parsed.version&&claimed?.timezone===parsed.timezone&&JSON.stringify(claimed?.slots||[])===JSON.stringify(parsed.slots)&&periods.every((p:any)=>p.to==null||Date.parse(p.to)>Date.parse(p.from));
+ return {verified:valid&&periods.length>0,periods:valid?periods:[],contract:valid?parsed:null};
 }
 async function scheduleEvidence(db:any){
  const row=await db.prepare("SELECT value FROM research_settings WHERE key='schedule'").first();
  const value=parse(row?.value,{}),schedule=typeof value.schedule==='string'?value.schedule:'';
  const timezone=schedule.match(/^DTSTART;TZID=([^:;\r\n]+):/m)?.[1]||value.timezone||null;
  const enabled=value.enabled===true&&typeof value.id==='string'&&!!value.id&&schedule.includes('BEGIN:VEVENT')&&schedule.includes('RRULE:');
- return {verified:enabled&&typeof value.verifiedAt==='string'&&Number.isFinite(Date.parse(value.verifiedAt)),enabled,timezone,status:enabled?'enabled':String(value.status||'not_configured')};
+ const contract=schedulePeriods(value,schedule,timezone);
+ return {verified:contract.verified,enabled,currentEnabled:enabled,timezone,status:enabled?'enabled':String(value.status||'not_configured'),contract:contract.contract,periods:contract.periods};
+}
+function activeRanges(schedule:any,through:number){
+ if(!schedule.verified)return [] as Array<[number,number]>;
+ const start=Date.parse(BRIEF_TRACKING_START_AT),ranges:Array<[number,number]>=[];
+ for(const period of schedule.periods){
+  const from=Math.max(start,Date.parse(period.from)),to=Math.min(through,period.to==null?through:Date.parse(period.to)-1);
+  const first=Math.max(0,Math.ceil((from-start)/BRIEF_SLOT_MS)),last=Math.floor((to-start)/BRIEF_SLOT_MS);if(last>=first)ranges.push([first,last]);
+ }
+ ranges.sort((a,b)=>a[0]-b[0]);const merged:Array<[number,number]>=[];for(const range of ranges){const prior=merged.at(-1);if(prior&&range[0]<=prior[1]+1)prior[1]=Math.max(prior[1],range[1]);else merged.push(range)}return merged;
+}
+function rangeKeys(ranges:Array<[number,number]>){return ranges.map(([first,last])=>[slotKeyFromIndex(first),slotKeyFromIndex(last)] as [string,string])}
+function rangePredicate(alias:string,ranges:Array<[number,number]>){
+ if(!ranges.length)return {sql:'0',binds:[] as string[]};
+ const keys=rangeKeys(ranges);return {sql:keys.map(()=>`(${alias}>=? AND ${alias}<=?)`).join(' OR '),binds:keys.flat()};
+}
+
+const BATCH_SUMMARY_PREFIX=`WITH latest_runs AS (
+ SELECT id,batch_key,source_id,started_at,finished_at,status,entry_point,details_json,
+        row_number() OVER (PARTITION BY batch_key,source_id ORDER BY started_at DESC,id DESC) rn
+ FROM research_runs
+ WHERE batch_key>=? AND batch_key<=? AND started_at<?
+), batch_rows AS (
+ SELECT b.key batch_key,b.date,b.slot,b.status batch_status,b.sources_json,b.started_at,b.finished_at,
+        coalesce(json_array_length(CASE WHEN json_valid(b.sources_json) THEN b.sources_json ELSE '[]' END),0) expected_sources,
+        coalesce(sum(CASE WHEN lr.source_id IS NOT NULL THEN 1 ELSE 0 END),0) attempted_sources,
+        coalesce(sum(CASE WHEN lr.status='ok' AND lr.finished_at IS NOT NULL AND lr.finished_at<? AND coalesce(json_extract(lr.details_json,'$.rssStatus'),'') IN ('ok','not_configured') THEN 1 ELSE 0 END),0) complete_sources,
+        br.status brief_status,br.updated_at brief_updated
+ FROM research_batches b
+ LEFT JOIN json_each(CASE WHEN json_valid(b.sources_json) THEN b.sources_json ELSE '[]' END) expected ON 1=1
+ LEFT JOIN latest_runs lr ON lr.batch_key=b.key AND lr.source_id=cast(expected.value AS text) AND lr.rn=1
+ LEFT JOIN research_briefs br ON br.batch_key=b.key
+ WHERE b.key>=? AND b.key<=?
+ GROUP BY b.key
+), batch_summary AS (
+ SELECT batch_rows.*,
+        CASE WHEN batch_status='finished' AND finished_at IS NOT NULL AND finished_at<? AND complete_sources=expected_sources THEN 1 ELSE 0 END is_complete
+ FROM batch_rows
+) `;
+
+function coverageFromSummary(row:any,runs:any[],cutoff:string){
+ const expected=parse(row.sources_json,RESEARCH_SOURCES.map(s=>s.id)),last=new Map<string,any>();for(const run of runs)last.set(run.source_id,run);
+ const missing=expected.filter((id:string)=>!last.has(id)),completeSources=expected.filter((id:string)=>{const r=last.get(id),d=parse(r?.details_json,{});return r&&r.status==='ok'&&r.finished_at&&r.finished_at<cutoff&&['ok','not_configured'].includes(d.rssStatus)});
+ return {key:row.batch_key,recorded:true,status:Number(row.is_complete)?'complete':'partial',startedAt:row.started_at||null,finishedAt:row.finished_at||null,expectedSources:expected.length,attemptedSources:last.size,completeSources:completeSources.length,missingSources:missing,runs:runs.map((r:any)=>({id:r.id,sourceId:r.source_id,entryPoint:r.entry_point||'legacy_unknown',status:r.status,startedAt:r.started_at,finishedAt:r.finished_at,channels:parse(r.details_json,{}).channels||null}))};
+}
+function pageOptions(options:BriefTrackingOptions={}){return {limit:Math.max(1,Math.min(BRIEF_PAGE_MAX,Number.isInteger(options.limit)?options.limit!:BRIEF_PAGE_LIMIT)),cursor:options.cursor||null}}
+function fullAggregateSql(active:any){
+ const observed=`observed AS (
+  SELECT batch_key slot_key,1 has_batch,is_complete,brief_status FROM batch_summary
+  UNION ALL
+  SELECT br.batch_key,0,0,br.status FROM research_briefs br LEFT JOIN research_batches b ON b.key=br.batch_key
+  WHERE b.key IS NULL AND br.batch_key>=? AND br.batch_key<=?
+ ), observed_flags AS (SELECT observed.*,CASE WHEN slot_key<? THEN 1 ELSE 0 END is_overdue,CASE WHEN slot_key>=? THEN 1 ELSE 0 END is_grace FROM observed)
+ SELECT
+  coalesce(sum(CASE WHEN has_batch=1 AND is_complete=1 AND brief_status='published' THEN 1 ELSE 0 END),0) complete_total,
+  coalesce(sum(CASE WHEN has_batch=1 AND is_complete=1 AND brief_status='published' AND is_overdue=1 THEN 1 ELSE 0 END),0) complete_overdue,
+  coalesce(sum(CASE WHEN has_batch=1 AND is_complete=1 AND brief_status='published' AND is_grace=1 THEN 1 ELSE 0 END),0) complete_grace,
+  coalesce(sum(CASE WHEN has_batch=1 AND is_complete=0 AND is_overdue=1 THEN 1 ELSE 0 END),0) collection_incomplete_overdue,
+  coalesce(sum(CASE WHEN has_batch=1 AND is_complete=1 AND (brief_status IS NULL OR brief_status='awaiting_analysis') AND is_overdue=1 THEN 1 ELSE 0 END),0) analysis_status_overdue,
+  coalesce(sum(CASE WHEN is_overdue=1 AND ((has_batch=1 AND ((is_complete=1 AND (brief_status IS NULL OR brief_status='awaiting_analysis')) OR (is_complete=0 AND brief_status='awaiting_analysis'))) OR (has_batch=0 AND brief_status='awaiting_analysis')) THEN 1 ELSE 0 END),0) analysis_debt_overdue,
+  coalesce(sum(CASE WHEN has_batch=1 AND (${active.sql}) THEN 1 ELSE 0 END),0) batch_active_overdue
+ FROM observed_flags`;
+ return BATCH_SUMMARY_PREFIX+','+observed;
 }
 
 /**
  * Read-only batch/brief completeness for the shared early/evening task.
  *
- * A prepared brief is deliberately not complete: only a published brief for
- * the exact batch key clears the analysis gap.  Missing batch rows are only
- * actionable when a verified schedule mirror exists; otherwise they remain
- * explicit unknowns rather than invented execution failures.
+ * Collection coverage and publication are independent: a prepared brief is
+ * deliberately not complete, and only a published brief for the exact batch
+ * key clears analysis debt.  Missing batch rows are only actionable when a
+ * durable verified schedule contract has an effective historical period;
+ * otherwise they remain explicit unknowns rather than invented failures.
  */
-export async function briefMissingness(db:any,at=new Date()){
- const keys=expectedBriefKeys(at),schedule=await scheduleEvidence(db);
- if(!keys.length)return {trackingStart:BRIEF_TRACKING_START_KEY,timezone:'Asia/Singapore',graceMs:BRIEF_MISSING_GRACE_MS,schedule,slots:[],gaps:[],counts:{tracked:0,complete:0,withinGrace:0,unknown:0,collectionMissing:0,collectionIncomplete:0,analysisMissing:0,alertable:0},hasMore:false};
- const [batchResult,briefResult]=await Promise.all([
-  db.prepare(`SELECT * FROM research_batches WHERE key IN (${keys.map(()=>'?').join(',')})`).bind(...keys).all(),
-  db.prepare(`SELECT * FROM research_briefs WHERE batch_key IN (${keys.map(()=>'?').join(',')})`).bind(...keys).all(),
+export async function briefMissingness(db:any,at=new Date(),options:BriefTrackingOptions={}){
+ const now=at.getTime(),last=lastSlotIndex(at),schedule=await scheduleEvidence(db),{limit,cursor}=pageOptions(options);
+ if(!Number.isFinite(now)||last<0)return {trackingStart:BRIEF_TRACKING_START_KEY,timezone:'Asia/Singapore',graceMs:BRIEF_MISSING_GRACE_MS,schedule,slots:[],gaps:[],counts:{tracked:0,complete:0,withinGrace:0,unknown:0,collectionMissing:0,collectionIncomplete:0,analysisMissing:0,alertable:0,gapCount:0},cursor:null,nextCursor:null,hasMore:false};
+ const cursorIndex=cursor==null?-1:slotIndex(cursor);if(cursorIndex===null||cursorIndex>=last)throw new AIError('invalid_tracking_cursor',400,'缺期游标无效');
+ const pageIndexes=Array.from({length:Math.min(limit+1,last-(cursorIndex+1)+1)},(_,i)=>cursorIndex+1+i),pageKeys=pageIndexes.map(slotKeyFromIndex),pageLower=pageKeys[0]!,pageUpper=pageKeys.at(-1)!;
+ const cutoff=new Date(now+1).toISOString(),graceStart=Math.max(0,Math.floor((now-BRIEF_MISSING_GRACE_MS-Date.parse(BRIEF_TRACKING_START_AT))/BRIEF_SLOT_MS)+1),graceCount=Math.max(0,last-graceStart+1),overdueThrough=Math.min(now-BRIEF_MISSING_GRACE_MS,now),active=activeRanges(schedule,overdueThrough),activeKeys=rangePredicate('slot_key',active),activeExpected=active.reduce((total,[first,lastIndex])=>total+lastIndex-first+1,0);
+ const fullSql=fullAggregateSql(activeKeys),fullBinds=[BRIEF_TRACKING_START_KEY,slotKeyFromIndex(last),cutoff,cutoff,BRIEF_TRACKING_START_KEY,slotKeyFromIndex(last),cutoff,BRIEF_TRACKING_START_KEY,slotKeyFromIndex(last),graceStart>last?slotKeyFromIndex(last+1):slotKeyFromIndex(graceStart),graceStart>last?slotKeyFromIndex(last+1):slotKeyFromIndex(graceStart),...activeKeys.binds];
+ const pageSql=BATCH_SUMMARY_PREFIX+'SELECT * FROM batch_summary ORDER BY batch_key',runSql='SELECT id,batch_key,source_id,started_at,finished_at,status,entry_point,details_json FROM research_runs WHERE batch_key>=? AND batch_key<=? AND started_at<? ORDER BY batch_key,started_at,id',briefSql='SELECT batch_key,status,updated_at FROM research_briefs WHERE batch_key>=? AND batch_key<=?';
+ const [aggregate,pageRows,runs,briefRows]=await Promise.all([
+  db.prepare(fullSql).bind(...fullBinds).first(),
+  db.prepare(pageSql).bind(pageLower,pageUpper,cutoff,cutoff,pageLower,pageUpper,cutoff).all(),
+  db.prepare(runSql).bind(pageLower,pageUpper,cutoff).all(),
+  db.prepare(briefSql).bind(pageLower,pageUpper).all(),
  ]);
- const batches=new Map<string,any>(batchResult.results.map((row:any)=>[String(row.key),row] as [string,any]));
- const briefs=new Map<string,any>(briefResult.results.map((row:any)=>[String(row.batch_key),row] as [string,any]));
- const now=at.getTime();
- const slots=await Promise.all(keys.map(async key=>{
-  const batch=batches.get(key),brief=briefs.get(key),scheduledAt=new Date(slotAt(key)).toISOString(),overdueAt=new Date(slotAt(key)+BRIEF_MISSING_GRACE_MS).toISOString();
-  let collection:'complete'|'missing'|'incomplete'|'unknown'|'within_grace'='unknown';
-  let analysis:'published'|'not_started'|'awaiting_analysis'|'blocked_by_collection'|'unknown'='unknown';
-  let status:BriefGapState='unknown';
-  let coverage:any=null;
-  if(!batch){
-   collection=schedule.verified?'missing':'unknown';analysis='blocked_by_collection';
-   status=now<slotAt(key)+BRIEF_MISSING_GRACE_MS?'within_grace':schedule.verified?'collection_missing':'unknown';
-  }else{
-   coverage=await batchCoverage(db,key,new Date(now+1).toISOString());
-   const complete=coverage.status==='complete';
-   collection=complete?'complete':now<slotAt(key)+BRIEF_MISSING_GRACE_MS?'within_grace':'incomplete';
-   if(!complete){analysis='blocked_by_collection';status=collection==='within_grace'?'within_grace':'collection_incomplete';}
-   else if(brief?.status==='published'){analysis='published';status='complete';}
-   else if(brief?.status==='awaiting_analysis'||!brief){analysis=brief?.status==='awaiting_analysis'?'awaiting_analysis':'not_started';status=now<slotAt(key)+BRIEF_MISSING_GRACE_MS?'within_grace':'analysis_missing';}
-   else{analysis='unknown';status=now<slotAt(key)+BRIEF_MISSING_GRACE_MS?'within_grace':'unknown';}
-  }
-  return {batchKey:key,date:key.slice(0,10),slot:Number(key.slice(11)),scheduledAt,overdueAt,collection,analysis,status,alertable:BRIEF_GAP_STATES.includes(status as any)&&status!=='unknown'&&status!=='within_grace',batch:batch?{status:batch.status,startedAt:batch.started_at||null,finishedAt:batch.finished_at||null}:null,brief:brief?{status:brief.status,updatedAt:brief.updated_at||null}:null,coverage};
- }));
- const gaps=slots.filter(s=>s.status!=='complete'&&s.status!=='within_grace');
- const counts={tracked:slots.length,complete:slots.filter(s=>s.status==='complete').length,withinGrace:slots.filter(s=>s.status==='within_grace').length,unknown:slots.filter(s=>s.status==='unknown').length,collectionMissing:slots.filter(s=>s.status==='collection_missing').length,collectionIncomplete:slots.filter(s=>s.status==='collection_incomplete').length,analysisMissing:slots.filter(s=>s.status==='analysis_missing').length,alertable:slots.filter(s=>s.alertable).length};
- return {trackingStart:BRIEF_TRACKING_START_KEY,timezone:'Asia/Singapore',graceMs:BRIEF_MISSING_GRACE_MS,schedule,slots,gaps,counts,hasMore:false};
+ const summaries=new Map<string,any>(pageRows.results.map((row:any)=>[String(row.batch_key),row] as [string,any])),briefs=new Map<string,any>(briefRows.results.map((row:any)=>[String(row.batch_key),row] as [string,any])),runMap=new Map<string,any[]>();for(const run of runs.results){const list=runMap.get(run.batch_key)||[];list.push(run);runMap.set(run.batch_key,list)}
+ const pageHasMore=pageKeys.length>limit,visibleKeys=pageHasMore?pageKeys.slice(0,limit):pageKeys;
+ const slots=visibleKeys.map(key=>{
+  const summary=summaries.get(key),brief=briefs.get(key),scheduled=slotAt(key),inGrace=slotIndex(key)!>=graceStart,complete=!!summary&&Number(summary.is_complete)===1,coverage=summary?coverageFromSummary(summary,runMap.get(key)||[],cutoff):null;
+  let collection:'complete'|'missing'|'incomplete'|'unknown'|'within_grace'='unknown';if(!summary)collection=schedule.periods.some((p:any)=>scheduled>=Date.parse(p.from)&&(p.to==null||scheduled<Date.parse(p.to)))?'missing':'unknown';else collection=complete?'complete':inGrace?'within_grace':'incomplete';
+  let analysis:'published'|'not_started'|'awaiting_analysis'|'blocked_by_collection'|'unknown'='unknown';if(brief?.status==='published')analysis='published';else if(brief?.status==='awaiting_analysis')analysis='awaiting_analysis';else if(!summary||!complete)analysis='blocked_by_collection';else if(!brief)analysis='not_started';
+  let status:BriefGapState;if(complete&&analysis==='published')status='complete';else if(inGrace)status='within_grace';else if(!summary)status=collection==='missing'?'collection_missing':'unknown';else if(!complete)status='collection_incomplete';else status=analysis==='awaiting_analysis'||analysis==='not_started'?'analysis_missing':'unknown';
+  const analysisDebt=!inGrace&&(analysis==='awaiting_analysis'||analysis==='not_started');
+  return {batchKey:key,date:key.slice(0,10),slot:Number(key.slice(11)),scheduledAt:new Date(scheduled).toISOString(),overdueAt:new Date(scheduled+BRIEF_MISSING_GRACE_MS).toISOString(),collection,analysis,analysisDebt,status,alertable:status!=='unknown'&&status!=='within_grace'&&status!=='complete',batch:summary?{status:summary.batch_status,startedAt:summary.started_at||null,finishedAt:summary.finished_at||null}:null,brief:brief?{status:brief.status,updatedAt:brief.updated_at||null}:null,coverage};
+ });
+ const completeTotal=Number(aggregate?.complete_total||0),completeOverdue=Number(aggregate?.complete_overdue||0),completeGrace=Number(aggregate?.complete_grace||0),collectionIncomplete=Number(aggregate?.collection_incomplete_overdue||0),analysisStatus=Number(aggregate?.analysis_status_overdue||0),analysisMissing=Number(aggregate?.analysis_debt_overdue||0),collectionMissing=Math.max(0,activeExpected-Number(aggregate?.batch_active_overdue||0)),overdueCount=Math.max(0,last+1-graceCount),unknown=Math.max(0,overdueCount-completeOverdue-collectionIncomplete-collectionMissing-analysisStatus),withinGrace=Math.max(0,graceCount-completeGrace),counts={tracked:last+1,complete:completeTotal,withinGrace,unknown,collectionMissing,collectionIncomplete,analysisMissing,alertable:collectionMissing+collectionIncomplete+analysisStatus,gapCount:Math.max(0,last+1-completeTotal-withinGrace)};
+ const gaps=slots.filter(s=>s.status!=='complete'&&s.status!=='within_grace'),nextCursor=pageHasMore?visibleKeys.at(-1)!:null;
+ return {trackingStart:BRIEF_TRACKING_START_KEY,timezone:'Asia/Singapore',graceMs:BRIEF_MISSING_GRACE_MS,schedule,slots,gaps,counts,cursor, nextCursor,hasMore:pageHasMore,pageLimit:limit};
 }
 
 export async function startBatch(db:any,slot:number,at=new Date()){

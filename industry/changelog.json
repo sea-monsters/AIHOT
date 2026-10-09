@@ -10,7 +10,7 @@
       "at": "2026-10-09T14:04:34Z",
       "title": "Selective batch tracking and cross-exit research classification",
       "body": [
-        "Added read-only 08/20 batch and brief missingness tracking from 2026-10-07/20 with a two-hour grace boundary, verified-schedule unknown state, exact same-batch publication resolution, and full historical cursor counts.",
+        "Added read-only 08/20 batch and brief missingness tracking from 2026-10-07/20 with a two-hour grace boundary, a durable historical schedule-contract check, verified-schedule unknown state, exact same-batch publication resolution, bounded detail pages, and full aggregate counts.",
         "Completed deterministic theme, alias, multi-membership, empty-result and invalid-parameter regression across the API, RSS and MCP exits. Legacy API topic filtering remains separate from dynamic theme filtering; unknown legacy topics return 400.",
         "Measured the upstream shared-chunk experiment with three repeated cold and hot route samples. It reduced JS request count but had no stable ready-time or byte improvement, so the fork features/admin and minShareCount-4 configuration remains unchanged."
       ],

@@ -22,6 +22,20 @@ const json=(data:any,status=200)=>Response.json(data,{status,headers:{'Cache-Con
 const stamp=()=>new Date().toISOString();
 const parse=(s:any,fallback:any=[])=>{try{return JSON.parse(s)}catch{return fallback}};
 const delay=(ms:number)=>new Promise(r=>setTimeout(r,ms));
+function mergeScheduleMirror(previous:any,next:any){
+ const prior=previous?.contract&&typeof previous.contract==='object'?previous.contract:null,priorPeriods=Array.isArray(prior?.periods)?prior.periods.map((p:any)=>({from:p?.from||null,to:p?.to||null})).filter((p:any)=>p.from):[];
+ const close=(periods:any[],at:string)=>{const open=periods.at(-1);if(open&&!open.to)open.to=at;return periods};
+ if(next.enabled&&next.contract?.version){
+  const same=prior?.version===next.contract.version&&prior?.timezone===next.contract.timezone&&JSON.stringify(prior?.slots||[])===JSON.stringify(next.contract.slots||[]);
+  const periods=priorPeriods.slice();if(!same)close(periods,next.verifiedAt);if(!same||!periods.at(-1)||periods.at(-1).to)periods.push({from:next.verifiedAt,to:null});
+  return {...next,contract:{...next.contract,periods}};
+ }
+ if(prior){
+  const periods=close(priorPeriods.slice(),next.verifiedAt);
+  return {...next,schedule:next.schedule||previous.schedule||'',timezone:next.timezone||previous.timezone||prior.timezone,contract:{...prior,periods}};
+ }
+ return next;
+}
 const DAY=86400000;
 // Read paths perform one version check, not repairs/upserts on every navigation.
 const initialization=new WeakMap<object,Promise<void>>();
@@ -243,7 +257,7 @@ export async function researchApi(request:Request,env:any){const db=env.DB;if(!d
   }
   if(path==='/api/site/research/sync'){try{const started=stamp(),batchKey=await validateBatch(db,body.batchKey,new Date(started));const control=await collectionControl(db,batchKey,new Date(started));if(control.stop)return json({status:'collection_stopped',pending:true,collectionControl:control,crossrefPages:[]});const sourceId=body.sourceId??(batchKey?control.nextSourceId:null),s=RESEARCH_SOURCES.find(s=>s.id===sourceId);if(!s)return json({error:'A configured sourceId or active batchKey is required'},400);const maxPages=Math.min(2,Math.max(1,Number(body.maxPages)||1));return json(await syncSource(db,s,maxPages,batchKey,collectionEntryPoint(request),started,env))}catch(e){return json({code:e instanceof AIError?e.code:'collection_unavailable',error:e instanceof AIError?e.message:'采集暂不可用'},e instanceof AIError?e.status:503)};}
 
-  if(path==='/api/site/research/schedule'){let value:any;try{value=validateScheduleMirror(body,stamp())}catch{return json({error:'Provide verified id, iCal, matching IANA timezone and optional nextRun'},400)}await db.prepare("INSERT INTO research_settings(key,value) VALUES('schedule',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(JSON.stringify(value)).run();return json(value);}
+  if(path==='/api/site/research/schedule'){let value:any;try{value=mergeScheduleMirror(parse((await db.prepare("SELECT value FROM research_settings WHERE key='schedule'").first())?.value,{}),validateScheduleMirror(body,stamp()))}catch{return json({error:'Provide verified id, iCal, matching IANA timezone and optional nextRun'},400)}await db.prepare("INSERT INTO research_settings(key,value) VALUES('schedule',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(JSON.stringify(value)).run();return json(value);}
   return json({error:'Not found'},404);
  }
  if(request.method!=='GET')return json({error:'Method not allowed'},405);

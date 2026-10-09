@@ -1,0 +1,1 @@
+CREATE INDEX `idx_research_runs_batch` ON `research_runs` (`batch_key`,`started_at`,`id`);

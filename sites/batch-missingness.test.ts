@@ -13,8 +13,8 @@ function fixture(){
 }
 const at=(date:string,time:string)=>new Date(`${date}T${time.length===5?time+':00':time}+08:00`);
 const key=(date:string,slot:number)=>`${date}/${String(slot).padStart(2,'0')}`;
-function schedule(sql:DatabaseSync,enabled=true){
- const value={enabled,id:enabled?'fixture-schedule':'',schedule:enabled?'BEGIN:VEVENT\nDTSTART;TZID=Asia/Singapore:20261007T080000\nRRULE:FREQ=DAILY\nEND:VEVENT':'',timezone:'Asia/Singapore',status:enabled?'enabled':'paused',verifiedAt:'2026-10-07T12:00:00Z'};
+function schedule(sql:DatabaseSync,enabled=true,until:string|null=null){
+ const verifiedAt='2026-10-07T12:00:00Z',ical='BEGIN:VEVENT\nDTSTART;TZID=Asia/Singapore:20261007T080000\nRRULE:FREQ=DAILY;BYHOUR=8,20;BYMINUTE=0;BYSECOND=0\nEND:VEVENT',value={enabled,id:'fixture-schedule',schedule:ical,timezone:'Asia/Singapore',status:enabled?'enabled':'paused',verifiedAt,contract:{version:'hkis-batch-v1',timezone:'Asia/Singapore',slots:[8,20],periods:[{from:verifiedAt,to:until}]}};
  sql.prepare("INSERT INTO research_settings(key,value) VALUES('schedule',?)").run(JSON.stringify(value));
 }
 function batch(sql:DatabaseSync,date:string,slot:number,status='finished'){
@@ -47,6 +47,7 @@ test('missingness honors the UTC+08 grace boundary and never invents a gap befor
 
 test('without an official schedule mirror an absent batch is unknown, not a fabricated failure',async()=>{
  const f=fixture();try{
+  f.sql.prepare("INSERT INTO research_settings(key,value) VALUES('schedule',?)").run(JSON.stringify({enabled:true,id:'unverified-mirror',schedule:'BEGIN:VEVENT\nDTSTART;TZID=Asia/Singapore:20261007T080000\nRRULE:FREQ=DAILY;BYHOUR=8,20\nEND:VEVENT',timezone:'Asia/Singapore',verifiedAt:'2026-10-07T12:00:00Z'}));
   const result=await briefMissingness(f.db,at('2026-10-08','10:00'));
   const slot=result.slots.find((s:any)=>s.batchKey===key('2026-10-08',8));
   assert.equal(slot?.status,'unknown');
@@ -58,16 +59,26 @@ test('without an official schedule mirror an absent batch is unknown, not a fabr
 
 test('collection incompleteness and same-batch analysis missingness stay separate',async()=>{
  const f=fixture();try{
-  schedule(f.sql);batch(f.sql,'2026-10-08',8,'running');
+  schedule(f.sql);batch(f.sql,'2026-10-08',8,'running');brief(f.sql,'2026-10-08',8,'awaiting_analysis');
   batch(f.sql,'2026-10-08',20);brief(f.sql,'2026-10-08',20,'awaiting_analysis');
   const result=await briefMissingness(f.db,at('2026-10-09','10:00'));
   const early=result.slots.find((s:any)=>s.batchKey===key('2026-10-08',8));
   const evening=result.slots.find((s:any)=>s.batchKey===key('2026-10-08',20));
   assert.equal(early?.status,'collection_incomplete');
-  assert.equal(early?.analysis,'blocked_by_collection');
+  assert.equal(early?.analysis,'awaiting_analysis');
+  assert.equal(early?.analysisDebt,true);
   assert.equal(evening?.status,'analysis_missing');
   assert.equal(evening?.analysis,'awaiting_analysis');
+  assert.equal(result.counts.analysisMissing,2);
   assert.notEqual(evening?.batchKey,early?.batchKey);
+ }finally{f.sql.close()}
+});
+
+test('same-batch published clears analysis debt even when collection remains partial',async()=>{
+ const f=fixture();try{
+  schedule(f.sql);batch(f.sql,'2026-10-08',8,'running');brief(f.sql,'2026-10-08',8,'published');
+  const result=await briefMissingness(f.db,at('2026-10-09','10:00')),slot=result.slots.find((s:any)=>s.batchKey===key('2026-10-08',8));
+  assert.equal(slot?.status,'collection_incomplete');assert.equal(slot?.collection,'incomplete');assert.equal(slot?.analysis,'published');assert.equal(slot?.analysisDebt,false);assert.equal(result.counts.analysisMissing,0);
  }finally{f.sql.close()}
 });
 
@@ -88,12 +99,21 @@ test('a late successful batch cannot clear an earlier awaiting brief; publishing
 test('tracking crosses month and year boundaries without resurrecting pre-start history',async()=>{
  const f=fixture();try{
   schedule(f.sql);batch(f.sql,'2026-10-01',8);brief(f.sql,'2026-10-01',8,'awaiting_analysis');
-  const result=await briefMissingness(f.db,at('2026-11-01','10:00'));
+  const result=await briefMissingness(f.db,at('2026-11-01','10:00'),{limit:50});
   const ids=result.slots.map((s:any)=>s.batchKey);
   assert.equal(ids.includes(key('2026-10-01',8)),false);
   assert.equal(ids.includes(key('2026-10-31',20)),true);
   assert.equal(ids.includes(key('2026-11-01',8)),true);
   assert.equal(ids.some((id:string)=>id<'2026-10-07/20'),false);
+ }finally{f.sql.close()}
+});
+
+test('paused current state does not erase a previously evidenced active interval',async()=>{
+ const f=fixture();try{
+  schedule(f.sql,false,'2026-10-08T12:00:00Z');
+  const result=await briefMissingness(f.db,at('2026-10-09','10:00'),{limit:50});
+  assert.equal(result.slots.find((s:any)=>s.batchKey===key('2026-10-07',20))?.status,'collection_missing');
+  assert.equal(result.slots.find((s:any)=>s.batchKey===key('2026-10-08',20))?.status,'unknown');
  }finally{f.sql.close()}
 });
 
@@ -106,6 +126,9 @@ test('brief publication reports the full count and keeps older pending keys behi
   assert.equal(first.coverage.total,30);
   assert.equal(first.coverage.hasMore,true);
   assert.ok(first.nextCursor);
+  assert.equal(first.coverage.briefTracking.hasMore,true);
+  assert.ok(first.coverage.briefTracking.nextCursor);
+  assert.equal(first.coverage.briefTracking.gaps.length<=25,true);
   const second:any=await readHkis(f.db,'owner',{section:'briefs',limit:25,cursor:first.nextCursor},atDate);
   assert.equal(second.coverage.total,30,JSON.stringify(second.coverage));
   assert.equal(second.items.length,5);

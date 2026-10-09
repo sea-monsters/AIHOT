@@ -4,7 +4,6 @@ import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,readdirSync} from 'node:fs';
 import {XMLParser,XMLValidator} from 'fast-xml-parser';
 import {initResearch,researchApi,savePaper} from './research.ts';
-import {readHkis} from './hkis-publication.ts';
 import {hkisEndpoint} from './hkis-endpoints.ts';
 import {RESEARCH_THEMES,organizationId} from './research-topics.ts';
 
@@ -40,9 +39,18 @@ async function seed(f:any){
 }
 
 async function jsonGet(f:any,path:string){const response=await researchApi(new Request('https://local.test'+path),f.env);return {response,body:await response.json() as any};}
-async function mcpRead(f:any,args:any){return readHkis(f.db,'owner',args,new Date('2026-10-09T00:00:00.000Z'));}
-async function rssRead(f:any,args:any){const query=new URLSearchParams(args);const response=await hkisEndpoint(new Request('https://local.test/feeds/research.xml?'+query,{headers:{'oai-authenticated-user-id':'owner','oai-authenticated-user-email':'owner@example.test'}}),f.env);const text=await response.text();return {response,text,xml:response.status===200?new XMLParser({ignoreAttributes:false}).parse(text):null};}
+let protocolRequest=0;
+async function mcpRead(f:any,args:any){const id='owner-mcp-'+(++protocolRequest);const response=await hkisEndpoint(new Request('https://local.test/mcp',{method:'POST',headers:{'content-type':'application/json','oai-authenticated-user-id':id,'oai-authenticated-user-email':'owner@example.test'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'hkis_read',arguments:args}})}),f.env);const body=await response.json() as any;assert.equal(response.status,200,JSON.stringify(body));assert.equal(body.result?.isError,false,JSON.stringify(body));return body.result.structuredContent;}
+async function rssRead(f:any,args:any){const id='owner-rss-'+(++protocolRequest),query=new URLSearchParams(args);const response=await hkisEndpoint(new Request('https://local.test/feeds/research.xml?'+query,{headers:{'oai-authenticated-user-id':id,'oai-authenticated-user-email':'owner@example.test'}}),f.env);const text=await response.text();return {response,text,xml:response.status===200?new XMLParser({ignoreAttributes:false}).parse(text):null};}
 function arrayOf(value:any){return value===undefined?[]:Array.isArray(value)?value:[value];}
+function ids(value:any){return value.map((item:any)=>item.id).sort();}
+async function themeExits(f:any,value:string){
+ const api=await jsonGet(f,'/api/site/research/papers?min=0&theme='+encodeURIComponent(value));assert.equal(api.response.status,200,value);
+ const mcp=await mcpRead(f,{section:'papers',min:0,topic:value,limit:50});
+ const rss=await rssRead(f,{section:'papers',min:'0',topic:value,limit:'50'});assert.equal(rss.response.status,200,value);assert.equal(XMLValidator.validate(rss.text),true,value);
+ const rssData=arrayOf(rss.xml.rss.channel.item).map((item:any)=>JSON.parse(item['hkis:data']));
+ const apiIds=ids(api.body.papers),mcpIds=mcp.items.map((item:any)=>item.data.id).sort(),rssIds=ids(rssData);assert.deepEqual(apiIds,mcpIds,value+' API/MCP IDs');assert.deepEqual(apiIds,rssIds,value+' API/RSS IDs');return {api, mcp, rss, rssData, apiIds, mcpIds, rssIds};
+}
 async function snapshot(f:any){const names=(await f.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name").all()).results.map((row:any)=>row.name);return JSON.stringify(await Promise.all(names.map(async(name:string)=>[name,(await f.db.prepare('SELECT * FROM "'+name+'" ORDER BY rowid').all()).results])));}
 
 test('research themes, aliases, empty and invalid parameters stay consistent without model calls',async()=>{
@@ -51,11 +59,9 @@ test('research themes, aliases, empty and invalid parameters stay consistent wit
   const seeded=await seed(f),before=await snapshot(f);
   const themes=await jsonGet(f,'/api/site/research/themes');assert.equal(themes.response.status,200);assert.equal(themes.body.multipleMembership,true);assert.ok(themes.body.topics.some((theme:any)=>theme.id==='devices'));
   for(const theme of RESEARCH_THEMES){
-   const api=await jsonGet(f,'/api/site/research/papers?min=0&theme='+encodeURIComponent(theme.id));
-   assert.equal(api.response.status,200,theme.id);assert.ok(Array.isArray(api.body.papers),theme.id);
-   const mcp=await mcpRead(f,{section:'papers',min:0,topic:theme.id,limit:50});assert.ok(Array.isArray(mcp.items),theme.id);
+   const canonical=await themeExits(f,theme.id);
    for(const alias of theme.aliases){
-    const resolved=RESEARCH_THEMES.find(candidate=>candidate.id===theme.id);assert.equal(resolved?.id,theme.id);const aliasApi=await jsonGet(f,'/api/site/research/papers?min=0&theme='+encodeURIComponent(alias));assert.equal(aliasApi.response.status,200,`${theme.id}:${alias}`);const aliasMcp=await mcpRead(f,{section:'papers',min:0,topic:alias,limit:50});assert.deepEqual(aliasMcp.items.map((item:any)=>item.data.id).sort(),mcp.items.map((item:any)=>item.data.id).sort(),`${theme.id}:${alias}`);
+    const resolved=RESEARCH_THEMES.find(candidate=>candidate.id===theme.id);assert.equal(resolved?.id,theme.id);const aliasExits=await themeExits(f,alias);assert.deepEqual(aliasExits.apiIds,canonical.apiIds,`${theme.id}:${alias} API`);assert.deepEqual(aliasExits.mcpIds,canonical.mcpIds,`${theme.id}:${alias} MCP`);assert.deepEqual(aliasExits.rssIds,canonical.rssIds,`${theme.id}:${alias} RSS`);
    }
   }
   const empty=await jsonGet(f,'/api/site/research/papers?min=0&theme=logic');assert.equal(empty.response.status,200);assert.ok(empty.body.total>0);
@@ -66,9 +72,8 @@ test('research themes, aliases, empty and invalid parameters stay consistent wit
   const invalidRss=await rssRead(f,{section:'papers',topic:'not-a-theme'});assert.equal(invalidRss.response.status,400);
   const legacy=await jsonGet(f,'/api/site/research/papers?min=0&topic=tcad');assert.equal(legacy.response.status,200);assert.ok(legacy.body.papers.some((paper:any)=>paper.id===seeded.legacyId));
   const dynamic=await jsonGet(f,'/api/site/research/papers?min=0&theme=tcad');assert.equal(dynamic.response.status,200);assert.ok(!dynamic.body.papers.some((paper:any)=>paper.id===seeded.legacyId));
-  const logic=await jsonGet(f,'/api/site/research/papers?min=0&theme=logic');const apiIds=new Set(logic.body.papers.map((paper:any)=>paper.id));const mcp=await mcpRead(f,{section:'papers',min:0,topic:'logic',limit:50});const mcpIds=new Set(mcp.items.map((item:any)=>item.data.id));const rss=await rssRead(f,{section:'papers',min:'0',topic:'logic',limit:'50'});assert.equal(rss.response.status,200);assert.equal(XMLValidator.validate(rss.text),true);const rssData=arrayOf(rss.xml.rss.channel.item).map((item:any)=>JSON.parse(item['hkis:data']));const rssIds=new Set(rssData.map((paper:any)=>paper.id));assert.deepEqual([...apiIds].sort(),[...mcpIds].sort());assert.deepEqual([...apiIds].sort(),[...rssIds].sort());
-  const apiBroad=logic.body.papers.find((paper:any)=>paper.id===seeded.broadId),mcpBroad=mcp.items.find((item:any)=>item.data.id===seeded.broadId)?.data,rssBroad=rssData.find((paper:any)=>paper.id===seeded.broadId);assert.ok(apiBroad&&mcpBroad&&rssBroad);assert.deepEqual(apiBroad.categories,mcpBroad.categories);assert.deepEqual(apiBroad.categories,rssBroad.categories);assert.ok(apiBroad.categories.length<=3&&apiBroad.categories.every((category:any)=>typeof category.id==='string'&&typeof category.label==='string'&&Array.isArray(category.sources)));assert.ok(apiBroad.topics.includes('logic')&&apiBroad.topics.includes('dram')&&apiBroad.topics.includes('tcad'));
-  const organizationTheme=organizationId('HKIS Test Institute');const company=await jsonGet(f,'/api/site/research/papers?min=0&theme='+encodeURIComponent(organizationTheme));assert.equal(company.response.status,200);assert.ok(company.body.papers.some((paper:any)=>paper.id===seeded.broadId));const companyMcp=await mcpRead(f,{section:'papers',min:0,topic:organizationTheme,limit:50});assert.ok(companyMcp.items.some((item:any)=>item.data.id===seeded.broadId));
+  const logic=await themeExits(f,'logic'),apiIds=new Set(logic.apiIds),mcpIds=new Set(logic.mcpIds),rssData=logic.rssData,rssIds=new Set(logic.rssIds);const apiBroad=logic.api.body.papers.find((paper:any)=>paper.id===seeded.broadId),mcpBroad=logic.mcp.items.find((item:any)=>item.data.id===seeded.broadId)?.data,rssBroad=rssData.find((paper:any)=>paper.id===seeded.broadId);assert.ok(apiBroad&&mcpBroad&&rssBroad);assert.deepEqual(apiBroad.categories,mcpBroad.categories);assert.deepEqual(apiBroad.categories,rssBroad.categories);assert.ok(apiBroad.categories.length<=3&&apiBroad.categories.every((category:any)=>typeof category.id==='string'&&typeof category.label==='string'&&Array.isArray(category.sources)));assert.ok(apiBroad.topics.includes('logic')&&apiBroad.topics.includes('dram')&&apiBroad.topics.includes('tcad'));assert.deepEqual([...apiIds].sort(),[...mcpIds].sort());assert.deepEqual([...apiIds].sort(),[...rssIds].sort());
+  const organizationTheme=organizationId('HKIS Test Institute'),company=await themeExits(f,organizationTheme);assert.ok(company.api.body.papers.some((paper:any)=>paper.id===seeded.broadId));assert.ok(company.mcp.items.some((item:any)=>item.data.id===seeded.broadId));assert.ok(company.rssData.some((paper:any)=>paper.id===seeded.broadId));
   assert.equal(await snapshot(f),before,'classification reads must not write, call a model, or call an external service');
  }finally{globalThis.fetch=previousFetch;f.sql.close()}
 });
