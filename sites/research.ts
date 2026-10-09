@@ -6,7 +6,7 @@ import {paperCategories,matchesPaperQuery} from './paper-keywords.ts';
 import {matchesResearchTheme,themeSummaries,resolveResearchTheme} from './research-topics.ts';
 import {dailyCohortKey,collectionEntryPoint,type CollectionEntryPoint} from './research-attribution.ts';
 import {prepareCrossref,nextCrossrefPage,reserveCrossrefPage,markCrossrefAttempt,crossrefURL,commitCrossrefPage,crossrefSummary} from './research-crossref.ts';
-import {startBatch,finishBatch,validateBatch,briefMissingness} from './research-batches.ts';
+import {startBatch,finishBatch,validateBatch,briefMissingness,briefTrackingSearchParams,briefTrackingView,type BriefTrackingOptions} from './research-batches.ts';
 import {dailyRead,dailyCalendarRead,generateDaily} from './research-daily.ts';
 import {AIError} from './ai/security.ts';
 import {processingStatus,processRecent,attachAnalyses,currentAnalysisKey} from './research-processing.ts';
@@ -23,11 +23,11 @@ const stamp=()=>new Date().toISOString();
 const parse=(s:any,fallback:any=[])=>{try{return JSON.parse(s)}catch{return fallback}};
 const delay=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 function mergeScheduleMirror(previous:any,next:any){
- const prior=previous?.contract&&typeof previous.contract==='object'?previous.contract:null,priorPeriods=Array.isArray(prior?.periods)?prior.periods.map((p:any)=>({from:p?.from||null,to:p?.to||null})).filter((p:any)=>p.from):[];
+ const prior=previous?.contract&&typeof previous.contract==='object'?previous.contract:null,periodEvidence=(contract:any)=>contract&&{version:contract.version,timezone:contract.timezone,slots:[...(contract.slots||[])],schedule:contract.schedule||null},priorSpec=periodEvidence(prior),priorPeriods=Array.isArray(prior?.periods)?prior.periods.map((p:any)=>({from:p?.from||null,to:p?.to||null,contract:p?.contract||priorSpec})).filter((p:any)=>p.from):[];
  const close=(periods:any[],at:string)=>{const open=periods.at(-1);if(open&&!open.to)open.to=at;return periods};
  if(next.enabled&&next.contract?.version){
-  const same=prior?.version===next.contract.version&&prior?.timezone===next.contract.timezone&&JSON.stringify(prior?.slots||[])===JSON.stringify(next.contract.slots||[]);
-  const periods=priorPeriods.slice();if(!same)close(periods,next.verifiedAt);if(!same||!periods.at(-1)||periods.at(-1).to)periods.push({from:next.verifiedAt,to:null});
+  const nextSpec=periodEvidence(next.contract),same=priorSpec?.version===nextSpec?.version&&priorSpec?.timezone===nextSpec?.timezone&&JSON.stringify(priorSpec?.slots||[])===JSON.stringify(nextSpec?.slots||[])&&priorSpec?.schedule===nextSpec?.schedule;
+  const periods=priorPeriods.slice();if(!same)close(periods,next.verifiedAt);if(!same||!periods.at(-1)||periods.at(-1).to)periods.push({from:next.verifiedAt,to:null,contract:nextSpec});
   return {...next,contract:{...next.contract,periods}};
  }
  if(prior){
@@ -226,7 +226,7 @@ export async function syncSource(db:any,s:JournalSource,maxPages=1,batchKey:stri
  }catch(e){await writeLog(db,{component:'research',event:'collection_failed',severity:'error',outcome:'failed',errorCode:'collection_failed',taskId:runId,correlationId:runId,sourceId:s.id,durationMs:Date.now()-Date.parse(started),metadata:counts});error=String((e as Error).message).slice(0,250);await db.prepare('UPDATE research_runs SET finished_at=?,status=?,details_json=? WHERE id=?').bind(stamp(),'error',JSON.stringify({error}),runId).run();await db.prepare('UPDATE research_sources SET error=? WHERE id=?').bind(error,s.id).run();return {runId,batchKey,entryPoint,sourceId:s.id,status:'error',error,...counts};}
  finally{await db.prepare('DELETE FROM research_settings WHERE key=? AND value=?').bind(lockKey,expires).run();}
 }
-export async function researchStatus(db:any,initialized=false){
+export async function researchStatus(db:any,initialized=false,trackingOptions:BriefTrackingOptions={}){
  if(!initialized)await initResearch(db);
  const [laneResult,sourceResult,countResult,schedule,runResult,briefTracking]=await Promise.all([
   db.prepare("SELECT key,value FROM research_settings WHERE key LIKE 'crossref:%'").all(),
@@ -234,14 +234,14 @@ export async function researchStatus(db:any,initialized=false){
   db.prepare("SELECT publisher,count(*) total,sum(CASE WHEN abstract IS NOT NULL AND length(abstract)>0 THEN 1 ELSE 0 END) abstracts,sum(CASE WHEN authors_json!='[]' THEN 1 ELSE 0 END) authors,sum(CASE WHEN affiliations_json!='[]' THEN 1 ELSE 0 END) affiliations,sum(CASE WHEN keywords_json!='[]' THEN 1 ELSE 0 END) authorKeywords,sum(CASE WHEN priority>=45 THEN 1 ELSE 0 END) recommended FROM research_papers WHERE priority>=0 GROUP BY publisher").all(),
   researchSchedule(db),
   db.prepare('SELECT * FROM research_runs ORDER BY started_at DESC LIMIT 12').all(),
-  briefMissingness(db),
+  briefMissingness(db,new Date(),trackingOptions),
  ]);
  const lanes=new Map(laneResult.results.flatMap((r:any)=>{const value=parse(r.value,{});return value.version==='latest-first-v1'?[[r.key.slice(9),crossrefSummary(value)]]:[]}));
  const intervals=await intervalPlan(db);
  const sources=sourceResult.results.map((s:any)=>{const {cursor,...safe}=s;const config=RESEARCH_SOURCES.find(c=>c.id===s.id);return {...safe,refresh:intervals.sources.find(p=>p.id===s.id),homepage:config?.homepage,publisherName:config?.publisherName||s.publisher,rssConfigured:!!config?.rss,issns:config?.issns||[s.issn],feedCoverage:config?.feedCoverage||'期刊 RSS 与 Crossref 元数据互补',topicFilter:!!config?.topicFilter,initialDays:config?.initialDays||45,verifiedAt:config?.verifiedAt||null,crossref:lanes.get(s.id)||null,backfillPending:(lanes.get(s.id) as any)?.pending??!!cursor}});
  const counts=countResult.results;
  sources.sort(headOrder);
- return {collectionControl:await collectionControl(db,null),sources,configuredSources:RESEARCH_SOURCES.length,collectionPolicy:{pageAttemptsPerSlot:RESEARCH_PAGE_BUDGET,maxPagesPerSource:2,ordering:'oldest_actual_head_attempt_first',completeCatalog:false},counts,total:counts.reduce((n:number,r:any)=>n+r.total,0),schedule,window:monthWindow(),evaluation:'script-first-selective-ai',ruleVersion:RULE_VERSION,topics:TOPICS.map(({id,label,weight})=>({id,label,weight})),runs:runResult.results,briefTracking};
+ return {collectionControl:await collectionControl(db,null),sources,configuredSources:RESEARCH_SOURCES.length,collectionPolicy:{pageAttemptsPerSlot:RESEARCH_PAGE_BUDGET,maxPagesPerSource:2,ordering:'oldest_actual_head_attempt_first',completeCatalog:false},counts,total:counts.reduce((n:number,r:any)=>n+r.total,0),schedule,window:monthWindow(),evaluation:'script-first-selective-ai',ruleVersion:RULE_VERSION,topics:TOPICS.map(({id,label,weight})=>({id,label,weight})),runs:runResult.results,briefTracking:briefTrackingView(briefTracking)};
 }
 export async function researchApi(request:Request,env:any){const db=env.DB;if(!db)return json({error:'Database unavailable'},503);const u=new URL(request.url),path=u.pathname;await initResearch(db);
  if(path==='/api/site/research/processing'&&request.method==='GET')return json(await processingStatus(db,env));
@@ -262,7 +262,7 @@ export async function researchApi(request:Request,env:any){const db=env.DB;if(!d
  }
  if(request.method!=='GET')return json({error:'Method not allowed'},405);
  if(path==='/api/site/research/themes'){const papers=(await db.prepare('SELECT * FROM research_papers WHERE priority>=0 ORDER BY id').all()).results.map(decodePaperRow);return json({topics:themeSummaries(await attachAnalyses(db,papers),new Date(),true),total:papers.length,multipleMembership:true});}
- if(path==='/api/site/research/status'){const [status,processing]=await Promise.all([researchStatus(db,true),processingStatus(db,env)]);return json({...status,processing});}
+ if(path==='/api/site/research/status'){try{const tracking=briefTrackingSearchParams(u.searchParams),[status,processing]=await Promise.all([researchStatus(db,true,tracking),processingStatus(db,env)]);return json({...status,processing});}catch(e){return json({code:e instanceof AIError?e.code:'status_unavailable',error:e instanceof AIError?e.message:'状态暂不可用'},e instanceof AIError?e.status:503)}}
  if(path==='/api/site/research/daily/calendar')return json(await dailyCalendarRead(db,u.searchParams));
  if(path==='/api/site/research/daily')return json(await dailyRead(db,u.searchParams));
  if(path==='/api/site/research/feed'){

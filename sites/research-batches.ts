@@ -23,7 +23,7 @@ const BRIEF_PAGE_LIMIT=25;
 const BRIEF_PAGE_MAX=50;
 
 type BriefGapState=typeof BRIEF_GAP_STATES[number]|'complete'|'within_grace';
-type BriefTrackingOptions={limit?:number;cursor?:string};
+export type BriefTrackingOptions={limit?:number;cursor?:string};
 
 function slotAt(key:string){
  const [date,rawSlot]=key.split('/');
@@ -39,10 +39,18 @@ function slotIndex(key:string){
  return index;
 }
 function lastSlotIndex(at:Date){return Math.floor((at.getTime()-Date.parse(BRIEF_TRACKING_START_AT))/BRIEF_SLOT_MS)}
+function sameContract(left:any,right:any){return !!left&&!!right&&left.version===right.version&&left.timezone===right.timezone&&JSON.stringify(left.slots||[])===JSON.stringify(right.slots||[])}
+function periodContract(value:any){
+ const schedule=typeof value?.schedule==='string'?value.schedule:'',timezone=typeof value?.timezone==='string'?value.timezone:null,parsed=schedule&&timezone?batchScheduleContract(schedule,timezone):null;
+ return parsed&&sameContract(value,parsed)?parsed:null;
+}
 function schedulePeriods(value:any,schedule:string,timezone:string|null){
- const claimed=value?.contract,parsed=timezone&&typeof schedule==='string'?batchScheduleContract(schedule,timezone):null,periods=Array.isArray(claimed?.periods)?claimed.periods.map((p:any)=>({from:p?.from||null,to:p?.to||null})).filter((p:any)=>typeof p.from==='string'&&Number.isFinite(Date.parse(p.from))&&(p.to==null||Number.isFinite(Date.parse(p.to)))):[];
- const valid=!!parsed&&claimed?.version===parsed.version&&claimed?.timezone===parsed.timezone&&JSON.stringify(claimed?.slots||[])===JSON.stringify(parsed.slots)&&periods.every((p:any)=>p.to==null||Date.parse(p.to)>Date.parse(p.from));
- return {verified:valid&&periods.length>0,periods:valid?periods:[],contract:valid?parsed:null};
+ const claimed=value?.contract,current=timezone&&typeof schedule==='string'?batchScheduleContract(schedule,timezone):null,topLevelCurrent=!!current&&sameContract(claimed,current),legacyContract=topLevelCurrent?current:null;
+ const periods=Array.isArray(claimed?.periods)?claimed.periods.map((p:any)=>{
+  const evidence=p?.contract!=null?periodContract(p.contract):periodContract(legacyContract);
+  return {from:p?.from||null,to:p?.to||null,contract:evidence};
+ }).filter((p:any)=>p.contract&&typeof p.from==='string'&&Number.isFinite(Date.parse(p.from))&&(p.to==null||Number.isFinite(Date.parse(p.to)))&&(p.to==null||Date.parse(p.to)>Date.parse(p.from))):[];
+ return {verified:periods.length>0,periods,contract:topLevelCurrent?current:null};
 }
 async function scheduleEvidence(db:any){
  const row=await db.prepare("SELECT value FROM research_settings WHERE key='schedule'").first();
@@ -96,6 +104,16 @@ function coverageFromSummary(row:any,runs:any[],cutoff:string){
  return {key:row.batch_key,recorded:true,status:Number(row.is_complete)?'complete':'partial',startedAt:row.started_at||null,finishedAt:row.finished_at||null,expectedSources:expected.length,attemptedSources:last.size,completeSources:completeSources.length,missingSources:missing,runs:runs.map((r:any)=>({id:r.id,sourceId:r.source_id,entryPoint:r.entry_point||'legacy_unknown',status:r.status,startedAt:r.started_at,finishedAt:r.finished_at,channels:parse(r.details_json,{}).channels||null}))};
 }
 function pageOptions(options:BriefTrackingOptions={}){return {limit:Math.max(1,Math.min(BRIEF_PAGE_MAX,Number.isInteger(options.limit)?options.limit!:BRIEF_PAGE_LIMIT)),cursor:options.cursor||null}}
+export function parseBriefTrackingOptions(input:any={}):BriefTrackingOptions{
+ const cursor=input?.cursor==null?undefined:input.cursor;if(cursor!==undefined&&(typeof cursor!=='string'||!cursor.length||cursor.length>1200))throw new AIError('invalid_tracking_cursor',400,'缺期游标无效');
+ const limit=input?.limit;if(limit!==undefined&&(!Number.isInteger(limit)||limit<1||limit>BRIEF_PAGE_MAX))throw new AIError('invalid_tracking_limit',400,'缺期分页大小无效');
+ return {cursor,limit};
+}
+export function briefTrackingSearchParams(params:URLSearchParams):BriefTrackingOptions{
+ if(params.getAll('tracking_cursor').length>1||params.getAll('tracking_limit').length>1)throw new AIError('duplicate_tracking_argument',400,'缺期参数重复');
+ const cursor=params.get('tracking_cursor')??undefined,rawLimit=params.get('tracking_limit');return parseBriefTrackingOptions({cursor,limit:rawLimit===null?undefined:Number(rawLimit)});
+}
+export function briefTrackingView(tracking:any){return {...tracking.counts,trackingStart:tracking.trackingStart,timezone:tracking.timezone,graceMs:tracking.graceMs,schedule:tracking.schedule,trackingCursor:tracking.cursor,nextTrackingCursor:tracking.nextCursor,trackingHasMore:tracking.hasMore,trackingPageLimit:tracking.pageLimit,trackingSlots:tracking.slots,trackingGaps:tracking.gaps};}
 function fullAggregateSql(active:any){
  const observed=`observed AS (
   SELECT batch_key slot_key,1 has_batch,is_complete,brief_status FROM batch_summary
@@ -126,7 +144,7 @@ function fullAggregateSql(active:any){
  */
 export async function briefMissingness(db:any,at=new Date(),options:BriefTrackingOptions={}){
  const now=at.getTime(),last=lastSlotIndex(at),schedule=await scheduleEvidence(db),{limit,cursor}=pageOptions(options);
- if(!Number.isFinite(now)||last<0)return {trackingStart:BRIEF_TRACKING_START_KEY,timezone:'Asia/Singapore',graceMs:BRIEF_MISSING_GRACE_MS,schedule,slots:[],gaps:[],counts:{tracked:0,complete:0,withinGrace:0,unknown:0,collectionMissing:0,collectionIncomplete:0,analysisMissing:0,alertable:0,gapCount:0},cursor:null,nextCursor:null,hasMore:false};
+ if(!Number.isFinite(now)||last<0)return {trackingStart:BRIEF_TRACKING_START_KEY,timezone:'Asia/Singapore',graceMs:BRIEF_MISSING_GRACE_MS,schedule,slots:[],gaps:[],counts:{tracked:0,complete:0,withinGrace:0,unknown:0,collectionMissing:0,collectionIncomplete:0,analysisMissing:0,alertable:0,gapCount:0},cursor:null,nextCursor:null,hasMore:false,pageLimit:limit};
  const cursorIndex=cursor==null?-1:slotIndex(cursor);if(cursorIndex===null||cursorIndex>=last)throw new AIError('invalid_tracking_cursor',400,'缺期游标无效');
  const pageIndexes=Array.from({length:Math.min(limit+1,last-(cursorIndex+1)+1)},(_,i)=>cursorIndex+1+i),pageKeys=pageIndexes.map(slotKeyFromIndex),pageLower=pageKeys[0]!,pageUpper=pageKeys.at(-1)!;
  const cutoff=new Date(now+1).toISOString(),graceStart=Math.max(0,Math.floor((now-BRIEF_MISSING_GRACE_MS-Date.parse(BRIEF_TRACKING_START_AT))/BRIEF_SLOT_MS)+1),graceCount=Math.max(0,last-graceStart+1),overdueThrough=Math.min(now-BRIEF_MISSING_GRACE_MS,now),active=activeRanges(schedule,overdueThrough),activeKeys=rangePredicate('slot_key',active),activeExpected=active.reduce((total,[first,lastIndex])=>total+lastIndex-first+1,0);

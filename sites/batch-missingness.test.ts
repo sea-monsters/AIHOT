@@ -4,6 +4,8 @@ import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import {briefMissingness} from './research-batches.ts';
 import {readHkis} from './hkis-publication.ts';
+import {briefApi} from './research-briefs.ts';
+import {researchApi} from './research.ts';
 
 function fixture(){
  const sql=new DatabaseSync(':memory:');
@@ -117,6 +119,13 @@ test('paused current state does not erase a previously evidenced active interval
  }finally{f.sql.close()}
 });
 
+test('historical tracking uses each period contract after the current schedule changes',async()=>{
+ const f=fixture(),oldSchedule='BEGIN:VEVENT\nDTSTART;TZID=Asia/Singapore:20261007T080000\nRRULE:FREQ=DAILY;BYHOUR=8,20;BYMINUTE=0;BYSECOND=0\nEND:VEVENT',currentSchedule=oldSchedule.replace('BYHOUR=8,20','BYHOUR=9,21');try{
+  const evidence={version:'hkis-batch-v1',timezone:'Asia/Singapore',slots:[8,20],schedule:oldSchedule};f.sql.prepare("INSERT INTO research_settings(key,value) VALUES('schedule',?)").run(JSON.stringify({enabled:true,id:'changed-schedule',schedule:currentSchedule,timezone:'Asia/Singapore',status:'enabled',contract:{...evidence,periods:[{from:'2026-10-07T12:00:00Z',to:'2026-10-08T12:00:00Z',contract:evidence}]}}));
+  const result=await briefMissingness(f.db,at('2026-10-09','10:00'),{limit:50});assert.equal(result.slots.find((s:any)=>s.batchKey===key('2026-10-07',20))?.status,'collection_missing');assert.equal(result.slots.find((s:any)=>s.batchKey===key('2026-10-08',20))?.status,'unknown');
+ }finally{f.sql.close()}
+});
+
 test('brief publication reports the full count and keeps older pending keys behind a cursor',async()=>{
  const f=fixture();try{
   for(let i=0;i<30;i++){const date=`2026-10-${String(7+Math.floor(i/2)).padStart(2,'0')}`,slot=i%2?20:8;brief(f.sql,date,slot,'awaiting_analysis');}
@@ -126,13 +135,24 @@ test('brief publication reports the full count and keeps older pending keys behi
   assert.equal(first.coverage.total,30);
   assert.equal(first.coverage.hasMore,true);
   assert.ok(first.nextCursor);
-  assert.equal(first.coverage.briefTracking.hasMore,true);
-  assert.ok(first.coverage.briefTracking.nextCursor);
-  assert.equal(first.coverage.briefTracking.gaps.length<=25,true);
+  assert.equal(first.coverage.briefTracking.trackingHasMore,true);
+  assert.ok(first.coverage.briefTracking.nextTrackingCursor);
+  assert.equal(first.coverage.briefTracking.trackingGaps.length<=25,true);
   const second:any=await readHkis(f.db,'owner',{section:'briefs',limit:25,cursor:first.nextCursor},atDate);
   assert.equal(second.coverage.total,30,JSON.stringify(second.coverage));
   assert.equal(second.items.length,5);
   assert.equal(second.nextCursor,null);
   assert.equal(new Set([...first.items,...second.items].map((x:any)=>x.id)).size,30);
+ }finally{f.sql.close()}
+});
+
+test('tracking pagination is consumable through status, brief API, and briefs without mixing the brief-list cursor',async()=>{
+ const f=fixture();try{
+  for(let i=0;i<30;i++){const date=`2026-10-${String(7+Math.floor(i/2)).padStart(2,'0')}`,slot=i%2?20:8;brief(f.sql,date,slot,'awaiting_analysis');}
+  const atDate=new Date('2026-10-30T00:00:00Z'),env={DB:f.db,HKIS_OWNER_EMAIL:'owner@example.test'};
+  const first:any=await readHkis(f.db,'owner',{section:'briefs',limit:25,tracking_limit:5},atDate);assert.equal(first.items.length,25);assert.ok(first.nextCursor);assert.ok(first.coverage.briefTracking.nextTrackingCursor);const countKeys=['tracked','complete','withinGrace','unknown','collectionMissing','collectionIncomplete','analysisMissing','alertable','gapCount'];const countOf=(tracking:any)=>Object.fromEntries(countKeys.map(key=>[key,tracking[key]]));
+  const second:any=await readHkis(f.db,'owner',{section:'briefs',limit:25,cursor:first.nextCursor,tracking_limit:5,tracking_cursor:first.coverage.briefTracking.nextTrackingCursor},atDate);assert.equal(second.items.length,5);assert.equal(second.coverage.total,30);assert.deepEqual(countOf(second.coverage.briefTracking),countOf(first.coverage.briefTracking));assert.equal(second.coverage.briefTracking.trackingCursor,first.coverage.briefTracking.nextTrackingCursor);assert.equal(first.coverage.briefTracking.trackingSlots.some((a:any)=>second.coverage.briefTracking.trackingSlots.some((b:any)=>a.batchKey===b.batchKey)),false);
+  const briefFirst=await briefApi(new Request('https://local.test/api/site/research/brief?tracking_limit=1'),env);assert.equal(briefFirst.status,200);const briefFirstBody:any=await briefFirst.json();assert.ok(briefFirstBody.tracking.nextTrackingCursor);const briefSecond=await briefApi(new Request('https://local.test/api/site/research/brief?tracking_limit=1&tracking_cursor='+encodeURIComponent(briefFirstBody.tracking.nextTrackingCursor)),env);assert.equal(briefSecond.status,200);const briefSecondBody:any=await briefSecond.json();assert.deepEqual(countOf(briefSecondBody.tracking),countOf(briefFirstBody.tracking));assert.equal(briefSecondBody.tracking.trackingCursor,briefFirstBody.tracking.nextTrackingCursor);
+  const statusFirst=await researchApi(new Request('https://local.test/api/site/research/status?tracking_limit=1'),env);assert.equal(statusFirst.status,200);const statusFirstBody:any=await statusFirst.json();assert.equal(statusFirstBody.briefTracking.trackingPageLimit,1);assert.ok(statusFirstBody.briefTracking.nextTrackingCursor);const statusSecond=await researchApi(new Request('https://local.test/api/site/research/status?tracking_limit=1&tracking_cursor='+encodeURIComponent(statusFirstBody.briefTracking.nextTrackingCursor)),env);assert.equal(statusSecond.status,200);const statusSecondBody:any=await statusSecond.json();assert.deepEqual(countOf(statusSecondBody.briefTracking),countOf(statusFirstBody.briefTracking));assert.equal(statusSecondBody.briefTracking.trackingCursor,statusFirstBody.briefTracking.nextTrackingCursor);
  }finally{f.sql.close()}
 });

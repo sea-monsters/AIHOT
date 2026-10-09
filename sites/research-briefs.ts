@@ -1,6 +1,6 @@
 import {AIError,owner,csrf,readBody} from './ai/security.ts';
 import {digest} from './research-pipeline.ts';
-import {batchCoverage,briefMissingness} from './research-batches.ts';
+import {batchCoverage,briefMissingness,briefTrackingSearchParams,briefTrackingView} from './research-batches.ts';
 import {TOPICS} from './research-config.ts';
 const parse=(s:any,f:any={})=>{try{return JSON.parse(s)}catch{return f}};
 export function briefDto(row:any){return row?{batchKey:row.batch_key,date:row.date,slot:row.slot,status:row.status,summary:row.summary,evidence:parse(row.evidence_json),contentHash:row.content_hash,revision:row.revision,method:row.method,createdAt:row.created_at,updatedAt:row.updated_at}:null}
@@ -43,7 +43,7 @@ export async function briefApi(request:Request,env:any){try{
  if(request.method==='GET'){
   let key=u.searchParams.get('batchKey');if(!key){const r=await db.prepare('SELECT batch_key FROM research_briefs ORDER BY date DESC,slot DESC LIMIT 1').first();key=r?.batch_key||null}
   if(key&&!/^\d{4}-\d{2}-\d{2}\/(08|20)$/.test(key))throw new AIError('invalid_batch',400,'批次无效');
-  const brief=key?briefDto(await db.prepare('SELECT * FROM research_briefs WHERE batch_key=?').bind(key).first()):null;const after=u.searchParams.get('after')||'';if(after.length>100)throw new AIError('invalid_cursor',400,'游标无效');return json({brief,...(brief?await readBriefEvidence(db,key!,after):{papers:[],next:null}),tracking:await briefMissingness(db)});
+  const brief=key?briefDto(await db.prepare('SELECT * FROM research_briefs WHERE batch_key=?').bind(key).first()):null;const after=u.searchParams.get('after')||'';if(after.length>100)throw new AIError('invalid_cursor',400,'游标无效');const tracking=briefTrackingSearchParams(u.searchParams);return json({brief,...(brief?await readBriefEvidence(db,key!,after):{papers:[],next:null}),tracking:briefTrackingView(await briefMissingness(db,new Date(),tracking))});
  }
  if(request.method!=='POST')throw new AIError('method_not_allowed',405,'不支持此操作');
  if(request.headers.has('origin')||request.headers.has('oai-authenticated-user-id')||request.headers.has('oai-authenticated-user-email')){owner(request,env);csrf(request)}

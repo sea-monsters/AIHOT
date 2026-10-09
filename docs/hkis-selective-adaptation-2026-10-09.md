@@ -25,15 +25,22 @@ This record covers the selective Sites adaptation on fork baseline
   debt; a published brief for that same partial batch clears only the analysis
   debt. Brief listing returns bounded cursor pages while its counts come from a
   single aggregate query over the full tracked range, without a giant key list
-  or per-batch reads. Status and brief reads perform no writes, outbound
-  requests, or model calls.
+  or per-batch reads. Production read paths consume tracking pages with
+  `tracking_cursor` and `tracking_limit`; the ordinary `cursor` remains the
+  stored-brief list cursor. Status, brief API, RSS and MCP all expose the
+  tracking page and `nextTrackingCursor`; counts remain full-range and stable
+  across pages. These reads perform no writes, outbound requests, or model
+  calls.
 
 Regression coverage in `sites/batch-missingness.test.ts` includes the grace
 cutoff, no-schedule unknown state, collection-versus-analysis separation,
 same-batch resolution, late-batch non-masking, month/year rollover, the
 pre-start boundary, paused historical intervals, idempotent reads, and
-more-than-one-page historical debt. `sites/research-pipeline.test.ts` also
-verifies that pausing the mirrored task does not erase its verified interval.
+more-than-one-page historical debt, and flipping through the production
+tracking cursor without changing full counts. `sites/research-schedule.test.ts`
+rejects recurrence restrictions/exceptions and verifies that a changed current
+schedule does not erase per-period historical contract evidence. The brief API,
+status API, RSS and MCP all have separate tracking-parameter paths.
 
 ## P2 — classification contract across exits
 

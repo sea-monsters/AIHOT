@@ -1,6 +1,7 @@
 const BATCH_CONTRACT_VERSION='hkis-batch-v1';
 const BATCH_SLOTS=[8,20] as const;
-const parseParts=(line:string)=>Object.fromEntries(line.split(';').map(part=>{const [key,...rest]=part.split('=');return [key.toUpperCase(),rest.join('=')]}));
+const ALLOWED_RRULE_PARTS=new Set(['FREQ','BYHOUR','BYMINUTE','BYSECOND']);
+const parseParts=(line:string)=>{const result:Record<string,string>={};for(const part of line.split(';')){const [rawKey,...rest]=part.split('=');const key=rawKey?.toUpperCase();if(!key||!rest.length||result[key]!==undefined)return null;result[key]=rest.join('=')}return result};
 function offsetMinutes(timezone:string,instant:Date){
  const parts=new Intl.DateTimeFormat('en-US',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(instant);
  const values=Object.fromEntries(parts.filter(p=>p.type!=='literal').map(p=>[p.type,Number(p.value)]));
@@ -9,14 +10,16 @@ function offsetMinutes(timezone:string,instant:Date){
 }
 /** Return a contract only for an explicit, UTC+08 08/20 native schedule. */
 export function batchScheduleContract(schedule:string,timezone:string){
- const dt=schedule.match(/^DTSTART;TZID=([^:;\r\n]+):(\d{8})T(\d{6})/m),rrule=schedule.match(/^RRULE:([^\r\n]+)/m);
- if(!dt||dt[1]!==timezone||!rrule)return null;
- const values=parseParts(rrule[1]),hours=String(values.BYHOUR||'').split(',').filter(Boolean).map(Number).sort((a,b)=>a-b),minutes=String(values.BYMINUTE||'').split(',').filter(Boolean).map(Number).sort((a,b)=>a-b),seconds=String(values.BYSECOND||'').split(',').filter(Boolean).map(Number).sort((a,b)=>a-b);
+ const dtMatches=[...schedule.matchAll(/^DTSTART;TZID=([^:;\r\n]+):(\d{8})T(\d{6})\s*$/gm)],rruleMatches=[...schedule.matchAll(/^RRULE:([^\r\n]+)\s*$/gm)];
+ if(dtMatches.length!==1||rruleMatches.length!==1||dtMatches[0]![1]!==timezone||/(?:^|\r?\n)(?:EXDATE|RDATE|DTEND|DURATION|RECURRENCE-ID)(?:;|:)/im.test(schedule))return null;
+ const values=parseParts(rruleMatches[0]![1]!);
+ if(!values||Object.keys(values).some(key=>!ALLOWED_RRULE_PARTS.has(key)))return null;
+ const hours=String(values.BYHOUR||'').split(',').filter(Boolean).map(Number).sort((a,b)=>a-b),minutes=String(values.BYMINUTE||'').split(',').filter(Boolean).map(Number).sort((a,b)=>a-b),seconds=String(values.BYSECOND||'').split(',').filter(Boolean).map(Number).sort((a,b)=>a-b);
  if(values.FREQ!=='DAILY'||hours.length!==2||hours[0]!==8||hours[1]!==20||minutes.length!==1||minutes[0]!==0||seconds.length!==1||seconds[0]!==0)return null;
- const y=Number(dt[2].slice(0,4)),m=Number(dt[2].slice(4,6)),d=Number(dt[2].slice(6,8)),h=Number(dt[3].slice(0,2)),minute=Number(dt[3].slice(2,4)),second=Number(dt[3].slice(4,6));
+ const dt=dtMatches[0]!,y=Number(dt[2]!.slice(0,4)),m=Number(dt[2]!.slice(4,6)),d=Number(dt[2]!.slice(6,8)),h=Number(dt[3]!.slice(0,2)),minute=Number(dt[3]!.slice(2,4)),second=Number(dt[3]!.slice(4,6));
  const anchor=new Date(Date.UTC(y,m-1,d,h,minute,second));
- if(!Number.isFinite(anchor.getTime())||offsetMinutes(timezone,anchor)!==480)return null;
- return {version:BATCH_CONTRACT_VERSION,timezone,slots:[...BATCH_SLOTS] as number[]};
+ if(!Number.isFinite(anchor.getTime())||anchor.getUTCFullYear()!==y||anchor.getUTCMonth()!==m-1||anchor.getUTCDate()!==d||h>23||minute>59||second>59||![8,20].includes(h)||minute!==0||second!==0||offsetMinutes(timezone,anchor)!==480)return null;
+ return {version:BATCH_CONTRACT_VERSION,timezone,slots:[...BATCH_SLOTS] as number[],schedule};
 }
 export function validateScheduleMirror(body:any,verifiedAt:string){
  if(typeof body.enabled!=='boolean')throw Error('invalid_schedule');
