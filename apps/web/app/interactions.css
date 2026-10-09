@@ -48,10 +48,10 @@
 :where(details[open])>summary .disclosure-closed-label{display:none}
 :where(details[open])>summary .disclosure-open-label{display:inline}
 :where(details[open])>summary .disclosure-caret,.disclosure-indicator[data-open=true]>.disclosure-caret{transform:rotate(180deg)}
-:is(.disclosure-summary,.rail-disclosure>summary,.changelog-toggle,.reading-control-toggle):active{background:var(--interaction-pressed)}
+:is(.disclosure-summary,.rail-disclosure>summary,.changelog-category-toggle,.reading-control-toggle):active{background:var(--interaction-pressed)}
 :is(.research-panel,.progress-provenance,.scholarly-discovery)>summary.disclosure-summary{padding:.45rem .5rem;min-height:38px;margin:0}
 .ai-privacy>.disclosure-summary{min-height:30px}
-:is(.changelog-toggle,.reading-control-toggle){border-radius:var(--radius-control)}
+:is(.changelog-category-toggle,.reading-control-toggle){border-radius:var(--radius-control)}
 .topic-grid-controls button{display:inline-flex;align-items:center;justify-content:center;gap:.35rem}
 .topic-grid-controls button .disclosure-indicator{margin-left:0}
 .service-row-actions .ai-secondary{display:inline-flex;align-items:center;justify-content:center;gap:.35rem}
@@ -65,7 +65,7 @@
  :is(.research-card h2,.weekly-paper h3,.daily-source-paper h4)>a:hover{color:var(--accent-ink);text-decoration-color:currentColor}
  :is(.progress-tabs a,.research-tags a):hover{background:var(--interaction-hover);color:var(--accent-ink)}
  .progress-tabs a[aria-current=page]:hover{background:var(--selected)}
- :is(.disclosure-summary,.rail-disclosure>summary,.changelog-toggle,.reading-control-toggle):hover{background:var(--interaction-hover)}
+ :is(.disclosure-summary,.rail-disclosure>summary,.changelog-category-toggle,.reading-control-toggle):hover{background:var(--interaction-hover)}
  .paper-text-button:hover:not(:disabled){background:var(--interaction-hover);border-color:var(--line)}
  .topic-card:hover{border-color:var(--accent);background:var(--interaction-hover)}
 }

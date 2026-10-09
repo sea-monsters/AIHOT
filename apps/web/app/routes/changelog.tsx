@@ -1,4 +1,4 @@
-import {DisclosureSummary,DisclosureIndicator,linkClass,ExternalLinkMark} from '../components/ui/Interaction';
+import {DisclosureIndicator,linkClass,ExternalLinkMark} from '../components/ui/Interaction';
 import {PageHeader} from '../components/ui/PageFrame';
 import {usePageRead} from '../components/NavigationUpdates';
 import {ControlReadingLayout} from '../components/ui/ControlReadingLayout';
@@ -12,7 +12,7 @@ import { pageMeta } from "../lib/seo";
 import {RailDisclosure} from "../components/ui/AdaptiveRail";
 import {ChangelogCalendar} from '../features/changelog/Calendar';
 import {calendarToday,updateDays} from '../features/changelog/calendar-domain';
-import {anchorEntries,toggleEntry} from "../features/changelog/disclosure";
+import {anchorEntries,categoryKey,groupEntriesByKind,toggleCategory} from "../features/changelog/disclosure";
 import { Inline, dateHeading } from "../features/changelog/text";
 
 export function headers() {
@@ -30,23 +30,23 @@ const LABELS: Record<ChangeKind, string> = { feature: "功能更新", fix: "问�
 const COLORS: Record<ChangeKind, string> = { feature: "bg-accent/10 text-accent", fix: "bg-ok/10 text-ok-ink", upstream: "bg-amber/10 text-amber-ink" };
 const BASIS: Record<ChangeRelease["basis"], string> = { commit: "代码提交", integration: "合入 fork", record: "维护记录" };
 
-export function Entry({ entry, open, onToggle }: { entry: ChangeRelease; open:boolean; onToggle:()=>void }) {
-  return <li id={`change-${entry.id}`} className="changelog-entry scroll-mt-8">
+export function Entry({ entry, open }: { entry: ChangeRelease; open:boolean }) {
+  return <li id={`change-${entry.id}`} className="changelog-entry scroll-mt-8" data-open={open}>
     <article className="min-w-0">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+      <div className="changelog-entry-meta flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]" hidden={!open}>
         <span className={`rounded-full px-2 py-0.5 font-medium ${COLORS[entry.kind]}`}>{LABELS[entry.kind]}</span>
         <span className="text-ink-3">{BASIS[entry.basis]} <time dateTime={entry.at} className="mono">{beijingTime(entry.at)}</time></span>
       </div>
-      <h3 className="mt-2 text-base font-semibold leading-relaxed text-ink"><button type="button" className="changelog-toggle" aria-expanded={open} aria-controls={`change-content-${entry.id}`} onClick={onToggle}><span>{entry.title}</span><DisclosureIndicator open={open}/></button></h3>
+      <h4 id={`heading-${entry.id}`} tabIndex={-1} className="changelog-entry-title text-base font-semibold leading-relaxed text-ink">{entry.title}</h4>
       <div id={`change-content-${entry.id}`} className="changelog-content" hidden={!open}>
       <ul className="changelog-body">
         {entry.body.map((line, index) => <li key={index}><Inline text={line} /></li>)}
       </ul>
       <div className="changelog-sources mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-        {entry.sources.map(source => <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer" className={linkClass('source')}>{source.label}<ExternalLinkMark/></a>)}
+        {entry.sources.map((source,index) => <a key={`${entry.id}-source-${index}`} href={source.url} target="_blank" rel="noopener noreferrer" className={linkClass('source')}>{source.label}<ExternalLinkMark/></a>)}
       </div>
-      {entry.upstream && <details className="changelog-upstream">
-        <DisclosureSummary className="cursor-pointer text-xs font-medium text-ink-2">查看 {entry.upstream.commits.length} 个上游提交</DisclosureSummary>
+      {entry.upstream && <div className="changelog-upstream">
+        <h5 className="text-xs font-medium text-ink-2">上游提交（{entry.upstream.commits.length}）</h5>
         <p className="mt-2 text-xs leading-relaxed text-ink-3">以下是上游原始提交时间（UTC+08）；本站于 {beijingDate(entry.at)} {beijingTime(entry.at)} 合入 fork。合入日期不等同于精确上线时间。</p>
         <ol className="changelog-commits">
           {entry.upstream.commits.map(commit => <li key={commit.sha} className="text-xs leading-relaxed">
@@ -54,28 +54,43 @@ export function Entry({ entry, open, onToggle }: { entry: ChangeRelease; open:bo
             <a href={commit.url} target="_blank" rel="noopener noreferrer" className="mt-1 block text-accent underline decoration-accent/30 underline-offset-4">{commit.title} <span className="mono text-xs">{commit.sha.slice(0, 7)}</span></a>
           </li>)}
         </ol>
-      </details>}
+      </div>}
       </div>
     </article>
   </li>;
 }
 
+export function Category({ date, kind, entries, open, onToggle }: { date:string; kind:ChangeKind; entries:ChangeRelease[]; open:boolean; onToggle:()=>void }) {
+  const categoryId=`change-category-${date}-${kind}`;
+  const headingId=`${categoryId}-heading`;
+  const controlledIds=entries.map(entry=>`change-content-${entry.id}`).join(' ');
+  return <section id={categoryId} className="changelog-category" aria-labelledby={headingId} data-changelog-category={kind}>
+    <h3 id={headingId} className="changelog-category-heading">
+      <button type="button" className="changelog-category-toggle" aria-expanded={open} aria-controls={controlledIds} onClick={onToggle}>
+        <span className="changelog-category-label"><span className={`rounded-full px-2 py-0.5 font-medium ${COLORS[kind]}`}>{LABELS[kind]}</span><span className="changelog-category-count">{entries.length}</span></span>
+        <DisclosureIndicator open={open}/>
+      </button>
+    </h3>
+    <ol className="changelog-entries" aria-label={LABELS[kind]}>{entries.map(entry=><Entry key={entry.id} entry={entry} open={open}/>)}</ol>
+  </section>;
+}
+
 export default function ChangelogPage() {
   const data = useLoaderData<typeof loader>();
   const [kind, setKind] = useState<ChangeKind | null>(null);
-  const [expanded,setExpanded]=useState<Record<string,boolean>>(()=>({[data.releases[0]?.id]:true}));
+  const [expanded,setExpanded]=useState<Record<string,boolean>>({});
   const location=useLocation(),navigate=useNavigate();
   const [today,setToday]=useState(data.calendarToday),[month,setMonth]=useState(data.calendarToday.slice(0,7));
   const [target,setTarget]=useState<{hash:string;sequence:number}|null>(null);
   const latest=data.releases[0];const [latestVisible,setLatestVisible]=useState(false);
-  useEffect(()=>{setLatestVisible(false);if(!latest||kind&&kind!==latest.kind||!expanded[latest.id])return;const target=document.getElementById('change-'+latest.id);if(!target)return;const observer=new IntersectionObserver(entries=>setLatestVisible(entries.some(e=>e.isIntersecting)),{threshold:0.15});observer.observe(target);return()=>observer.disconnect()},[latest?.id,kind,expanded]);
+  useEffect(()=>{setLatestVisible(false);if(!latest||kind&&kind!==latest.kind)return;const target=document.getElementById('change-'+latest.id);if(!target)return;const observer=new IntersectionObserver(entries=>setLatestVisible(entries.some(e=>e.isIntersecting)),{threshold:0.15});observer.observe(target);return()=>observer.disconnect()},[latest?.id,kind]);
   const latestHash=!location.hash||location.hash==='#change-'+latest?.id||location.hash==='#d-'+beijingDate(latest.at);
   usePageRead(data.pageUpdate,latestVisible&&latestHash);
   const calendarDays=useMemo(()=>updateDays(data.releases),[data.releases]);
   useEffect(()=>{const current=calendarToday();setToday(current);setMonth(value=>value===data.calendarToday.slice(0,7)?current.slice(0,7):value)},[data.calendarToday]);
-  function reveal(hash:string){const ids=anchorEntries(hash,data.releases);if(ids.length){setKind(null);setExpanded(v=>({...v,...Object.fromEntries(ids.map(id=>[id,true]))}));setTarget(v=>({hash,sequence:(v?.sequence??0)+1}))}}
+  function reveal(hash:string){const ids=anchorEntries(hash,data.releases);if(ids.length){setKind(null);const keys=data.releases.filter(entry=>ids.includes(entry.id)).map(entry=>categoryKey(beijingDate(entry.at),entry.kind));setExpanded(v=>({...v,...Object.fromEntries(keys.map(key=>[key,true]))}));setTarget(v=>({hash,sequence:(v?.sequence??0)+1}))}}
   useEffect(()=>{reveal(location.hash)},[location.hash,data.releases]);
-  useEffect(()=>{if(!target)return;const frame=requestAnimationFrame(()=>{const element=document.getElementById(target.hash.slice(1));if(!element)return;element.scrollIntoView({block:'start'});const heading=element.querySelector<HTMLElement>('h2, h3 button');heading?.focus({preventScroll:true})});return()=>cancelAnimationFrame(frame)},[target]);
+  useEffect(()=>{if(!target)return;const frame=requestAnimationFrame(()=>{const element=document.getElementById(target.hash.slice(1));if(!element)return;element.scrollIntoView({block:'start'});const heading=element.querySelector<HTMLElement>('h2, h3 button, h4');heading?.focus({preventScroll:true})});return()=>cancelAnimationFrame(frame)},[target]);
   function jump(hash:string,event:MouseEvent<HTMLAnchorElement>){if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;event.preventDefault();reveal(hash);navigate({pathname:location.pathname,search:location.search,hash},{preventScrollReset:true})}
   const selected=location.hash.startsWith('#d-')&&calendarDays[location.hash.slice(3)]?location.hash.slice(3):null;
   const calendar=<ChangelogCalendar today={today} month={month} selected={selected} days={calendarDays} onMonth={setMonth} onDate={(date,event)=>jump(`#d-${date}`,event)}/>;
@@ -111,7 +126,7 @@ export default function ChangelogPage() {
             <a href={`#d-${day.date}`} onClick={event=>jump(`#d-${day.date}`,event)} className="text-lg font-semibold text-ink hover:text-accent"><time dateTime={day.date}>{heading.label}</time></a>
             <span className="text-xs text-ink-3">{heading.weekday} · {day.entries.length} 条</span>
           </h2>
-          <ol className="changelog-entries">{day.entries.map(entry => <Entry key={entry.id} entry={entry} open={!!expanded[entry.id]} onToggle={()=>setExpanded(v=>toggleEntry(v,entry.id))} />)}</ol>
+          <div className="changelog-categories">{groupEntriesByKind(day.entries).map(group=>{const key=categoryKey(day.date,group.kind);return <Category key={key} date={day.date} kind={group.kind} entries={group.entries} open={!!expanded[key]} onToggle={()=>setExpanded(v=>toggleCategory(v,key))}/>})}</div>
         </section>;
       })}
       {days.length === 0 && <p className="card p-6 text-sm text-ink-3">暂无这一类型的变更记录</p>}

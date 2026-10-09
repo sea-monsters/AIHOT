@@ -3,6 +3,7 @@ import { strict as assert } from 'node:assert';
 import { readFile } from 'node:fs/promises';
 import { CHANGELOG } from '../industry/changelog.ts';
 import { validateChangelog, changelogDays } from '../packages/contracts/src/changelog.ts';
+import { categoryKey, groupEntriesByKind } from '../apps/web/app/features/changelog/disclosure.ts';
 import { siteApi } from './api.ts';
 const copy = () => structuredClone(CHANGELOG);
 
@@ -26,6 +27,19 @@ test('all type filters retain the same ordered evidence', () => {
     const entries = changelogDays(CHANGELOG.releases, kind).flatMap(day => day.entries);
     assert.ok(entries.length > 0);
     assert.deepEqual(entries, CHANGELOG.releases.filter(entry => entry.kind === kind));
+  }
+});
+test('date and kind categories are stable and lossless for every release', () => {
+  const grouped = changelogDays(CHANGELOG.releases).flatMap(day => groupEntriesByKind(day.entries).map(group => ({ date: day.date, ...group })));
+  const flattened = grouped.flatMap(group => group.entries);
+  const order = new Map(CHANGELOG.releases.map((entry, index) => [entry.id, index]));
+  assert.deepEqual(flattened.map(entry => entry.id).sort((a, b) => order.get(a)! - order.get(b)!), CHANGELOG.releases.map(entry => entry.id));
+  assert.equal(new Set(flattened.map(entry => entry.id)).size, CHANGELOG.releases.length);
+  assert.equal(new Set(grouped.map(group => categoryKey(group.date, group.kind))).size, grouped.length);
+  for (const entry of CHANGELOG.releases) {
+    const groupedEntry = flattened.find(value => value.id === entry.id)!;
+    assert.equal(groupedEntry.body.length, entry.body.length, entry.id);
+    assert.equal(groupedEntry.sources.length, entry.sources.length, entry.id);
   }
 });
 test('all twelve upstream source commits predate fork integration and include correct range', () => {
