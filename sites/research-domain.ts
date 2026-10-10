@@ -1,3 +1,5 @@
+import {doiId} from './doi.ts';
+import {reconstructAbstract} from './scholarly/abstract.ts';
 import {sourceMetadata,mergeMetadata} from './paper-metadata.ts';
 import {atomLink} from './atom-link.ts';
 import {atomPlainText} from './atom-text.ts';
@@ -8,7 +10,7 @@ const arr=(x:any):any[]=>x==null?[]:Array.isArray(x)?x:[x];
 const val=(x:any):string=>x==null?'':typeof x==='object'?val(x['#text']??x['#cdata']??''):String(x);
 export const canonicalURL=(url:string)=>{try{const u=new URL(url);if(!['https:','http:'].includes(u.protocol))return '';u.hash='';if(u.hostname==='ieeexplore.ieee.org')u.protocol='https:';for(const k of [...u.searchParams.keys()])if(k.startsWith('utm_')||k==='dgcid')u.searchParams.delete(k);const pii=u.pathname.match(/(?:pii\/|retrieve\/pii\/)([A-Z0-9]+)/i)?.[1];if(pii&&['linkinghub.elsevier.com','www.sciencedirect.com'].includes(u.hostname))return 'https://www.sciencedirect.com/science/article/pii/'+pii;return u.href.replace(/\/$/,'');}catch{return '';}};
 export const normalizedTitle=(s:string)=>clean(s).normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'');
-export const normalizeDoi=(s:any)=>String(s||'').replace(/^https?:\/\/(?:dx\.)?doi\.org\//i,'').trim().toLowerCase();
+export const normalizeDoi=(s:any)=>doiId(s)||'';
 export interface Author {name:string;orcid:string|null;first:boolean;corresponding:boolean|null;affiliations:string[];source:string;affiliationSource?:string}
 export interface Paper {doi:string|null;title:string;url:string;publisher:string;journal:string;sourceId:string;issn:string;publishedAt:string|null;datePrecision:string|null;authors:Author[];affiliations:string[];abstract:string|null;keywords:string[];provenance:Record<string,any>;sourceIndexedAt:string|null;discovery:string;topics?:string[];relevance?:number;priority?:number;reasons?:string[];ruleVersion?:string}
 function dateParts(v:any):{date:string|null;precision:string|null}{
@@ -19,7 +21,8 @@ function dateParts(v:any):{date:string|null;precision:string|null}{
  return {date,precision:['year','month','day'][Math.min(a.length,3)-1]!};
 }
 export function fromCrossref(w:any,s:JournalSource):Paper|null{
- if(w.type!=='journal-article'||!w.DOI||!w.title?.[0])return null;
+ if(!w||typeof w!=='object'||Array.isArray(w)||w.type!=='journal-article'||!normalizeDoi(w.DOI)||!Array.isArray(w.title)||typeof w.title[0]!=='string'||!w.title[0])return null;
+ w={...w,author:arr(w.author).filter(a=>a&&typeof a==='object').map(a=>({...a,affiliation:arr(a.affiliation).filter(x=>x&&typeof x==='object')}))};
  // New journal manifests verify print/online ISSNs; never relabel a cross-journal record.
  if(s.issns&&!arr(w.ISSN).some(value=>s.issns!.includes(String(value).toUpperCase())))return null;
  const title=clean(w.title[0]);
@@ -75,14 +78,18 @@ export function evaluate(p:Paper,at=Date.now()){
  const reasons=weighted.map(({t,n})=>`${t.label}：匹配权重 ${n}`);if(mechanism)reasons.push('出现机理 / 实验 / 可靠性 / 仿真证据词 +10');if(recent)reasons.push('来源日期在近 30 天 +10');if(review)reasons.push('综述 / 路线图信号 +5');
  return {...p,topics:hits.map(t=>t.id),relevance,priority,reasons,ruleVersion:RULE_VERSION};
 }
-export function fromOpenAlex(w:any){const source='openalex';const authors:Author[]=arr(w.authorships).map(a=>({name:clean(a.raw_author_name||a.author?.display_name),orcid:a.author?.orcid||null,first:a.author_position==='first',corresponding:a.is_corresponding===true?true:null,affiliations:arr(a.raw_affiliation_strings).length?arr(a.raw_affiliation_strings).map(clean):arr(a.institutions).map(i=>clean(i.display_name)),source}));
- const words:string[]=[];if(w.abstract_inverted_index)for(const [word,positions] of Object.entries(w.abstract_inverted_index))for(const i of positions as number[])if(i>=0&&i<20000)words[i]=word;
- return {doi:normalizeDoi(w.doi),metadataSource:sourceMetadata('openalex',w,w.id,new Date().toISOString()),keywordEvidence:Array.isArray(w.keywords)?{recordUrl:w.id,policy:'first-three-v2',status:w.keywords.length?'found':w.topics?.length?'topics_only':'no_keywords',records:[{kind:'openalex-keyword',method:'model-generated-index',terms:w.keywords.map((k:any)=>({label:k.display_name,score:k.score,id:k.id}))},{kind:'openalex-topic',method:'model-generated-topic',terms:(w.topics||[]).map((k:any)=>({label:k.display_name,score:k.score,id:k.id}))}]}:null,abstract:words.length?words.join(' '):null,authors,affiliations:[...new Set(authors.flatMap(a=>a.affiliations))],url:w.id};
+export function fromOpenAlex(w:any){
+ if(!w||typeof w!=='object'||Array.isArray(w))throw Error('Invalid OpenAlex record');
+ const source='openalex',list=(x:any)=>Array.isArray(x)?x.slice(0,100):[];
+ const authors:Author[]=list(w.authorships).filter(a=>a&&typeof a==='object').map(a=>({name:clean(a.raw_author_name||a.author?.display_name),orcid:a.author?.orcid||null,first:a.author_position==='first',corresponding:a.is_corresponding===true?true:null,affiliations:(list(a.raw_affiliation_strings).length?list(a.raw_affiliation_strings):list(a.institutions).map(i=>i?.display_name)).map(clean).filter(Boolean),source})).filter(a=>a.name);
+ const {abstract,truncated}=reconstructAbstract(w.abstract_inverted_index);
+ return {doi:normalizeDoi(w.doi),title:clean(w.title||w.display_name),abstractTruncated:truncated,metadataSource:sourceMetadata('openalex',w,w.id,new Date().toISOString()),keywordEvidence:Array.isArray(w.keywords)?{recordUrl:w.id,policy:'first-three-v2',status:w.keywords.length?'found':list(w.topics).length?'topics_only':'no_keywords',records:[{kind:'openalex-keyword',method:'model-generated-index',terms:list(w.keywords).filter(k=>k&&typeof k.display_name==='string').map(k=>({label:k.display_name,score:k.score,id:k.id}))},{kind:'openalex-topic',method:'model-generated-topic',terms:list(w.topics).filter(k=>k&&typeof k.display_name==='string').map(k=>({label:k.display_name,score:k.score,id:k.id}))}]}:null,abstract,authors,affiliations:[...new Set(authors.flatMap(a=>a.affiliations))],url:w.id};
 }
 export function enrichPaper(p:Paper,w:ReturnType<typeof fromOpenAlex>):Paper{if(!p.doi||w.doi!==p.doi)return p;const q:Paper={...p,authors:p.authors.map(a=>({...a})),provenance:{...p.provenance,metadataEvidence:mergeMetadata(p.provenance.metadataEvidence,[w.metadataSource],new Date().toISOString())}};
+ q.provenance.openalexAbstractTruncated=w.abstractTruncated;
  if(!q.abstract&&w.abstract){q.abstract=w.abstract;q.provenance.abstract='openalex';}
  if(!q.authors.length&&w.authors.length){q.authors=w.authors;q.provenance.authors='openalex';}
  for(const a of q.authors){const match=w.authors.find(b=>(a.orcid&&b.orcid===a.orcid)||normalizedTitle(b.name)===normalizedTitle(a.name));if(match&&!a.affiliations.length&&match.affiliations.length){a.affiliations=match.affiliations;a.affiliationSource='openalex';}if(match?.corresponding===true){a.corresponding=true;q.provenance.corresponding='openalex';}}
  if(!q.affiliations.length&&w.affiliations.length){q.affiliations=w.affiliations;q.provenance.affiliations='openalex';}q.affiliations=[...new Set([...q.affiliations,...q.authors.flatMap(a=>a.affiliations)])];
- if(w.keywordEvidence&&!q.provenance.keywordEvidence)q.provenance.keywordEvidence={...w.keywordEvidence,checkedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),revision:1};if(['abstract','authors','affiliations'].some(k=>JSON.stringify((q as any)[k])!==JSON.stringify((p as any)[k])))q.provenance.openalexRecord=w.url;return q;
+ if(w.keywordEvidence){const prior=q.provenance.keywordEvidence,at=new Date().toISOString(),stable=(v:any)=>JSON.stringify(v,(k,x)=>['checkedAt','updatedAt','revision'].includes(k)?undefined:x),changed=stable(prior)!==stable(w.keywordEvidence);q.provenance.keywordEvidence={...w.keywordEvidence,checkedAt:at,updatedAt:changed?at:prior?.updatedAt||at,revision:(prior?.revision||0)+(changed?1:0)};}if(['abstract','authors','affiliations'].some(k=>JSON.stringify((q as any)[k])!==JSON.stringify((p as any)[k])))q.provenance.openalexRecord=w.url;return q;
 }

@@ -1,5 +1,6 @@
 import {collectionCycle} from './research-crossref.ts';
 import {RESEARCH_PAGE_BUDGET} from './research-config.ts';
+import {batchLifecycle,batchBudgetMs} from './research-lifecycle.ts';
 const parse=(s:any,f:any)=>{try{return JSON.parse(s)}catch{return f}};
 export const headAge=(s:any)=>String(s.crossref&&'lastHeadAttemptAt' in s.crossref?s.crossref.lastHeadAttemptAt||'':s.crossref?.headPlannedThrough||'');
 export const headOrder=(a:any,b:any)=>headAge(a).localeCompare(headAge(b))||a.id.localeCompare(b.id);
@@ -15,8 +16,8 @@ export async function collectionControl(db:any,batchKey:string|null,at=new Date(
  if(!batchKey)return {stop:false};
  const batch=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(batchKey).first();
  if(!batch||batch.status!=='running')return {stop:true,scope:'batch',reason:'batch_closed',retryAt:null,nextAction:'finish_batch'};
- const maxMs=batch.slot===8?260000:330000;
- if(at.getTime()-Date.parse(batch.started_at)>=maxMs)return {stop:true,scope:'batch',reason:'time_budget',retryAt:null,nextAction:'finish_batch'};
+ const maxMs=batchBudgetMs(batch);
+ if(at.getTime()-Date.parse(batch.started_at)>=maxMs)return {stop:true,scope:'batch',reason:'time_budget',retryAt:null,nextAction:'finish_batch',...batchLifecycle(batch,at)};
  const expected:string[]=parse(batch.sources_json,[]),states=(await db.prepare("SELECT key,value FROM research_settings WHERE key LIKE 'crossref:%'").all()).results;
  const byId=new Map<string,any>(states.map((r:any)=>[r.key.slice(9),parse(r.value,{})]));
  const pages=(id:string)=>{const s=byId.get(id);return s?.cycle?.key===cycle?s.cycle.pages:0};

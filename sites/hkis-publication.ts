@@ -1,3 +1,4 @@
+import {batchLifecycle} from './research-lifecycle.ts';
 import {briefDto} from './research-briefs.ts';
 import {paperMetadata} from './paper-metadata.ts';
 import {paperCategories,matchesPaperQuery} from './paper-keywords.ts';
@@ -70,10 +71,10 @@ export async function readHkis(db:any,ownerId:string,q:HkisQuery,at=new Date()){
   const sourceRows=(await db.prepare('SELECT id,name,publisher,last_checked,last_success,rss_status,count FROM research_sources ORDER BY id').all()).results;
   const sources=RESEARCH_SOURCES.map(config=>({...config,rss:undefined,count:0,last_checked:null,last_success:null,rss_status:config.rss?null:'not_configured',...sourceRows.find((s:any)=>s.id===config.id),rssConfigured:!!config.rss,stored:sourceRows.some((s:any)=>s.id===config.id)}));
   const totals=await db.prepare("SELECT count(*) papers,sum(CASE WHEN abstract IS NOT NULL AND length(abstract)>0 THEN 1 ELSE 0 END) abstracts,max(updated_at) updated FROM research_papers WHERE priority>=0").first();
-  const [batch,latestBriefRow]=await Promise.all([db.prepare('SELECT date,slot,status,started_at,finished_at FROM research_batches ORDER BY started_at DESC LIMIT 1').first(),db.prepare('SELECT * FROM research_briefs ORDER BY date DESC,slot DESC LIMIT 1').first()]);
+  const [batch,latestBriefRow]=await Promise.all([db.prepare('SELECT date,slot,status,started_at,finished_at,closed_at,close_reason FROM research_batches ORDER BY started_at DESC LIMIT 1').first(),db.prepare('SELECT * FROM research_briefs ORDER BY date DESC,slot DESC LIMIT 1').first()]);
   const themePapers=(await db.prepare('SELECT * FROM research_papers WHERE priority>=0 ORDER BY id').all()).results.map(decodePaperRow);
-  const data={collectionPolicy:{pageAttemptsPerSlot:RESEARCH_PAGE_BUDGET,maxPagesPerSource:2,completeCatalog:false},researchThemes:themeSummaries(await attachAnalyses(db,themePapers),at,true),sources,counts:{papers:totals?.papers||0,abstracts:totals?.abstracts||0},latestBatch:batch,latestBrief:briefDto(latestBriefRow),configuredSources:RESEARCH_SOURCES.length,interfaces:HKIS_CAPABILITIES,parameters:{collectionTimezone:'UTC+08:00',dailyThreshold:'strict >75',readOnly:true}};
-  const updated=[totals?.updated,...sources.map((s:any)=>s.last_checked),batch?.finished_at,batch?.started_at,latestBriefRow?.updated_at].filter(Boolean).sort().at(-1)||null;
+  const data={collectionPolicy:{pageAttemptsPerSlot:RESEARCH_PAGE_BUDGET,maxPagesPerSource:2,completeCatalog:false},researchThemes:themeSummaries(await attachAnalyses(db,themePapers),at,true),sources,counts:{papers:totals?.papers||0,abstracts:totals?.abstracts||0},latestBatch:batch?{...batch,...batchLifecycle(batch,at)}:null,latestBrief:briefDto(latestBriefRow),configuredSources:RESEARCH_SOURCES.length,interfaces:HKIS_CAPABILITIES,parameters:{collectionTimezone:'UTC+08:00',dailyThreshold:'strict >75',readOnly:true}};
+  const updated=[totals?.updated,...sources.map((s:any)=>s.last_checked),batch?.finished_at,batch?.closed_at,batch?.started_at,latestBriefRow?.updated_at].filter(Boolean).sort().at(-1)||null;
   return {items:[{id:'status:research',title:'研究情报覆盖状态',url:link('/settings'),updatedAt:stamp(updated),summary:`已配置 ${RESEARCH_SOURCES.length} 个期刊源；已存 ${totals?.papers||0} 篇论文`,keywords:[],data}],coverage:{configuredSources:RESEARCH_SOURCES.length,storedSources:sourceRows.length}};
  },at);
 }

@@ -8,6 +8,7 @@ import {collectedDay} from './research-views.ts';
 import {dailyWindow,localHour} from './daily-domain.ts';
 import {AIError} from './ai/security.ts';
 import {batchScheduleContract} from './research-schedule.ts';
+import {batchLifecycle,noActiveBatchWork,reconcileBatches} from './research-lifecycle.ts';
 const parse=(s:any,f:any)=>{try{return JSON.parse(s)}catch{return f}};
 
 // Brief tracking starts with the first shared evening slot that the verified
@@ -76,12 +77,12 @@ function rangePredicate(alias:string,ranges:Array<[number,number]>){
 }
 
 const BATCH_SUMMARY_PREFIX=`WITH latest_runs AS (
- SELECT id,batch_key,source_id,started_at,finished_at,status,entry_point,details_json,
+ SELECT id,batch_key,source_id,started_at,finished_at,closed_at,close_reason,status,entry_point,details_json,
         row_number() OVER (PARTITION BY batch_key,source_id ORDER BY started_at DESC,id DESC) rn
  FROM research_runs
  WHERE batch_key>=? AND batch_key<=? AND started_at<?
 ), batch_rows AS (
- SELECT b.key batch_key,b.date,b.slot,b.status batch_status,b.sources_json,b.started_at,b.finished_at,
+ SELECT b.key batch_key,b.date,b.slot,b.status batch_status,b.sources_json,b.started_at,b.finished_at,b.closed_at,b.close_reason,
         coalesce(json_array_length(CASE WHEN json_valid(b.sources_json) THEN b.sources_json ELSE '[]' END),0) expected_sources,
         coalesce(sum(CASE WHEN lr.source_id IS NOT NULL THEN 1 ELSE 0 END),0) attempted_sources,
         coalesce(sum(CASE WHEN lr.status='ok' AND lr.finished_at IS NOT NULL AND lr.finished_at<? AND coalesce(json_extract(lr.details_json,'$.rssStatus'),'') IN ('ok','not_configured') THEN 1 ELSE 0 END),0) complete_sources,
@@ -98,10 +99,16 @@ const BATCH_SUMMARY_PREFIX=`WITH latest_runs AS (
  FROM batch_rows
 ) `;
 
+function detailedRun(r:any){const d=parse(r.details_json,{});return {id:r.id,sourceId:r.source_id,entryPoint:r.entry_point||'legacy_unknown',status:r.status,startedAt:r.started_at,finishedAt:r.finished_at,closedAt:r.closed_at||null,closeReason:r.close_reason||null,channels:d.channels||null,crossref:d.crossref||null,stages:d.stages||null};}
+function sourceCheckEvidence(expected:string[],last:Map<string,any>){
+ const checked=expected.filter(id=>{const d=parse(last.get(id)?.details_json,{});return d.crossrefPages?.length>0||['ok','failed'].includes(d.channels?.crossref)||d.rssStatus==='ok'});
+ const notAttempted=expected.filter(id=>{const r=last.get(id),d=parse(r?.details_json,{});return !r||r.status==='budget_deferred'&&d.crossrefPages?.length===0});
+ return {checkedSources:checked.length,checkedSourceIds:checked,notAttemptedSources:notAttempted,unconfirmedSources:expected.filter(id=>last.has(id)&&!checked.includes(id)&&!notAttempted.includes(id)),failedSources:expected.filter(id=>['error','interrupted'].includes(last.get(id)?.status))};
+}
 function coverageFromSummary(row:any,runs:any[],cutoff:string){
  const expected=parse(row.sources_json,RESEARCH_SOURCES.map(s=>s.id)),last=new Map<string,any>();for(const run of runs)last.set(run.source_id,run);
  const missing=expected.filter((id:string)=>!last.has(id)),completeSources=expected.filter((id:string)=>{const r=last.get(id),d=parse(r?.details_json,{});return r&&r.status==='ok'&&r.finished_at&&r.finished_at<cutoff&&['ok','not_configured'].includes(d.rssStatus)});
- return {key:row.batch_key,recorded:true,status:Number(row.is_complete)?'complete':'partial',startedAt:row.started_at||null,finishedAt:row.finished_at||null,expectedSources:expected.length,attemptedSources:last.size,completeSources:completeSources.length,missingSources:missing,runs:runs.map((r:any)=>({id:r.id,sourceId:r.source_id,entryPoint:r.entry_point||'legacy_unknown',status:r.status,startedAt:r.started_at,finishedAt:r.finished_at,channels:parse(r.details_json,{}).channels||null}))};
+ return {key:row.batch_key,recorded:true,...batchLifecycle({...row,status:row.batch_status},new Date(cutoff)),status:Number(row.is_complete)?'complete':'partial',startedAt:row.started_at||null,finishedAt:row.finished_at||null,expectedSources:expected.length,attemptedSources:last.size,completeSources:completeSources.length,missingSources:missing,...sourceCheckEvidence(expected,last),runs:runs.map(detailedRun)};
 }
 function pageOptions(options:BriefTrackingOptions={}){return {limit:Math.max(1,Math.min(BRIEF_PAGE_MAX,Number.isInteger(options.limit)?options.limit!:BRIEF_PAGE_LIMIT)),cursor:options.cursor||null}}
 export function parseBriefTrackingOptions(input:any={}):BriefTrackingOptions{
@@ -149,7 +156,7 @@ export async function briefMissingness(db:any,at=new Date(),options:BriefTrackin
  const pageIndexes=Array.from({length:Math.min(limit+1,last-(cursorIndex+1)+1)},(_,i)=>cursorIndex+1+i),pageKeys=pageIndexes.map(slotKeyFromIndex),pageLower=pageKeys[0]!,pageUpper=pageKeys.at(-1)!;
  const cutoff=new Date(now+1).toISOString(),graceStart=Math.max(0,Math.floor((now-BRIEF_MISSING_GRACE_MS-Date.parse(BRIEF_TRACKING_START_AT))/BRIEF_SLOT_MS)+1),graceCount=Math.max(0,last-graceStart+1),overdueThrough=Math.min(now-BRIEF_MISSING_GRACE_MS,now),active=activeRanges(schedule,overdueThrough),activeKeys=rangePredicate('slot_key',active),activeExpected=active.reduce((total,[first,lastIndex])=>total+lastIndex-first+1,0);
  const fullSql=fullAggregateSql(activeKeys),fullBinds=[BRIEF_TRACKING_START_KEY,slotKeyFromIndex(last),cutoff,cutoff,BRIEF_TRACKING_START_KEY,slotKeyFromIndex(last),cutoff,BRIEF_TRACKING_START_KEY,slotKeyFromIndex(last),graceStart>last?slotKeyFromIndex(last+1):slotKeyFromIndex(graceStart),graceStart>last?slotKeyFromIndex(last+1):slotKeyFromIndex(graceStart),...activeKeys.binds];
- const pageSql=BATCH_SUMMARY_PREFIX+'SELECT * FROM batch_summary ORDER BY batch_key',runSql='SELECT id,batch_key,source_id,started_at,finished_at,status,entry_point,details_json FROM research_runs WHERE batch_key>=? AND batch_key<=? AND started_at<? ORDER BY batch_key,started_at,id',briefSql='SELECT batch_key,status,updated_at FROM research_briefs WHERE batch_key>=? AND batch_key<=?';
+ const pageSql=BATCH_SUMMARY_PREFIX+'SELECT * FROM batch_summary ORDER BY batch_key',runSql='SELECT id,batch_key,source_id,started_at,finished_at,closed_at,close_reason,status,entry_point,details_json FROM research_runs WHERE batch_key>=? AND batch_key<=? AND started_at<? ORDER BY batch_key,started_at,id',briefSql='SELECT batch_key,status,updated_at FROM research_briefs WHERE batch_key>=? AND batch_key<=?';
  const [aggregate,pageRows,runs,briefRows]=await Promise.all([
   db.prepare(fullSql).bind(...fullBinds).first(),
   db.prepare(pageSql).bind(pageLower,pageUpper,cutoff,cutoff,pageLower,pageUpper,cutoff).all(),
@@ -164,7 +171,7 @@ export async function briefMissingness(db:any,at=new Date(),options:BriefTrackin
   let analysis:'published'|'not_started'|'awaiting_analysis'|'blocked_by_collection'|'unknown'='unknown';if(brief?.status==='published')analysis='published';else if(brief?.status==='awaiting_analysis')analysis='awaiting_analysis';else if(!summary||!complete)analysis='blocked_by_collection';else if(!brief)analysis='not_started';
   let status:BriefGapState;if(complete&&analysis==='published')status='complete';else if(inGrace)status='within_grace';else if(!summary)status=collection==='missing'?'collection_missing':'unknown';else if(!complete)status='collection_incomplete';else status=analysis==='awaiting_analysis'||analysis==='not_started'?'analysis_missing':'unknown';
   const analysisDebt=!inGrace&&(analysis==='awaiting_analysis'||analysis==='not_started');
-  return {batchKey:key,date:key.slice(0,10),slot:Number(key.slice(11)),scheduledAt:new Date(scheduled).toISOString(),overdueAt:new Date(scheduled+BRIEF_MISSING_GRACE_MS).toISOString(),collection,analysis,analysisDebt,status,alertable:status!=='unknown'&&status!=='within_grace'&&status!=='complete',batch:summary?{status:summary.batch_status,startedAt:summary.started_at||null,finishedAt:summary.finished_at||null}:null,brief:brief?{status:brief.status,updatedAt:brief.updated_at||null}:null,coverage};
+  return {batchKey:key,date:key.slice(0,10),slot:Number(key.slice(11)),scheduledAt:new Date(scheduled).toISOString(),overdueAt:new Date(scheduled+BRIEF_MISSING_GRACE_MS).toISOString(),collection,analysis,analysisDebt,status,alertable:status!=='unknown'&&status!=='within_grace'&&status!=='complete',batch:summary?{...batchLifecycle({...summary,status:summary.batch_status},at),status:summary.batch_status,startedAt:summary.started_at||null,finishedAt:summary.finished_at||null}:null,brief:brief?{status:brief.status,updatedAt:brief.updated_at||null}:null,coverage};
  });
  const completeTotal=Number(aggregate?.complete_total||0),completeOverdue=Number(aggregate?.complete_overdue||0),completeGrace=Number(aggregate?.complete_grace||0),collectionIncomplete=Number(aggregate?.collection_incomplete_overdue||0),analysisStatus=Number(aggregate?.analysis_status_overdue||0),analysisMissing=Number(aggregate?.analysis_debt_overdue||0),collectionMissing=Math.max(0,activeExpected-Number(aggregate?.batch_active_overdue||0)),overdueCount=Math.max(0,last+1-graceCount),unknown=Math.max(0,overdueCount-completeOverdue-collectionIncomplete-collectionMissing-analysisStatus),withinGrace=Math.max(0,graceCount-completeGrace),counts={tracked:last+1,complete:completeTotal,withinGrace,unknown,collectionMissing,collectionIncomplete,analysisMissing,alertable:collectionMissing+collectionIncomplete+analysisStatus,gapCount:Math.max(0,last+1-completeTotal-withinGrace)};
  const gaps=slots.filter(s=>s.status!=='complete'&&s.status!=='within_grace'),nextCursor=pageHasMore?visibleKeys.at(-1)!:null;
@@ -173,10 +180,11 @@ export async function briefMissingness(db:any,at=new Date(),options:BriefTrackin
 
 export async function startBatch(db:any,slot:number,at=new Date()){
  if(![8,20].includes(slot)||localHour(at)!==slot)throw new AIError('batch_window',409,'只可在 UTC+08 的 08 点或 20 点窗口开始对应采集批次');
+ await reconcileBatches(db,at);
  const date=collectedDay(at.toISOString())!,key=date+'/'+String(slot).padStart(2,'0');
  const plan=await intervalPlan(db,at);if(!plan.value.verified)throw new AIError('interval_owner_ambiguous',409,'无法确认采集间隔所属账户，请由所有者保存配置');
  await db.prepare("INSERT OR IGNORE INTO research_batches(key,date,slot,status,sources_json,started_at) VALUES(?,?,?,'running',?,?)").bind(key,date,slot,JSON.stringify(plan.sources.filter(s=>s.due).sort((a,b)=>String(a.lastAttempt||'').localeCompare(String(b.lastAttempt||''))||a.id.localeCompare(b.id)).map(s=>s.id)),at.toISOString()).run();
- const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();return {batchKey:key,status:row.status,startedAt:row.started_at,collectionControl:await collectionControl(db,key,at)};
+ const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();return {batchKey:key,status:row.status,startedAt:row.started_at,...batchLifecycle(row,at),collectionControl:await collectionControl(db,key,at)};
 }
 export async function validateBatch(db:any,key:any,at=new Date()){
  if(key===undefined||key===null)return null;
@@ -185,14 +193,18 @@ export async function validateBatch(db:any,key:any,at=new Date()){
 }
 export async function finishBatch(db:any,key:any,at=new Date()){
  if(typeof key!=='string')throw new AIError('invalid_batch',400,'无效采集批次');const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();if(!row)throw new AIError('invalid_batch',404,'采集批次不存在');
- await db.prepare("UPDATE research_batches SET status='finished',finished_at=? WHERE key=? AND status='running'").bind(at.toISOString(),key).run();return {batchKey:key,...await batchCoverage(db,key,new Date(at.getTime()+1).toISOString()),brief:await prepareBrief(db,key,at)};
+ const now=at.toISOString();
+ await db.prepare(`UPDATE research_batches SET status='finished',finished_at=? WHERE key=? AND status='running' AND ${noActiveBatchWork}`).bind(now,key,now,now).run();
+ const current=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();
+ if(current.status==='running')throw new AIError('batch_in_flight',409,'采集请求或来源租约仍在运行，请稍后回读');
+ return {batchKey:key,...await batchCoverage(db,key,new Date(at.getTime()+1).toISOString()),brief:current.status==='finished'?await prepareBrief(db,key,at):null};
 }
 export async function batchCoverage(db:any,key:string,cutoff:string){
  const batch=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();const expected=parse(batch?.sources_json,RESEARCH_SOURCES.map(s=>s.id));
- const rows=(await db.prepare('SELECT id,source_id,started_at,finished_at,status,entry_point,details_json FROM research_runs WHERE batch_key=? AND started_at<? ORDER BY started_at,id').bind(key,cutoff).all()).results;
+ const rows=(await db.prepare('SELECT id,source_id,started_at,finished_at,closed_at,close_reason,status,entry_point,details_json FROM research_runs WHERE batch_key=? AND started_at<? ORDER BY started_at,id').bind(key,cutoff).all()).results;
  const last=new Map<string,any>();for(const r of rows)last.set(r.source_id,r);const missing=expected.filter((id:string)=>!last.has(id));
  const completeSources=expected.filter((id:string)=>{const r=last.get(id),d=parse(r?.details_json,{});return r&&r.status==='ok'&&r.finished_at&&r.finished_at<cutoff&&['ok','not_configured'].includes(d.rssStatus)});
  const complete=!!batch&&batch.status==='finished'&&batch.finished_at&&batch.finished_at<cutoff&&completeSources.length===expected.length;
- return {key,recorded:!!batch,status:complete?'complete':batch?'partial':'missing',startedAt:batch?.started_at||null,finishedAt:batch?.finished_at||null,expectedSources:expected.length,attemptedSources:last.size,completeSources:completeSources.length,missingSources:missing,runs:rows.map((r:any)=>({id:r.id,sourceId:r.source_id,entryPoint:r.entry_point||'legacy_unknown',status:r.status,startedAt:r.started_at,finishedAt:r.finished_at,channels:parse(r.details_json,{}).channels||null}))};
+ return {key,recorded:!!batch,status:complete?'complete':batch?'partial':'missing',...batchLifecycle(batch,new Date(cutoff)),startedAt:batch?.started_at||null,finishedAt:batch?.finished_at||null,expectedSources:expected.length,attemptedSources:expected.filter((id:string)=>last.has(id)).length,completeSources:completeSources.length,missingSources:missing,...sourceCheckEvidence(expected,last),runs:rows.map(detailedRun)};
 }
 export async function previousCoverage(db:any,date:string){const w=dailyWindow(new Date(),date),batches=[];for(const key of w.batchKeys)batches.push(await batchCoverage(db,key,w.cutoff));const untracked=await db.prepare('SELECT count(*) n FROM research_papers p WHERE p.first_seen>=? AND p.first_seen<? AND NOT EXISTS(SELECT 1 FROM research_batch_members m WHERE m.paper_id=p.id AND '+cohortExpression+' IN (?,?))').bind(w.start,w.cutoff,...w.batchKeys).first();return {...w,batches,complete:batches.every(b=>b.status==='complete'),untrackedNewPapers:Number(untracked?.n||0)};}

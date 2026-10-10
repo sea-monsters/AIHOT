@@ -1,8 +1,31 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-09T14:04:34Z",
+  "latestVersion": "2026-10-10T01:35:47Z",
   "releases": [
+    {
+      "id": "collection-recovery-20261010",
+      "kind": "fix",
+      "basis": "record",
+      "at": "2026-10-10T01:35:47Z",
+      "title": "采集中断状态与来源证据保护",
+      "body": [
+        "采集截止后明确显示等待收尾；后续授权写请求在租约安全退出后幂等关闭为中断，保留已存论文、部分覆盖和独立关闭时间，不把超时或失联伪装成全源完成。",
+        "同步准入与在途记录使用同一事务，迟到结果通过数据库租约与锁归属检查整笔回滚；正在采集时拒绝提前冻结，重复完成可补齐未保存简报，已发布证据保持不变。",
+        "修复不同 DOI 共用网址时串篇、异常 OpenAlex 摘要索引和关键词负证据；对缺摘要的范围待判条目与共享限流后的补全保存有限延期队列。",
+        "保持32源、35次分页、每源2次、早晚窗口与模型预算；没有生产采集、模型请求或调度变更。持久收尾仍需后续写请求，环境网络403及完整作者/机构快照修正另行处理。"
+      ],
+      "sources": [
+        {
+          "label": "修复与审计边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/collection-recovery-audit.md"
+        },
+        {
+          "label": "批次与来源采集约束",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-ingestion.md"
+        }
+      ]
+    },
     {
       "id": "hkis-selective-adaptation-20261009",
       "kind": "feature",

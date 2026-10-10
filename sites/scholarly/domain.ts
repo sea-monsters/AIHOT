@@ -1,3 +1,7 @@
+import {doiId} from '../doi.ts';
+import {reconstructAbstract} from './abstract.ts';
+export {doiId} from '../doi.ts';
+export {reconstructAbstract} from './abstract.ts';
 import {sourceMetadata,mergeMetadata} from '../paper-metadata.ts';
 import {clean} from '../rss.ts';
 import {normalizedTitle,type Author,type Paper} from '../research-domain.ts';
@@ -18,18 +22,12 @@ const text=(v:unknown,max=2000)=>typeof v==='string'?clean(v).slice(0,max):'';
 const list=(v:any)=>Array.isArray(v)?v.slice(0,100):[];
 export function serviceId(value:unknown):Service {if(value!=='semanticscholar'&&value!=='openalex')throw new AIError('invalid_service',400,'请选择 Semantic Scholar 或 OpenAlex');return value}
 export function safeUrl(value:unknown){try{if(typeof value!=='string'||value.length>2000)return null;const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password?u.href:null}catch{return null}}
-export function doiId(value:unknown){if(typeof value!=='string')return null;const s=value.trim().replace(/^(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:\s*)/i,'').toLowerCase();return /^10\.\d{4,9}\/[^\s<>"?#]{1,400}$/.test(s)?s:null}
 export function parseIdentifier(value:string):{kind:'doi'|'openalex'|'semanticscholar';id:string}|null {
  const doi=doiId(value);if(doi)return {kind:'doi',id:doi};
  const oa=value.trim().replace(/^https:\/\/(?:api\.)?openalex\.org\/(?:works\/)?/i,'').replace(/^openalex:/i,'');if(/^W\d{1,20}$/i.test(oa))return {kind:'openalex',id:oa.toUpperCase()};
  const s2=value.trim().replace(/^https:\/\/www\.semanticscholar\.org\/paper\//i,'').replace(/^(?:s2|semanticscholar):/i,'');if(/^[a-f0-9]{40}$/i.test(s2))return {kind:'semanticscholar',id:s2.toLowerCase()};
  if(/^(CorpusId:\d{1,20}|ARXIV:(?:\d{4}\.\d{4,5}(?:v\d+)?|[a-z.-]+\/\d{7}(?:v\d+)?))$/i.test(s2))return {kind:'semanticscholar',id:s2.replace(/^corpusid:/i,'CorpusId:').replace(/^arxiv:/i,'ARXIV:')};
  return null;
-}
-export function reconstructAbstract(value:any):{abstract:string|null;truncated:boolean} {
- if(!value||typeof value!=='object'||Array.isArray(value))return {abstract:null,truncated:false};const positions=new Map<number,string>();let truncated=false;
- for(const [word,slots] of Object.entries(value).slice(0,10000)){if(!Array.isArray(slots))continue;for(const n of slots.slice(0,10000)){if(!Number.isInteger(n)||n<0)continue;if(n>=10000){truncated=true;continue}positions.set(n,text(word,200))}}
- if(!positions.size)return {abstract:null,truncated};const ordered=[...positions].sort((a,b)=>a[0]-b[0]);const full=ordered.map(([,w])=>w).join(' ');return {abstract:full.slice(0,30000)||null,truncated:truncated||full.length>30000};
 }
 export function normalizeRecord(service:Service,raw:any,retrievedAt=new Date().toISOString()):RecordData {
  if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new AIError('scholarly_format',502,'数据源返回的论文格式无效');

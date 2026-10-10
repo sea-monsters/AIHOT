@@ -1,3 +1,4 @@
+import {batchLifecycle} from './research-lifecycle.ts';
 import {briefDto} from './research-briefs.ts';
 import {dailyDateRevision} from './daily-visits.ts';
 import {cohortExpression} from './research-attribution.ts';
@@ -112,8 +113,8 @@ export async function dailyRead(db:any,params:URLSearchParams,at=new Date()){
   invalidDate?Promise.resolve(null):db.prepare('SELECT * FROM research_daily WHERE date=?').bind(date).first(),
   researchSchedule(db),
  ]);
- const [briefRows,batchRows]=await Promise.all([db.prepare('SELECT * FROM research_briefs WHERE date=? ORDER BY slot').bind(date).all(),db.prepare('SELECT key,slot,status,started_at,finished_at FROM research_batches WHERE date=? ORDER BY slot').bind(date).all()]);
- const briefs=briefRows.results.map(briefDto),batches=batchRows.results;
+ const [briefRows,batchRows]=await Promise.all([db.prepare('SELECT * FROM research_briefs WHERE date=? ORDER BY slot').bind(date).all(),db.prepare('SELECT key,slot,status,started_at,finished_at,closed_at,close_reason FROM research_batches WHERE date=? ORDER BY slot').bind(date).all()]);
+ const briefs=briefRows.results.map(briefDto),batches=batchRows.results.map((b:any)=>({...b,...batchLifecycle(b,at)}));
  const {month,days}=calendar,selection=row?parse(row.selection_json):null;
  const [groups,evidenceCoverage]=row?await Promise.all([
   db.prepare('SELECT * FROM research_daily_groups WHERE date=? ORDER BY ordinal').bind(date).all().then((r:any)=>r.results.map(publicGroup)),
