@@ -1,6 +1,6 @@
 {
   "label": "phase1",
-  "measuredAt": "2026-10-10T16:34:21.141Z",
+  "measuredAt": "2026-10-10T17:12:34.884Z",
   "node": "v24.11.1",
   "platform": "win32",
   "workload": {
@@ -15,9 +15,9 @@
   "samples": [
     {
       "sample": 0,
-      "durationMs": 44.72519999999997,
-      "heapDeltaBytes": 1443256,
-      "peakRssKiB": 80000,
+      "durationMs": 34.59010000000001,
+      "heapDeltaBytes": 1468768,
+      "peakRssKiB": 85352,
       "counts": {
         "journal": 1,
         "recheck": 0,
@@ -30,9 +30,9 @@
     },
     {
       "sample": 1,
-      "durationMs": 7.432199999999966,
-      "heapDeltaBytes": 404520,
-      "peakRssKiB": 80228,
+      "durationMs": 7.674000000000035,
+      "heapDeltaBytes": 455208,
+      "peakRssKiB": 85524,
       "counts": {
         "journal": 1,
         "recheck": 0,
@@ -45,9 +45,9 @@
     },
     {
       "sample": 2,
-      "durationMs": 7.133800000000065,
-      "heapDeltaBytes": -1698824,
-      "peakRssKiB": 82212,
+      "durationMs": 6.628499999999974,
+      "heapDeltaBytes": -1748936,
+      "peakRssKiB": 87088,
       "counts": {
         "journal": 1,
         "recheck": 0,
@@ -59,6 +59,6 @@
       "queued": 1
     }
   ],
-  "medianMs": 7.432199999999966,
+  "medianMs": 7.674000000000035,
   "scope": "collection endpoint local fixture, not online speed or full pipeline latency"
 }

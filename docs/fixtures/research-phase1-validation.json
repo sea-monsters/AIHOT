@@ -1,0 +1,68 @@
+{
+  "checkedAt": "2026-10-10T17:19:31.956Z",
+  "environment": {
+    "node": "v24.11.1",
+    "platform": "win32",
+    "database": "isolated SQLite and Miniflare D1",
+    "baseline": "5de4ff86c5d8a0cfdbd8814205c2cdb095ff28a2",
+    "mergedMain": "b963187545df6c7a10e7154a586d93bf18560f92",
+    "codeCommit": "64ee1ec87ad4d3bf2b8aada60fdef4f8c84c6b2b",
+    "preservedMainReleases": 76
+  },
+  "checks": [
+    {
+      "command": "node --test --test-concurrency=1 --test-timeout=120000 'sites/*.test.ts' 'sites/*.test.mjs' 'sites/scholarly/*.test.ts' 'sites/ai/*.test.ts' 'sites/anysearch/*.test.mjs'",
+      "exitCode": 0,
+      "tests": 515,
+      "pass": 515,
+      "fail": 0,
+      "durationMs": 82959.3955
+    },
+    {
+      "command": "npm run typecheck",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run check:changelog",
+      "exitCode": 0,
+      "releases": 77
+    },
+    {
+      "command": "node sites/test-worker.mjs",
+      "exitCode": 0,
+      "transport": "isolated workerd with synthetic outbound responses"
+    },
+    {
+      "command": "npm run build",
+      "compilation": "Web client, SSR and Sites Worker bundle succeed",
+      "packaging": "blocked: ignored .openai/hosting.json is absent; no private Site configuration copied or fabricated"
+    }
+  ],
+  "migrations": {
+    "additive": [
+      "0019_metadata_phases.sql",
+      "0020_daily_readiness.sql"
+    ],
+    "applied": "all migration statements applied in SQLite fixtures and isolated D1",
+    "deletions": 0
+  },
+  "externalEffects": {
+    "productionCollection": 0,
+    "paidModels": 0,
+    "scheduleChanges": 0,
+    "siteDeployments": 0
+  },
+  "reviewBoundaries": {
+    "originAndFence": "passed",
+    "dailyReadinessAndAtomicFreeze": "passed",
+    "expiredBeforeLimit": "passed",
+    "legacyCapacity": "passed",
+    "batchIdentityAndPartialEvidence": "passed",
+    "serialRequestAndDeadlineGates": "passed"
+  },
+  "performanceScope": "Local component fixture only; work moves out of discovery. No online or end-to-end speedup claim.",
+  "limitations": [
+    "Actual Site access and deployed endpoint contract must be checked by the parent in the official release environment.",
+    "Attempted failed/unknown assessments become explicit review-required abstentions and never automatically replay. Proven unsent current-schema claims remain queued."
+  ]
+}

@@ -76,11 +76,11 @@ Node.js 24.11+：`node sites/run-research-slot.mjs`。一个进程、一个串�
 
 ## 建议替换的完整自动化文本（只建议，未写入真实任务）
 
-以下建议绑定固定代码 SHA **REVIEWED_HKIS_CODE_SHA**。父任务审查并批准后才可替换原任务提示词；保持原定时规则、原 Site 和既有 service access。
+以下建议绑定固定代码 SHA **64ee1ec87ad4d3bf2b8aada60fdef4f8c84c6b2b**。父任务审查并批准后才可替换原任务提示词；保持原定时规则、原 Site 和既有 service access。
 
-> 执行 HKIS 研究采集 v2。记录本次自动化开始 UTC 时间 automationStartedAt；它计入整轮 540 秒，不允许脚本重新获得 540 秒预算。首先用原生 get_site 读取原 HKIS 自动化已绑定的准确 Site ID，核实 Site active、published、owner-private 访问方式及 current_live_url；只接受原站点返回的 HTTPS chatgpt.site origin。核对官方发布证据已包含批准的代码提交 REVIEWED_HKIS_CODE_SHA。任何 identity、发布状态、权限或版本无法确认都停止并报告 deferred，不能根据相似名称挑另一个站点、创建 service access 或把当前 main 当已批准版本。
+> 执行 HKIS 研究采集 v2。记录本次自动化开始 UTC 时间 automationStartedAt；它计入整轮 540 秒，不允许脚本重新获得 540 秒预算。首先用原生 get_site 读取原 HKIS 自动化已绑定的准确 Site ID，核实 Site active、published、owner-private 访问方式及 current_live_url；只接受原站点返回的 HTTPS chatgpt.site origin。核对官方发布证据已包含批准的代码提交 64ee1ec87ad4d3bf2b8aada60fdef4f8c84c6b2b。任何 identity、发布状态、权限或版本无法确认都停止并报告 deferred，不能根据相似名称挑另一个站点、创建 service access 或把当前 main 当已批准版本。
 >
-> 使用既有官方 service access。token 仅保留于 stdin/内存，不放进 argv、环境文件、临时文件、输出、shell 历史或带密钥的重定向，不打印敏感 headers。取固定提交 REVIEWED_HKIS_CODE_SHA 中的 node sites/run-research-slot.mjs，核对本地实际 SHA；用运行环境已支持的安全 stdin/内存通道直接传入 baseUrl、精确 allowedOrigins、原 token、automationStartedAt、当前实际 UTC+08 的 slot 8 或 20。禁止真实时段外强制运行，不开新的常驻后台。缺少此安全传递能力时报告 deferred，不能退回逐源人工编排或改用新 key。
+> 使用既有官方 service access。token 仅保留于 stdin/内存，不放进 argv、环境文件、临时文件、输出、shell 历史或带密钥的重定向，不打印敏感 headers。取固定提交 64ee1ec87ad4d3bf2b8aada60fdef4f8c84c6b2b 中的 node sites/run-research-slot.mjs，核对本地实际 SHA；用运行环境已支持的安全 stdin/内存通道直接传入 baseUrl、精确 allowedOrigins、原 token、automationStartedAt、当前实际 UTC+08 的 slot 8 或 20。禁止真实时段外强制运行，不开新的常驻后台。缺少此安全传递能力时报告 deferred，不能退回逐源人工编排或改用新 key。
 >
 > 一次确定性进程串行执行 HTTP。20 点 start slot20，按后端 nextSourceId sync maxPages1，不自行选择源；全部应检 head 成功或明确延期前只发现，不能执行 DOI recheck/OpenAlex/S2。随后按最旧实际续页尝试公平 continuation，源内 latest/history 交替；head 按最旧实际检查，锁忙是 deferred，不预先推进尝试时间。sync HTTP 调用独立最多 35 次，分页原子总扣额最多 35、每源最多 2；锁忙或没有有效 nextSourceId 不能忙循环。20 点采集最多 330 秒，08 点最多 260 秒，整轮最多 540 秒；余量不足 110 秒不启动长请求。sync maxMs 至多 75000，并按剩余采集预算缩短，留 15 秒保存和释放 lease。429/cooldown 立即停止后续派发，保留所有队列。
 >
