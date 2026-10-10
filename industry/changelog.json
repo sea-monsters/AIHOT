@@ -1,8 +1,30 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-10T17:14:54Z",
+  "latestVersion": "2026-10-10T18:19:15Z",
   "releases": [
+    {
+      "id": "paper-disclosure-bounded-performance-20261010",
+      "at": "2026-10-10T18:19:15Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "补充论文抽屉长列表的限定性能诊断",
+      "body": [
+        "增加同一隔离 fixture 的限定收起诊断，分别记录原几何探针、仅时间戳和点击区间 trace；默认页面与动效实现未改。",
+        "12 次动作中仅一次不带 trace 的首次收起复现 100.1ms 帧间隔；其余帧最大 16.8ms。浏览器布局、首轮状态与探针影响仍有混杂，不宣称长帧已经修复。",
+        "复核折叠摘要与 DOI 不可见、来源不可聚焦，读者状态写入及外部/模型请求均为零；本次仍只更新 review 分支，未合入或部署。"
+      ],
+      "sources": [
+        {
+          "label": "论文条目抽屉 review 基线",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/52ee707b8d8255b188a315f71a222135e1cbb6e8"
+        },
+        {
+          "label": "覆盖与长帧复核证据",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/paper-disclosure-audit.md"
+        }
+      ]
+    },
     {
       "id": "paper-items-shared-disclosure-20261010",
       "at": "2026-10-10T17:14:54Z",
