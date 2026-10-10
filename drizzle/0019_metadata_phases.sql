@@ -39,3 +39,6 @@ ALTER TABLE `research_papers` ADD `metadata_status` text DEFAULT 'legacy_ready' 
 ALTER TABLE `research_runs` ADD `phase` text DEFAULT 'collection' NOT NULL;
 --> statement-breakpoint
 UPDATE research_enrichment_queue SET first_seen=updated_at WHERE first_seen IS NULL;
+
+--> statement-breakpoint
+UPDATE research_enrichment_queue SET status='legacy_deferred',ready_reason='legacy_unattributed' WHERE origin_run_id IS NULL AND daily_cohort_key IS NULL AND status IN ('pending','deferred','blocked','overflow');

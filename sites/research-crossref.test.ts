@@ -63,7 +63,8 @@ test('preflight shared cooldown and expired collection deadline consume no calls
 test('orchestrator honors structured global stop even when HTTP200 has no error text',async()=>{const called:string[]=[];const result=await collectResearch([{id:'a'},{id:'b'}],async id=>{called.push(id);return {pending:true,status:'backfill_pending',collectionControl:{stop:true,reason:'crossref_rate_limit'}}},{maxPagesPerSource:2,maxMs:260000});assert.deepEqual(called,['a']);assert.equal(result.length,1)});
 
 
-test('server auto-next tolerates stale explicit order, freezes membership and skips exhausted empty history',async()=>{
+test('server auto-next tolerates stale explicit order, freezes membership and skips exhausted empty history',async(t)=>{
+ const next8=Date.parse(new Date(Date.now()+8*3600000+86400000).toISOString().slice(0,10)+'T08:01:00+08:00');t.mock.timers.enable({apis:['Date'],now:next8});
  const f=fixture(),original=globalThis.fetch,[a,b]=RESEARCH_SOURCES,at=new Date(),key=collectionCycle(at.toISOString(),null);const fetched:string[]=[];
  try{await initResearch(f.db);f.sql.prepare("INSERT INTO research_batches(key,date,slot,status,sources_json,started_at) VALUES(?,?,?,'running',?,?)").run(key,key.slice(0,10),Number(key.slice(-2)),JSON.stringify([a!.id,b!.id]),at.toISOString());
  globalThis.fetch=async(url:any)=>{const u=new URL(String(url));if(u.hostname==='api.crossref.org'){fetched.push(u.pathname);return Response.json({message:{items:[]}})}return new Response('<rss><channel/></rss>')};
@@ -76,11 +77,11 @@ test('server auto-next tolerates stale explicit order, freezes membership and sk
 });
 
 
-test('shared lease deferral cannot spend budget or advance the batch to continuation',async()=>{
+test('shared lease deferral spends no budget, preserves attempt time, and settles an explicit deferred head',async()=>{
  const f=fixture(),original=globalThis.fetch,[a,b]=RESEARCH_SOURCES,at=new Date(),key=collectionCycle(at.toISOString(),null);let requests=0;
  try{await initResearch(f.db);f.sql.prepare("INSERT INTO research_batches(key,date,slot,status,sources_json,started_at) VALUES(?,?,?,'running',?,?)").run(key,key.slice(0,10),Number(key.slice(-2)),JSON.stringify([a!.id,b!.id]),at.toISOString());globalThis.fetch=async(url:any)=>{if(new URL(String(url)).hostname==='api.crossref.org'){requests++;return Response.json({message:{items:[]}})}return new Response('<rss><channel/></rss>')};await syncSource(f.db,a!,1,key);
- f.sql.prepare("INSERT INTO research_settings(key,value) VALUES('crossref_http_lock',?)").run(new Date(Date.now()+60000).toISOString());const blocked:any=await syncSource(f.db,b!,1,key);assert.equal(blocked.crossref.cycle.pages,0);assert.equal(blocked.crossref.lastHeadAttemptAt,null);assert.deepEqual(blocked.crossrefPages,[]);assert.equal(blocked.collectionControl.pass,'head');assert.equal(blocked.collectionControl.nextSourceId,b!.id);assert.equal(f.sql.prepare("SELECT value FROM research_settings WHERE key LIKE 'collection-budget:%'").get()!.value,'1');assert.equal((await syncSource(f.db,a!,1,key) as any).status,'deferred');assert.equal(requests,1);
- f.sql.prepare("DELETE FROM research_settings WHERE key='crossref_http_lock'").run();const settled:any=await syncSource(f.db,b!,1,key);assert.equal(requests,1);assert.equal(settled.collectionControl.stop,true);
+ f.sql.prepare("INSERT INTO research_settings(key,value) VALUES('crossref_http_lock',?)").run(new Date(Date.now()+60000).toISOString());const blocked:any=await syncSource(f.db,b!,1,key);assert.equal(blocked.crossref.cycle.pages,0);assert.equal(blocked.crossref.lastHeadAttemptAt,null);assert.deepEqual(blocked.crossrefPages,[]);assert.equal(blocked.collectionControl.pass,'continuation');assert.equal(blocked.collectionControl.nextSourceId,a!.id);assert.equal(f.sql.prepare("SELECT value FROM research_settings WHERE key LIKE 'collection-budget:%'").get()!.value,'1');assert.equal((await syncSource(f.db,a!,1,key) as any).status,'deferred');assert.equal(requests,1);
+ f.sql.prepare("DELETE FROM research_settings WHERE key='crossref_http_lock'").run();const settled:any=await syncSource(f.db,b!,1,key);assert.equal(requests,1);assert.equal(settled.collectionControl.nextSourceId,a!.id);assert.deepEqual(settled.collectionControl.headDeferredSources,[b!.id]);const continuation=await syncSource(f.db,a!,1,key);assert.equal(continuation.crossrefPages[0].lane,'history');assert.equal(requests,2);assert.equal(continuation.collectionControl.stop,true);
  }finally{globalThis.fetch=original;f.sql.close()}
 });
 test('full batch client follows server plan independently of current due list, with 35-call and time bounds',async()=>{

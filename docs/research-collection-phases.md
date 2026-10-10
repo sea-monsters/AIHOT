@@ -16,7 +16,7 @@
 
 1. `POST /api/site/research/batch/start {"slot":20}`。保留返回的实际 batchKey 和服务端冻结的到期 source 计划。
 2. 串行 `POST /api/site/research/sync {"batchKey":"实际值","maxPages":1}`，不指定 sourceId，由服务端选择 nextSourceId。先 head，所有 head 完成或明确延期后公平续页。Crossref 429 / 共享 cooldown / 35 页扣额达到上限时立即停止采集派发。
-3. 采集最多 330 秒；整轮最多 540 秒。每次派发前检查两种预算，整轮不足 110 秒不开始长请求。已开始的 sync 必须等待返回并释放 lease。网络未知时停止本次执行，不重放、不强行 finish 在飞批次，后续只回读 / 显式 reconcile。
+3. 采集最多 330 秒；整轮最多 540 秒。每次派发前检查两种预算，整轮不足 110 秒不开始长请求。sync 传入 maxMs ≤75000，按实际剩余采集时限缩小并预留 15 秒保存和释放租约；不足 30 秒不再派发新采集请求。process 也传入 maxMs（08 ≤120000、20 ≤210000 且不超过整轮实际余量），服务端每次模型派发前要求仍有 110 秒，防止一个端点内部跨越总 deadline。已开始的 sync 必须等待返回并释放 lease。网络未知时停止本次执行，不重放、不强行 finish 在飞批次，后续只回读 / 显式 reconcile。
 4. 已确认所有请求返回后 `POST /api/site/research/batch/finish {"batchKey":"实际值"}`。409 in-flight 或网络未知不能继续补全；不强行封口。
 5. 足够预算时 `POST /api/site/research/enrich {"cohort":"pending","maxMs":75000}`。按最旧原发现时间，读取最多 100 个已记录原采集 run 且属于今天或明确准备任务的到期队列项；可接续前次延期工作，不为未知来源的旧迁移队列自动花费外联预算。
 6. 补全就绪后 `POST /api/site/research/process {"maxPapers":2,"cohort":"current"}`。只扫描本地当天归属的 ready 证据，不自动付费补历史。预算不足仍留队。20 点不生成日报。
@@ -31,7 +31,7 @@
 
 ## 一次性脚本
 
-Node.js 24.11+：`node sites/run-research-slot.mjs`。一个进程、一个串行 HTTP 客户端；无新常驻后台、无真实调度写入。输入只来自不回显的 stdin，字段为 `baseUrl`、`allowedOrigins`（已核实 origin 的精确列表）、`token`（原 service access）和可选 `slot`（当前实际 8 或 20）。不要以含密钥的 shell 命令、输入文件或重定向传入；由已有受支持的安全 service access 工作流把值直接交给 stdin / 内存。输出只包含阶段状态、run ID、耗时、分页数和延期原因。
+Node.js 24.11+：`node sites/run-research-slot.mjs`。一个进程、一个串行 HTTP 客户端；无新常驻后台、无真实调度写入。输入只来自不回显的 stdin，字段为 `baseUrl`、`allowedOrigins`（已核实 origin 的精确列表）、`token`（原 service access）、自动化开始前记录的 `automationStartedAt`（UTC ISO 字符串，将 native 预检和 stdin 等待计入同一 540 秒）和可选 `slot`（当前实际 8 或 20）。不要以含密钥的 shell 命令、输入文件或重定向传入；由已有受支持的安全 service access 工作流把值直接交给 stdin / 内存。输出只包含阶段状态、run ID、耗时、分页数、ready / abstain / deferred 计数和延期原因。overflow 等全局队列计数通过既有私有 status 回读；不把旧迁移积压当本轮已授权任务。
 
 旧 `refresh-research.mjs` 保留手动接口兼容；完整定时批次使用新脚本。脚本遇到任何 POST 结果未知便停止，不能自动重跑它来“补成功”。`daily/process` 的收据、内容版本和 unknown 状态继续由服务端保护。
 
@@ -56,16 +56,38 @@ Node.js 24.11+：`node sites/run-research-slot.mjs`。一个进程、一个串�
 
 ## 迁移、可测证据与回滚边界
 
-新增迁移 `0019_metadata_phases.sql`、`0020_daily_readiness.sql` 由 Drizzle schema / snapshot 生成，只添加字段、表、索引和旧队列审计时间补值；不删除数据。先在隔离数据库应用并检查，父任务审查后由正式发布工作流执行。新代码不能先于迁移运行。回退旧代码前保留新队列 / ready 证据；旧代码不认识 overflow，不应让旧编排继续消费新阶段队列。
+新增迁移 `0019_metadata_phases.sql`、`0020_daily_readiness.sql` 由 Drizzle schema / snapshot 生成，只添加字段、表、索引和旧队列审计时间补值；不删除数据。0020 只建立准备队列，不由迁移扫描历史或创建付费补历史任务。先在隔离数据库应用并检查，父任务审查后由正式发布工作流执行。新代码不能先于迁移运行。回退旧代码前保留新队列 / ready 证据；旧代码不认识 overflow，不应让旧编排继续消费新阶段队列。
 
-`research_phase_events` 只持久保存 source / batch / run / phase、queue/start/end、gate/HTTP/解析及持久化毫秒、分页与本地预算、成功 / 429 / timeout / lock_busy / deadline 等状态。`/research/status` 提供最近 24 小时分组；不保存 key、敏感 headers、完整请求 URL 或响应正文。bulk metadata 的独立 run 通过队列 origin 字段关联各 source；本地 cacheHits 和 dispatched 分开计数，429/超时真实派发仍记一次。模型真实请求仍以 ai_receipts 为准。
+`research_phase_events` 只持久保存 source / batch / run / phase、queue/start/end、gate/HTTP/解析及持久化毫秒、分页与本地预算、成功 / 429 / timeout / lock_busy / deadline 等状态。`/research/status` 提供最近 24 小时分组；不保存 key、敏感 headers、完整请求 URL 或响应正文。bulk metadata 的独立 run 通过 provider_json.runId 及队列 origin 字段关联各 source；本地 cacheHits 和 dispatched 分开计数，429/超时真实派发仍记一次。模型真实请求仍以 ai_receipts 为准。
 
-新增 fixture 验证：32 head 后最多 3 公平续页、采集补全 0 外联、持久 429、deadline 留队、超限留存、独立 run / lease、fence / 原子扣额 / 幂等、scope_pending 原归属、评分门控、冻结日报 / 简报不变，以及 sync / process / daily 网络未知不重放。所有响应均为合成数据，未执行生产采集或真实收费模型。
+新增 fixture 验证：32 head 后最多 3 公平续页、采集补全 0 外联、持久 429、deadline 留队、超限留存、独立 run / lease、fence / 原子扣额 / 幂等、scope_pending 原归属、评分门控、冻结日报 / 简报不变，以及 sync / process / daily 网络未知不重放。完整 Sites / scholarly / AI / anysearch 回归 495/495 通过，typecheck、changelog 校验、隔离 Worker/D1 检查通过；[结构化验证记录](fixtures/research-phase1-validation.json)保留命令和范围。构建中的 Web client、SSR 和 Worker 编译通过，最终复制步骤因 fork 缺少私有 `.openai/hosting.json` 而无法完成；父任务在官方 checkout 做最终构建，本工作区不复制或伪造该配置。所有响应均为合成数据，未执行生产采集或真实收费模型。
 
 离线阶段基线：`node sites/bench-research-phases.mjs <本地版本目录> <标签>`。原始样本保存在 `docs/fixtures/research-phases-*.json`，Node 24.11.1 / Windows，3 次全新内存 SQLite、1 个 source、1 页、5 条已有 DOI。旧基线 5de4ff8 的采集端点执行 1 期刊页 + 2 DOI recheck + 1 OpenAlex；新采集端点只执行 1 期刊页，候选延期到独立维护阶段。它衡量本地阶段移动和原共享间隔，不是完整管线的同工作量提速比较；不能拿 fake transport 或 mock 墙钟宣称线上加速。
 
 用户已有线上证据保持原解释：Oct10 晚 29 runs 共 194.708 秒，run 间 126.071 秒尚不可细分；29/32 首屏、Crossref 全部成功、剩 3 源未尝试，35 页未用满。新增 telemetry 用于正式授权后的真实测量，此次没有补造线上数据。
 
+## review 边界补充
+
+旧队列 origin_run_id 与 daily_cohort_key 同为空时转为 legacy_deferred / legacy_unattributed，保留原始记录，不占 v2 活动 2000 项额度，也不授权新付费历史查找。明确过更新窗口的队列在 LIMIT 前转为 abstain / expired_update_window；评分同样排除并标注过期，候选、分析和回执不删除。
+
+已创建 ai_receipts 的 failed / unknown 评分是本版本的终态弃权，简报保留 scoringAbstained、reviewRequired 和对应 request/receipt 诊断；不伪装评分成功，也不永远卡住最老准备日。当前 schema 且 request_id 与本分析严格对应、没有任何持久回执的 unknown 可恢复 queued；真正未发送的额度阻塞继续等待。归档、分组和 research_daily_work=frozen 同事务提交，既有归档可幂等修复准备状态；准备日选择排除已有归档，防止旧 pending 标志堵住下一天。
+
+身份缺失、外来 DOI、同 DOI 冲突、一个稳定 provider ID 对应多个 DOI 都保留 blocked/deferred 证据。只有核对完整结果集后的明确缺项、S2 对应请求槽的显式 null，或 Crossref 单 DOI 的 404 可以记 no_record；批量端点 404 不能推定全部 DOI 不存在。原始重发现先合并已补证据，未改变的语义输入保留 provider 终态和下一尝试时间，完整摘要可以替换短片段；每次 provider 请求核对设置 revision。
+
 ## 建议替换的完整自动化文本（只建议，未写入真实任务）
 
-> 执行 HKIS 研究采集 v2。只使用已有官方私有 Site service access；不要创建密钥、输出或写入 token，不改调度或部署。运行 fork 审查通过版本中的 `node sites/run-research-slot.mjs`，将已核实 baseUrl、精确 allowedOrigins、现有 token 和当前 UTC+08 的 8/20 slot 直接通过安全 stdin / 内存传入。一次进程串行完成本次调用，不逐源重复人工编排。20 点先冻结到期 source 计划，首轮 head 优先、所有 head 完成或明确延期后公平续页；确认 sync 已返回并释放租约后 finish，再统一补全和评分。08 点先对前日真实 08/20 首次新增归属补全、评分，所有元数据及评分完成后才冻结前日日报；不足则保留独立准备队列并在后续 08 续办原归属日，然后采集今天 08 批次，不能混入今天论文。保留全局 35 页、每源 2 页、20 点采集 330 秒 / 08 点采集 260 秒、整轮 540 秒和不足 110 秒不启动长请求；日报需要完整 190 秒余量。provider / 模型额度由现有服务端执行；预算不足、缺连接、429、锁忙、deadline 和范围待判如实排队，首屏不称完整覆盖。任何 POST 网络未知立即停止，不重放 daily/process，不强行 finish 在飞批次；只回读持久状态并报告真实缺口。输出阶段状态、实际 run/batch ID、分页 / ready / pending / overflow 数量和耗时，不输出任何密钥或敏感 headers。执行环境不能支持该脚本或官方 access 时明确报告 deferred，不静默退回逐源付费补查。
+以下建议绑定固定代码 SHA **REVIEWED_HKIS_CODE_SHA**。父任务审查并批准后才可替换原任务提示词；保持原定时规则、原 Site 和既有 service access。
+
+> 执行 HKIS 研究采集 v2。记录本次自动化开始 UTC 时间 automationStartedAt；它计入整轮 540 秒，不允许脚本重新获得 540 秒预算。首先用原生 get_site 读取原 HKIS 自动化已绑定的准确 Site ID，核实 Site active、published、owner-private 访问方式及 current_live_url；只接受原站点返回的 HTTPS chatgpt.site origin。核对官方发布证据已包含批准的代码提交 REVIEWED_HKIS_CODE_SHA。任何 identity、发布状态、权限或版本无法确认都停止并报告 deferred，不能根据相似名称挑另一个站点、创建 service access 或把当前 main 当已批准版本。
+>
+> 使用既有官方 service access。token 仅保留于 stdin/内存，不放进 argv、环境文件、临时文件、输出、shell 历史或带密钥的重定向，不打印敏感 headers。取固定提交 REVIEWED_HKIS_CODE_SHA 中的 node sites/run-research-slot.mjs，核对本地实际 SHA；用运行环境已支持的安全 stdin/内存通道直接传入 baseUrl、精确 allowedOrigins、原 token、automationStartedAt、当前实际 UTC+08 的 slot 8 或 20。禁止真实时段外强制运行，不开新的常驻后台。缺少此安全传递能力时报告 deferred，不能退回逐源人工编排或改用新 key。
+>
+> 一次确定性进程串行执行 HTTP。20 点 start slot20，按后端 nextSourceId sync maxPages1，不自行选择源；全部应检 head 成功或明确延期前只发现，不能执行 DOI recheck/OpenAlex/S2。随后按最旧实际续页尝试公平 continuation，源内 latest/history 交替；head 按最旧实际检查，锁忙是 deferred，不预先推进尝试时间。sync HTTP 调用独立最多 35 次，分页原子总扣额最多 35、每源最多 2；锁忙或没有有效 nextSourceId 不能忙循环。20 点采集最多 330 秒，08 点最多 260 秒，整轮最多 540 秒；余量不足 110 秒不启动长请求。sync maxMs 至多 75000，并按剩余采集预算缩短，留 15 秒保存和释放 lease。429/cooldown 立即停止后续派发，保留所有队列。
+>
+> 每个已发 sync 等待返回并释放 lease 后 finish batch。只有明确 batchStatus finished/interrupted 才进入独立 metadata run/lease；HTTP 200 本身不证明结束。锁忙、在飞工作、deadline 或 finish 结果未知保留延期，不强封批次、不使用已 finish 的 fence。20 点 enrich cohort pending/maxMs75000，仅包含今天或已有明确准备任务的原归属候选；随后剩余至少 200 秒才 process maxPapers2/cohort current/maxMs至多210000。20 点不生成日报。
+>
+> 08 点先 enrich cohort previous_day/maxMs75000，按已有最老准备任务的原 source_date 补全，再 process maxPapers1/cohort previous_day/maxMs至多120000。任何原候选尚未 metadata ready 或明确终态 abstain、任何对应数据/配置/schema 的评分尚未终态时，日报必须 deferred pending_metadata/pending_scoring，不能冻结 ready 子集。剩余至少 190 秒才 daily/generate maxCalls2；只在 UTC+08 08:00–08:59 开始。准备任务后续 08 点按原归属日恢复；已尝试 failed/unknown 的评分保留 reviewRequired 诊断并终态弃权，paid 回执不自动重放。然后才 start slot8、按相同 head/continuation 顺序采集今天并安全 finish，今天的新论文不能进入昨天简报。
+>
+> 继续遵守所有现有 Crossref 并发1、共享限流、Retry-After、provider/模型额度和 AI 日30；不自行启用并发2或 polite 邮箱。scope_pending 保留，因为缺摘要仍可能待判相关性；不得删除候选、旧回执或冻结证据，不把首屏成功称完整覆盖。超量候选 durable overflow，旧未归属队列不扩张付费范围；过更新窗口候选转明确过期弃权并保留证据。任何 POST 网络结果未知立即停止，daily/process 不重试，sync 不强 finish 在飞工作。
+>
+> 余量内用同一官方 service access 只读一次 /api/site/research/status 和 /api/site/research/processing/status，核对 source/batch/run/phase 状态、pending/overflow/legacy_deferred、分页扣额、ready/abstain/deferred、模型回执/额度与持久阶段耗时；08 点还可只读 /api/site/research/daily 查看实际报告状态。只读也计入同一 540 秒，无余量则明确标注未核验，不为回读延长预算。最终报告真实 run/batch ID、覆盖缺口、各阶段耗时和下一步延期原因；不输出 token 或敏感 headers。不修改真实定时规则、不部署 Site、不新建调度镜像或支付配置。
