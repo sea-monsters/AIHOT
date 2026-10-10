@@ -78,7 +78,7 @@ Node.js 24.11+：`node sites/run-research-slot.mjs`。一个进程、一个串�
 
 以下建议绑定固定代码 SHA **64ee1ec87ad4d3bf2b8aada60fdef4f8c84c6b2b**。父任务审查并批准后才可替换原任务提示词；保持原定时规则、原 Site 和既有 service access。
 
-> 执行 HKIS 研究采集 v2。记录本次自动化开始 UTC 时间 automationStartedAt；它计入整轮 540 秒，不允许脚本重新获得 540 秒预算。首先用原生 get_site 读取原 HKIS 自动化已绑定的准确 Site ID，核实 Site active、published、owner-private 访问方式及 current_live_url；只接受原站点返回的 HTTPS chatgpt.site origin。核对官方发布证据已包含批准的代码提交 64ee1ec87ad4d3bf2b8aada60fdef4f8c84c6b2b。任何 identity、发布状态、权限或版本无法确认都停止并报告 deferred，不能根据相似名称挑另一个站点、创建 service access 或把当前 main 当已批准版本。
+> 执行 HKIS 研究采集 v2。记录本次自动化开始 UTC 时间 automationStartedAt；它计入整轮 540 秒，不允许脚本重新获得 540 秒预算。首先用原生 get_site，明确传入 project_id="appgprj_6abc4fd381ec8191a22761c6ba246fe2" 读取准确的 HKIS Site，核实 Site active、published、owner-private 访问方式及 current_live_url；只接受原站点返回的 HTTPS chatgpt.site origin。核对官方发布证据已包含批准的代码提交 64ee1ec87ad4d3bf2b8aada60fdef4f8c84c6b2b。任何 identity、发布状态、权限或版本无法确认都停止并报告 deferred，不能根据相似名称挑另一个站点、创建 service access 或把当前 main 当已批准版本。
 >
 > 使用既有官方 service access。token 仅保留于 stdin/内存，不放进 argv、环境文件、临时文件、输出、shell 历史或带密钥的重定向，不打印敏感 headers。取固定提交 64ee1ec87ad4d3bf2b8aada60fdef4f8c84c6b2b 中的 node sites/run-research-slot.mjs，核对本地实际 SHA；用运行环境已支持的安全 stdin/内存通道直接传入 baseUrl、精确 allowedOrigins、原 token、automationStartedAt、当前实际 UTC+08 的 slot 8 或 20。禁止真实时段外强制运行，不开新的常驻后台。缺少此安全传递能力时报告 deferred，不能退回逐源人工编排或改用新 key。
 >
@@ -90,4 +90,4 @@ Node.js 24.11+：`node sites/run-research-slot.mjs`。一个进程、一个串�
 >
 > 继续遵守所有现有 Crossref 并发1、共享限流、Retry-After、provider/模型额度和 AI 日30；不自行启用并发2或 polite 邮箱。scope_pending 保留，因为缺摘要仍可能待判相关性；不得删除候选、旧回执或冻结证据，不把首屏成功称完整覆盖。超量候选 durable overflow，旧未归属队列不扩张付费范围；过更新窗口候选转明确过期弃权并保留证据。任何 POST 网络结果未知立即停止，daily/process 不重试，sync 不强 finish 在飞工作。
 >
-> 余量内用同一官方 service access 只读一次 /api/site/research/status 和 /api/site/research/processing/status，核对 source/batch/run/phase 状态、pending/overflow/legacy_deferred、分页扣额、ready/abstain/deferred、模型回执/额度与持久阶段耗时；08 点还可只读 /api/site/research/daily 查看实际报告状态。只读也计入同一 540 秒，无余量则明确标注未核验，不为回读延长预算。最终报告真实 run/batch ID、覆盖缺口、各阶段耗时和下一步延期原因；不输出 token 或敏感 headers。不修改真实定时规则、不部署 Site、不新建调度镜像或支付配置。
+> 余量内用同一官方 service access 只读一次 /api/site/research/status 和 /api/site/research/processing，核对 source/batch/run/phase 状态、pending/overflow/legacy_deferred、分页扣额、ready/abstain/deferred、模型回执/额度与持久阶段耗时；08 点还可只读 /api/site/research/daily 查看实际报告状态。只读也计入同一 540 秒，无余量则明确标注未核验，不为回读延长预算。沿用原通知策略：仅对新增可处理失败或定时路径阻塞通知用户，说明真实 run/batch ID、覆盖缺口、相关阶段耗时和可处理原因；常规成功不通知，正常 cooldown/RSS 限制只记持久日志，不重复通知，同一未变化阻塞也不重复提醒；不输出 token 或敏感 headers。不修改真实定时规则、不部署 Site、不新建调度镜像或支付配置。

@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-10T17:19:31.956Z",
+  "checkedAt": "2026-10-10T17:27:21.673Z",
   "environment": {
     "node": "v24.11.1",
     "platform": "win32",
@@ -13,10 +13,10 @@
     {
       "command": "node --test --test-concurrency=1 --test-timeout=120000 'sites/*.test.ts' 'sites/*.test.mjs' 'sites/scholarly/*.test.ts' 'sites/ai/*.test.ts' 'sites/anysearch/*.test.mjs'",
       "exitCode": 0,
-      "tests": 515,
-      "pass": 515,
+      "tests": 518,
+      "pass": 518,
       "fail": 0,
-      "durationMs": 82959.3955
+      "durationMs": 79290.9665
     },
     {
       "command": "npm run typecheck",
@@ -36,6 +36,14 @@
       "command": "npm run build",
       "compilation": "Web client, SSR and Sites Worker bundle succeed",
       "packaging": "blocked: ignored .openai/hosting.json is absent; no private Site configuration copied or fabricated"
+    },
+    {
+      "command": "node --test sites/research-contract.test.ts",
+      "exitCode": 0,
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "scope": "documented endpoints match actual route guards; exact project identity and quiet notification policy"
     }
   ],
   "migrations": {
@@ -58,7 +66,8 @@
     "expiredBeforeLimit": "passed",
     "legacyCapacity": "passed",
     "batchIdentityAndPartialEvidence": "passed",
-    "serialRequestAndDeadlineGates": "passed"
+    "serialRequestAndDeadlineGates": "passed",
+    "automationDocumentationEndpoints": "passed"
   },
   "performanceScope": "Local component fixture only; work moves out of discovery. No online or end-to-end speedup claim.",
   "limitations": [
