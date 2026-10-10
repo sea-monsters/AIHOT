@@ -1,5 +1,41 @@
 # 上游同步记录
 
+## 当前同步索引
+
+- 最后完整 merge：`cf8f8d07d68dfa9079becc72b0717a45b33485f3`，由 fork `ed0cf9a24790602902b6350bb2d2d18a6168a4e7` 合入；未把后续审查 head 记成已完整合并。
+- 最近一次选择性审查：`8ef28ebcd167b311ffab8c0308181e2912262ae2` → `9cf2a3c261d3e4d8f4350ece98d1f9e197a71a8b`，本轮 13 项，见下节。上游 head 原始 committer 时间为 **2026-10-10T13:32:05Z**。
+- 上次选择性审查：`8e34e05feb161cb5838e592ee22715f791c7f814` → `8ef28ebcd167b311ffab8c0308181e2912262ae2`，共 18 项；详见 [2026-10-09 适配记录](hkis-selective-adaptation-2026-10-09.md)。原第四轮的 `8e34e05` 是历史节点，不能继续当作当前索引。
+
+## 2026-10-10 UTC · 第六轮审查，仅导航维护说明适配
+
+固定核对 [13 项完整比较](https://github.com/KKKKhazix/AIHOT/compare/8ef28ebcd167b311ffab8c0308181e2912262ae2...9cf2a3c261d3e4d8f4350ece98d1f9e197a71a8b)；本地 fetch 该精确 head 后，Git 范围确认 13 个提交。维护记录时间为 `2026-10-10T16:48:37Z`（UTC+08 为 2026-10-11 00:48:37），不是生产上线时间。该范围用于审查，**没有生产功能 cherry-pick，也没有完整 merge**。
+
+仅把 `18ddc7b` 的导航验收要求适配到本站 AGENTS：将上游“我的”映射到本站“更多”，核对默认/非默认配置、侧栏/手机底栏、返回及减少入口的浏览器布局。本站 `TABBAR` 为 4 项，另有 `AssistantEntry`，实际合计 5 项；本轮不更改列数、不新增隐藏配置。隐藏展示不等于权限控制，仍由服务端校验。未原样覆盖上游 AGENTS 或改变现有安全约束。
+
+### 逐提交判定（原始 UTC committer 时间）
+
+| 上游提交 | 原始时间 | 实际适用性 |
+| --- | --- | --- |
+| [f9a6da4](https://github.com/KKKKhazix/AIHOT/commit/f9a6da4f39fde1edebad984197fc4e1ed269eaff) | 2026-10-09T18:04:06Z | 不采用：原 weekly/monthly PostgreSQL 补期边界，不属于 Sites D1 论文批次与简报路径。 |
+| [a68d525](https://github.com/KKKKhazix/AIHOT/commit/a68d525dcdb6a8258417a8827f534a5bfecd8c77) | 2026-10-09T18:09:25Z | 不采用：新增付费措辞修订模型步骤；不增加模型请求、费用或改变本站回执和 unknown 不重发边界。 |
+| [c0bf09d](https://github.com/KKKKhazix/AIHOT/commit/c0bf09d8ef9d6f7f0c6b7ea0b86ea03333aa2bb2) | 2026-10-09T18:09:25Z | 不采用：上述措辞修订步骤的选填模型变量说明，本站未启用该步骤。 |
+| [ab715bf](https://github.com/KKKKhazix/AIHOT/commit/ab715bfc222a5fdb27254887c767371ff8504095) | 2026-10-09T18:17:16Z | 不采用：新版 NAV.hidden 导航配置在本站没有对应实现，不凭隐藏入口推导权限。 |
+| [aab7e62](https://github.com/KKKKhazix/AIHOT/commit/aab7e62db01dfc76eaf24b5ba936dced377e1f60) | 2026-10-09T18:17:16Z | 不采用：NAV.hidden 的新版手机栏与直达标签布局，本站为独立 Sidebar/MobileTabBar/更多路径。 |
+| [50075b4](https://github.com/KKKKhazix/AIHOT/commit/50075b4b73a6e450d8fbdf48925f019b4fbdd11a) | 2026-10-09T18:21:56Z | 不采用：上游 PhoneBar 隐藏标题宽度修复，本站没有该组件。 |
+| [7971d92](https://github.com/KKKKhazix/AIHOT/commit/7971d92b73daf976c9966a9353fffdcfec3dfc00) | 2026-10-09T18:21:56Z | 不采用：上述 PhoneBar 的注释整理，本站没有该组件。 |
+| [18ddc7b](https://github.com/KKKKhazix/AIHOT/commit/18ddc7b17f59923d2e9f297fac7839dac3b4043a) | 2026-10-09T18:28:21Z | 仅维护说明适配：导航更改须验证默认/非默认、桌面侧栏/手机底栏、返回/更多及减少入口后的布局；不原样覆盖 AGENTS。 |
+| [dd02610](https://github.com/KKKKhazix/AIHOT/commit/dd026102ddd8effa2b626085126050973e209c7b) | 2026-10-10T05:58:00Z | 不采用：旧 selection eval 的 COPY_WRITTEN 等待后再选择回归；本站评估条件和实现不同。 |
+| [f087b9f](https://github.com/KKKKhazix/AIHOT/commit/f087b9f79f9955db6f823fdcdb7ca248b8f62828) | 2026-10-10T06:26:26Z | 不采用：撤回新闻不再参与未来事件归组；不等同于学术论文撤稿处理。 |
+| [b6c0796](https://github.com/KKKKhazix/AIHOT/commit/b6c079661a83add6ee0fc38e47a8514e49f1db95) | 2026-10-10T13:11:55Z | 不采用：通过 current fact 寻找 related-event bridge 的 PG 查询/索引，本站不存在这条事件归组路径。 |
+| [efc7bdf](https://github.com/KKKKhazix/AIHOT/commit/efc7bdfc37743d3c3a491c19f315a2fb7c30dafb) | 2026-10-10T13:11:55Z | 不采用：飞书缺期提醒的七天扫描窗，本站没有该运行告警路径。 |
+| [9cf2a3c](https://github.com/KKKKhazix/AIHOT/commit/9cf2a3c261d3e4d8f4350ece98d1f9e197a71a8b) | 2026-10-10T13:32:05Z | 不采用：措辞修订拒绝时保留第一份文案、NAV.hidden 直达页面包屑与关联说明；两条生产功能均未在本站启用。 |
+
+本轮 13 项中的采用数量只代表 **1 项维护说明适配、0 项生产功能修复**。已有采集、32 来源、模型预算、调度、Sites D1 schema、账户状态及视觉主题均未由本轮更改。生产部署由父任务处理；未运行真实采集、付费模型、游标重置、补历史、定时任务或秘密变更。代码修复不能消除执行环境网络 403 根因。
+
+本次同批日志分类更正与验证见 [分类审计](changelog-classification-audit.md)。
+
+---
+
 ## 2026-10-07 · 第四轮上游审查与构建依赖安全修复
 
 GitHub 固定窗口为 `2b80294859160a727e0749f7b8b6232c2812fdf4` → `8e34e05feb161cb5838e592ee22715f791c7f814`，新增 **10** 个提交；2026-10-07 13:46 UTC 复核上游 HEAD 未变。[比较范围](https://github.com/KKKKhazix/AIHOT/compare/2b80294859160a727e0749f7b8b6232c2812fdf4...8e34e05feb161cb5838e592ee22715f791c7f814)。选择性审查截至 **8e34e05**；最后完整 merge 基线仍为 **cf8f8d0**，不添加虚假的第二父提交，历史未采用项目继续以本记录判断。

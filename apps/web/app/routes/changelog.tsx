@@ -106,7 +106,7 @@ export default function ChangelogPage() {
 </section>
     <RailDisclosure title="记录口径">
       <p className="text-sm leading-relaxed text-ink-3">所有日期统一为 UTC+08。历史条目按代码提交或上游合入日期归档；本页维护记为「维护记录」，不推测精确上线时间。</p>
-      <p className="mt-2 text-xs leading-relaxed text-ink-3">每条记录附代码来源。上游更新只有合入本站 fork 后才进入主时间线。</p>
+      <p className="mt-2 text-xs leading-relaxed text-ink-3">每条记录附来源。上游条目区分实际合入、选择性适配与已提交的审查记录；审查不表示全部合入。</p>
     </RailDisclosure>
     <RailDisclosure title="运行问题排查">
       <p className="text-sm leading-relaxed text-ink-3">采集、模型请求的 warning / error 仍在所有者专用诊断页查看。</p>

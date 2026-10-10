@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { readFile } from 'node:fs/promises';
 import { CHANGELOG } from '../industry/changelog.ts';
-import { validateChangelog, changelogDays } from '../packages/contracts/src/changelog.ts';
+import { CHANGE_KIND_OPTIONS, validateChangelog, changelogDays } from '../packages/contracts/src/changelog.ts';
 import { categoryKey, groupEntriesByKind, latestReadReady } from '../apps/web/app/features/changelog/disclosure.ts';
 import { siteApi } from './api.ts';
 const copy = () => structuredClone(CHANGELOG);
@@ -125,4 +125,79 @@ test('selective upstream record distinguishes the reviewed range from the adopte
  assert.equal(entry.upstream!.commits.filter(c=>c.title.startsWith('择取：')).length,3);
  assert.ok(entry.body.some(s=>s.includes('未整合 v3/v4')));
  assert.ok(entry.sources.some(s=>s.url.endsWith('/65ad76f90c158024fe2ee37754930a0111e7f98d')));
+});
+
+test('authoring choices name all three types and reject invalid or coerced kinds', () => {
+  assert.deepEqual(Object.entries(CHANGE_KIND_OPTIONS).map(([kind, option]) => [kind, option.label]), [
+    ['feature', '功能更新'], ['fix', '问题修复'], ['upstream', '上游同步'],
+  ]);
+  for (const kind of ['unknown', '__proto__', null, ['fix'], { toString: () => 'fix' }]) {
+    const bad = copy(); (bad.releases[0] as any).kind = kind;
+    assert.throws(() => validateChangelog(bad), /feature（功能更新）.*fix（问题修复）.*upstream（上游同步）/);
+  }
+});
+
+test('proven historical upstream adaptations retain their maintenance dates and local changes keep their types', () => {
+  for (const [id, at] of [
+    ['upstream-navigation-safety-2026-10-04', '2026-10-04T14:24:45Z'],
+    ['upstream-atom-baseline-20261006', '2026-10-06T11:16:30Z'],
+    ['upstream-source-map-safety-20261007', '2026-10-07T13:53:10Z'],
+  ]) {
+    const entry = CHANGELOG.releases.find(entry => entry.id === id)!;
+    assert.equal(entry.kind, 'upstream', id);
+    assert.equal(entry.at, at, id);
+    assert.equal(entry.basis, 'record', id);
+    assert.equal(entry.upstream, undefined, 'no fabricated full merge evidence');
+    assert.ok(changelogDays(CHANGELOG.releases, 'upstream').flatMap(day => day.entries).includes(entry));
+    assert.ok(!changelogDays(CHANGELOG.releases, 'fix').flatMap(day => day.entries).includes(entry));
+  }
+  for (const id of ['collection-recovery-20261010', 'collection-review-followup-20261010', 'crossref-slot-stop-20261008', 'metadata-doi-conflict-isolation-20261006', 'changelog-inline-time-prose-spacing-20261010']) {
+    assert.equal(CHANGELOG.releases.find(entry => entry.id === id)!.kind, 'fix', id);
+  }
+  for (const id of ['hkis-selective-adaptation-20261009', 'batch-brief-publisher-settings-20261007']) {
+    assert.equal(CHANGELOG.releases.find(entry => entry.id === id)!.kind, 'feature', id);
+  }
+});
+
+test('upstream maintenance evidence cannot replace integration evidence or omit either provenance source', () => {
+  assert.equal(validateChangelog(copy()).latestVersion, CHANGELOG.latestVersion);
+  const id = 'upstream-navigation-safety-2026-10-04';
+  const withoutUpstream = copy(); withoutUpstream.releases.find(entry => entry.id === id)!.sources = [
+    { label: 'Local notes', url: 'https://github.com/sea-monsters/AIHOT/blob/main/docs/upstream-sync.md' },
+  ];
+  assert.throws(() => validateChangelog(withoutUpstream), /requires upstream commit or comparison/);
+  const withoutReview = copy(); withoutReview.releases.find(entry => entry.id === id)!.sources = [
+    { label: 'Upstream', url: 'https://github.com/KKKKhazix/AIHOT/commit/18ddc7b17f59923d2e9f297fac7839dac3b4043a' },
+  ];
+  assert.throws(() => validateChangelog(withoutReview), /requires a fork review document/);
+  const falseIntegration = copy(); falseIntegration.releases.find(entry => entry.id === id)!.basis = 'integration';
+  assert.throws(() => validateChangelog(falseIntegration), /upstream/);
+  const falseCommit = copy(); falseCommit.releases.find(entry => entry.id === id)!.basis = 'commit';
+  assert.throws(() => validateChangelog(falseCommit), /integration/);
+  const substituted = copy(); substituted.releases.find(entry => entry.id === 'upstream-2026-10-01')!.basis = 'record';
+  assert.throws(() => validateChangelog(substituted), /integration/);
+});
+
+test('review-only maintenance names actual adoption without claiming the thirteen commits were merged', () => {
+  const entry = CHANGELOG.releases.find(entry => entry.id === 'upstream-navigation-maintenance-review-20261010')!;
+  assert.equal(entry.kind, 'upstream'); assert.equal(entry.basis, 'record'); assert.equal(entry.upstream, undefined);
+  assert.ok(entry.body.some(line => line.includes('没有生产功能cherry-pick')));
+  assert.ok(entry.body.some(line => line.includes('最后完整merge仍为cf8f8d0')));
+  assert.ok(entry.sources.some(source => source.url.endsWith('/compare/8ef28ebcd167b311ffab8c0308181e2912262ae2...9cf2a3c261d3e4d8f4350ece98d1f9e197a71a8b')));
+});
+
+test('counts, midnight calendar and latest-visible acknowledgement use the actual corrected data', () => {
+  const counts = Object.keys(CHANGE_KIND_OPTIONS).map(kind => CHANGELOG.releases.filter(entry => entry.kind === kind).length);
+  assert.equal(counts.reduce((total, count) => total + count, 0), CHANGELOG.releases.length);
+  const days = changelogDays(CHANGELOG.releases);
+  assert.equal(days.reduce((total, day) => total + day.entries.length, 0), CHANGELOG.releases.length);
+  const entry = CHANGELOG.releases[0]!;
+  const latest = { id: entry.id, kind: entry.kind, date: days[0]!.date };
+  const open = { [categoryKey(latest.date, latest.kind)]: true };
+  const maintenance = CHANGELOG.releases.find(entry => entry.id === 'changelog-provenance-classification-20261010')!;
+  assert.equal(changelogDays([maintenance])[0]!.date, '2026-10-11', 'maintenance timestamp crosses UTC+08 midnight');
+  assert.equal(latestReadReady(latest, {}, true, ''), false);
+  assert.equal(latestReadReady(latest, open, false, ''), false);
+  assert.equal(latestReadReady(latest, open, true, `#change-${latest.id}`), true);
+  assert.equal(latestReadReady(latest, open, true, '#change-upstream-navigation-safety-2026-10-04'), false);
 });
