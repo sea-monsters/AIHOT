@@ -1,8 +1,20 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-10T07:51:54Z",
+  "latestVersion": "2026-10-10T08:08:26Z",
   "releases": [
+    {
+      "id": "changelog-side-references-spacing-20261010",
+      "kind": "fix",
+      "basis": "record",
+      "at": "2026-10-10T08:08:26Z",
+      "title": "日志参考链接移至右侧，展开正文收紧边界留白",
+      "body": [
+        "展开详情在空间足够时分为正文主列和右侧参考链接列，链接按条目垂直排列，较长名称自然换行；窄屏或正文列较窄时下移并靠右，避免挤压正文或出现横向滚动。没有参考链接的条目不预留空列。",
+        "折叠后所有参考链接仍随详情隐藏，不能通过键盘聚焦；展开后的正文与上下边界间距收紧。条目标题、同行时间、整栏展开、日期月历、锚点和最新日志已读规则保持原有行为。"
+      ],
+      "sources": [{"label": "链接位置与间距验证", "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/changelog-ui-audit.md"}]
+    },
     {
       "id": "changelog-entry-title-density-20261010",
       "kind": "fix",

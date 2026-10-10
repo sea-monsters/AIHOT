@@ -37,13 +37,11 @@ export function Entry({ entry, open }: { entry: ChangeRelease; open:boolean }) {
         <h4 id={`heading-${entry.id}`} tabIndex={-1} className="changelog-entry-title text-base font-semibold leading-relaxed text-ink">{entry.title}</h4>
         <span className="changelog-entry-meta text-ink-3"><span>{BASIS[entry.basis]}</span> <time dateTime={entry.at} className="mono">{beijingTime(entry.at)}</time></span>
       </div>
-      <div id={`change-content-${entry.id}`} className="changelog-content" hidden={!open}>
+      <div id={`change-content-${entry.id}`} className="changelog-content" hidden={!open} data-has-sources={entry.sources.length>0}>
+      <div className="changelog-copy">
       <ul className="changelog-body">
         {entry.body.map((line, index) => <li key={index}><p className={isProseParagraph(line) ? 'changelog-prose' : undefined}><Inline text={line} /></p></li>)}
       </ul>
-      <div className="changelog-sources mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-        {entry.sources.map((source,index) => <a key={`${entry.id}-source-${index}`} href={source.url} target="_blank" rel="noopener noreferrer" className={linkClass('source')}>{source.label}<ExternalLinkMark/></a>)}
-      </div>
       {entry.upstream && <div className="changelog-upstream">
         <h5 className="text-xs font-medium text-ink-2">上游提交（{entry.upstream.commits.length}）</h5>
         <p className="mt-2 text-xs leading-relaxed text-ink-3">以下是上游原始提交时间（UTC+08）；本站于 {beijingDate(entry.at)} {beijingTime(entry.at)} 合入 fork。合入日期不等同于精确上线时间。</p>
@@ -53,6 +51,10 @@ export function Entry({ entry, open }: { entry: ChangeRelease; open:boolean }) {
             <a href={commit.url} target="_blank" rel="noopener noreferrer" className="mt-1 block text-accent underline decoration-accent/30 underline-offset-4">{commit.title} <span className="mono text-xs">{commit.sha.slice(0, 7)}</span></a>
           </li>)}
         </ol>
+      </div>}
+      </div>
+      {entry.sources.length>0 && <div className="changelog-sources">
+        {entry.sources.map((source,index) => <a key={`${entry.id}-source-${index}`} href={source.url} target="_blank" rel="noopener noreferrer" className={linkClass('source')}><span className="changelog-source-label">{source.label}</span><ExternalLinkMark/></a>)}
       </div>}
       </div>
     </article>
