@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-10T16:48:37Z",
+  "latestVersion": "2026-10-10T17:14:54Z",
   "releases": [
+    {
+      "id": "paper-items-shared-disclosure-20261010",
+      "at": "2026-10-10T17:14:54Z",
+      "basis": "record",
+      "kind": "feature",
+      "title": "论文条目统一紧凑摘要抽屉，保留完整来源和阅读操作",
+      "body": [
+        "论文库、主题、研究进展、收藏、热点关联、精华日报及助手论文结果复用紧凑条目，默认显示完整题名、关键词、更新时间、单位机构和评分；缺字段明确未提供，规则阅读优先级与AI评分分别标识。",
+        "点击摘要按钮后展示完整已存摘要、完整DOI与安全原文入口，采用二百二十毫秒的局部裁切和文字位置过渡；折叠来源不可聚焦，连续反向、减少动态效果和导航卸载安全收尾，大列表仅测量正在切换的条目。",
+        "热点和助手按已有ID懒读详情，精华日报按对应归档快照读取，保留日报正文、逐句引用和早晚简报；展开不启动外站全文、模型或已读写入，既有原文点击已读、收藏、多选和批量已读继续可用。本条为源码维护记录，review分支验收不代表生产已发布。"
+      ],
+      "sources": [
+        {
+          "label": "页面覆盖、数据口径与隔离验收",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/paper-disclosure-audit.md"
+        }
+      ]
+    },
     {
       "id": "changelog-provenance-classification-20261010",
       "at": "2026-10-10T16:48:37Z",

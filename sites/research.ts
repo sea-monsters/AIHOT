@@ -8,7 +8,7 @@ import {matchesResearchTheme,themeSummaries,resolveResearchTheme} from './resear
 import {dailyCohortKey,collectionEntryPoint,type CollectionEntryPoint} from './research-attribution.ts';
 import {prepareCrossref,nextCrossrefPage,reserveCrossrefPage,markCrossrefAttempt,crossrefURL,commitCrossrefPage,crossrefSummary} from './research-crossref.ts';
 import {startBatch,finishBatch,validateBatch,briefMissingness,briefTrackingSearchParams,briefTrackingView,type BriefTrackingOptions} from './research-batches.ts';
-import {dailyRead,dailyCalendarRead,generateDaily} from './research-daily.ts';
+import {dailyRead,dailyCalendarRead,dailyPaperRead,generateDaily} from './research-daily.ts';
 import {AIError} from './ai/security.ts';
 import {processingStatus,processRecent,attachAnalyses,currentAnalysisKey} from './research-processing.ts';
 import {monthWindow,inUpdateWindow,PIPELINE_VERSION,ANALYSIS_SCHEMA,digest,metadataFields,analysisFields} from './research-pipeline.ts';
@@ -328,6 +328,7 @@ export async function researchApi(request:Request,env:any){const db=env.DB;if(!d
  if(path==='/api/site/research/status'){try{const tracking=briefTrackingSearchParams(u.searchParams),[status,processing]=await Promise.all([researchStatus(db,true,tracking),processingStatus(db,env)]);return json({...status,processing});}catch(e){return json({code:e instanceof AIError?e.code:'status_unavailable',error:e instanceof AIError?e.message:'状态暂不可用'},e instanceof AIError?e.status:503)}}
  if(path==='/api/site/research/daily/calendar')return json(await dailyCalendarRead(db,u.searchParams));
  if(path==='/api/site/research/daily')return json(await dailyRead(db,u.searchParams));
+ if(path.startsWith('/api/site/research/daily/papers/')){const parts=path.slice('/api/site/research/daily/papers/'.length).split('/');if(parts.length!==2)return json({error:'Not found'},404);let ids:string[];try{ids=parts.map(decodeURIComponent)}catch{return json({error:'Not found'},404)}const paper=await dailyPaperRead(db,ids[0],ids[1]);return paper?json(paper):json({error:'Not found'},404);}
  if(path==='/api/site/research/feed'){
   const rows=(await db.prepare('SELECT * FROM research_papers WHERE priority>=0').all()).results;
   const view=buildResearchView(rows.map(decodePaperRow),u.searchParams,'feed');return json({...view,papers:view.papers.map(enrichPaperRow)});

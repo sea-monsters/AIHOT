@@ -1,4 +1,5 @@
 import {publisherGroups} from '../research-intervals.ts';
+import {paperInstitutionEvidence} from '../paper-metadata.ts';
 import {researchSchedule} from '../research-schedule.ts';
 import {search as searchWeb} from '../anysearch/provider.ts';
 import {validateQuery,validateLimit} from '../anysearch/domain.ts';
@@ -38,7 +39,11 @@ export async function resolveProposal(db:any,id:string,pid:string,action:string)
  const done=await db.prepare('SELECT status FROM ai_proposals WHERE id=? AND owner_id=?').bind(pid,id).first();if(done.status!=='applied')throw new AIError('proposal_conflict',409,'配置已变化或建议已取消，请重新生成');
  return {status:'applied',preferences:await preferenceStatus(db,id)};
 }
-export function evidencePaper(p:any){let provenance:any={};try{provenance=JSON.parse(p.provenance_json)}catch{}return {id:p.id,title:p.title,journal:p.journal,publisher:p.publisher,publishedAt:p.published_at,doi:p.doi,detailUrl:'/research/'+p.id,originalUrl:p.doi?'https://doi.org/'+p.doi:p.url,abstract:p.abstract?.slice(0,12000)||null,abstractSource:provenance.abstract||null,ruleScore:p.priority,ruleRelevance:p.relevance,aiScore:null}}
+export function evidencePaper(p:any){
+ const parse=(value:any,fallback:any)=>{try{return JSON.parse(value)}catch{return fallback}};
+ const provenance=parse(p.provenance_json,{}),affiliations=parse(p.affiliations_json,[]),authors=parse(p.authors_json,[]);
+ return {id:p.id,title:p.title,journal:p.journal,publisher:p.publisher,publishedAt:p.published_at,doi:p.doi,detailUrl:'/research/'+p.id,originalUrl:p.doi?'https://doi.org/'+p.doi:p.url,abstract:p.abstract?.slice(0,12000)||null,abstractSource:provenance.abstract||null,updatedAt:p.updated_at,affiliations:[...new Set([...affiliations,...paperInstitutionEvidence({affiliations,authors,provenance}).map(i=>i.label)])],keywords:parse(p.keywords_json,[]),ruleScore:p.priority,ruleRelevance:p.relevance,aiScore:null};
+}
 /** Validate before canonical counting/execution. Normalization follows the tools' actual semantics. */
 export function normalizeToolArgs(name:string,args:any):Record<string,any>{
  const object=(v:any,keys:string[])=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).every(k=>keys.includes(k));

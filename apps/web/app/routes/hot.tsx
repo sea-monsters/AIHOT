@@ -1,3 +1,4 @@
+import {PaperItem} from '../components/PaperItem';
 import {formatHotTime as time} from '../lib/hot-format';
 import {profileContentReady} from '../lib/performance-profile';
 import {useContentProfile} from '../lib/use-content-profile';
@@ -14,7 +15,7 @@ import {isPageOverview} from '@aihot/contracts/navigation-updates';
 import {memo,useCallback,useEffect,useLayoutEffect,useMemo,useState,type CSSProperties} from 'react';
 import {Form,Link,useLoaderData,useLocation,useRevalidator,type LoaderFunctionArgs} from 'react-router';
 import {ControlReadingLayout} from '../components/ui/ControlReadingLayout';
-import {PaperSelection,PaperBulkToolbar,PaperCardState,PaperSourceLink} from '../components/PaperReader';
+import {PaperSelection,PaperBulkToolbar} from '../components/PaperReader';
 import {PUBLISHERS} from '../../../../sites/research-config.ts';
 import type {KeywordMap} from '../../../../sites/keyword-map.ts';
 import {loadOr404,withPageUpdate} from '../lib/api.server';
@@ -45,7 +46,7 @@ const TableChunk=memo(function TableChunk({chunk,pinned,onHover,onPin}:{chunk:Ke
 const KeywordTable=memo(function KeywordTable({chunks,pinned,onHover,onPin}:{chunks:KeywordChunk[];pinned:string|null;onHover:(id:string|null)=>void;onPin:(id:string)=>void}){return <div className="keyword-table-scroll"><table><thead><tr><th scope="col">关键词</th><th scope="col">篇数</th><th scope="col">中位数</th><th scope="col">中间 50%</th><th scope="col">未评分</th><th scope="col">来源</th></tr></thead>{chunks.map(chunk=><TableChunk key={chunk.items[0]!.id} chunk={chunk} pinned={pinned&&chunk.ids.has(pinned)?pinned:null} onHover={onHover} onPin={onPin}/>)}</table></div>});
 /** Hover previews do not invalidate the fixed reading selection or its cards. */
 const KeywordPaperList=memo(function KeywordPaperList({papers,metric,scopeKey,showPapers}:{papers:KeywordMap['papers'];metric:string;scopeKey:string;showPapers:boolean}){
- return <PaperSelection load={showPapers} ids={papers.map(p=>p.id)} scopeKey={scopeKey}>{showPapers&&<div id="keyword-paper-list"><PaperBulkToolbar scopeLabel="当前结果"/><div className="keyword-paper-list">{papers.map(p=><PaperCardState key={p.id} id={p.id} title={p.title} className="keyword-paper"><div><h3><Link to={p.detailUrl}>{p.title}</Link></h3><p>{p.journal} · {metric} {num(p.score)} · {p.hasAbstract?'有摘要':'当前无可用摘要'}</p><p>发表 {p.publicationDate||'日期未明确'} · 入库 {time(p.firstSeen)} · 更新 {time(p.updatedAt)}</p><p>{p.keywords.map(k=>k.label).join(' · ')||'未分类'}<br/>{p.scoreSource}{p.scoreReason?'：'+p.scoreReason:''}</p>{p.jif.status==='verified'?<p>期刊 JIF {p.jif.value}（{p.jif.year}）· <a href={p.jif.sourceUrl!} target="_blank" rel="noreferrer">官方来源</a> · 不代表单篇质量</p>:<p>JIF 尚未核实</p>}<PaperSourceLink paperId={p.id} href={p.url} target="_blank" rel="noreferrer">论文原文</PaperSourceLink></div></PaperCardState>)}</div></div>}</PaperSelection>;
+ return <PaperSelection load={showPapers} ids={papers.map(p=>p.id)} scopeKey={scopeKey}>{showPapers&&<div id="keyword-paper-list"><PaperBulkToolbar scopeLabel="当前结果"/><div className="keyword-paper-list">{papers.map(p=><PaperItem key={p.id} paper={{...p,keywords:p.sourceKeywords,categories:p.keywords}} heading={3} className="keyword-paper" lazy><p>{metric}：{num(p.score)} · {p.scoreSource}{p.scoreReason?'：'+p.scoreReason:''}</p>{p.jif.status==='verified'?<p>期刊 JIF {p.jif.value}（{p.jif.year}）· <a href={p.jif.sourceUrl!} target="_blank" rel="noopener noreferrer">官方来源</a> · 不代表单篇质量</p>:<p>JIF 尚未核实</p>}</PaperItem>)}</div></div>}</PaperSelection>;
 });
 export function KeywordExplorer({d}:{d:KeywordMap}){
  const [legendOpen,setLegendOpen]=useState(false),[tableOpen,setTableOpen]=useState(false);

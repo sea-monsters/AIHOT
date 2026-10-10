@@ -1,4 +1,5 @@
 import {batchLifecycle} from './research-lifecycle.ts';
+import {paperInstitutionEvidence} from './paper-metadata.ts';
 import {briefDto} from './research-briefs.ts';
 import {dailyDateRevision} from './daily-visits.ts';
 import {cohortExpression} from './research-attribution.ts';
@@ -96,7 +97,7 @@ export async function generateDaily(db:any,env:any,body:any={},request?:Request,
   result.status=result.blocked?'blocked':result.queue.queued||result.queue.failed||result.queue.unknown||!['completed','empty'].includes(saved.status)?'partial':'ok';return result;
  }finally{await db.prepare("DELETE FROM research_settings WHERE key='daily_generation_lock' AND value=?").bind(expires).run();}
 }
-function publicGroup(r:any){const input=parse(r.input_json),config=parse(r.config_json,null);return {id:r.id,keyword:r.keyword,status:r.status,result:parse(r.result_json,null),config,errorCode:r.error_code,contentHash:r.content_hash,updatedAt:r.updated_at,papers:(input.papers||[]).map((p:any)=>({id:p.id,title:p.title,url:p.doi?'https://doi.org/'+encodeURI(p.doi):p.url,doi:p.doi,journal:p.journal,publisher:p.publisher,authors:p.authors,firstSeen:p.firstSeen,readingScore:p.readingScore,abstractSource:p.provenance?.abstract||null,contentHash:p.contentHash}))};}
+function publicGroup(r:any){const input=parse(r.input_json),config=parse(r.config_json,null);return {id:r.id,keyword:r.keyword,status:r.status,result:parse(r.result_json,null),config,errorCode:r.error_code,contentHash:r.content_hash,updatedAt:r.updated_at,papers:(input.papers||[]).map((p:any)=>({id:p.id,title:p.title,url:p.doi?'https://doi.org/'+encodeURI(p.doi):p.url,doi:p.doi,journal:p.journal,publisher:p.publisher,authors:p.authors,affiliations:[...new Set([...(p.affiliations||[]),...paperInstitutionEvidence(p).map(i=>i.label)])],keywords:p.keywords,updatedAt:p.updatedAt||null,firstSeen:p.firstSeen,readingScore:p.readingScore,abstractSource:p.provenance?.abstract||null,contentHash:p.contentHash}))};}
 export async function dailyCalendarRead(db:any,params:URLSearchParams,at=new Date()){
  const today=collectedDay(at.toISOString())!;
  const inputMonth=params.get('month')||today.slice(0,7),month=/^(?:19\d{2}|[2-9]\d{3})-(?:0[1-9]|1[0-2])$/.test(inputMonth)?inputMonth:today.slice(0,7);
@@ -122,4 +123,10 @@ export async function dailyRead(db:any,params:URLSearchParams,at=new Date()){
  ]):[[],null];
  const report=row?{diagnostics:{evidenceCoverage,reconstructed:!selection.evidenceCoverage,countsMatchArchive:evidenceCoverage.totalCandidates===selection.newPapers},date:row.date,sourceDate:row.source_date,cutoff:row.cutoff,status:row.status,coverage:parse(row.coverage_json),selection,paperIds:parse(row.paper_ids_json,[]),contentHash:row.content_hash,schema:row.schema_version,prompt:row.prompt_version,revision:row.revision,createdAt:row.created_at,updatedAt:row.updated_at,finishedAt:row.finished_at,groups}:null;
  return {today,date,month,invalidDate,days,report,briefs,batches,dateRevision,window:dailyWindow(at,date),schedule,limits:DAILY_LIMITS,method:'AI-frozen-daily',timezone:'Asia/Singapore'};
+}
+/** Read the exact archived input, never replace frozen evidence with a current paper row. */
+export async function dailyPaperRead(db:any,groupId:string,paperId:string){
+ const row=await db.prepare('SELECT input_json FROM research_daily_groups WHERE id=?').bind(groupId).first();
+ const p=row?parse(row.input_json).papers?.find((p:any)=>p.id===paperId):null;
+ return p?{id:p.id,doi:p.doi,url:p.url,abstract:p.abstract||null,abstractSource:p.provenance?.abstract||null}:null;
 }
