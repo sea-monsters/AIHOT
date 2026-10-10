@@ -134,6 +134,20 @@
       "when": 1791595742007,
       "tag": "0018_collection_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1791647423040,
+      "tag": "0019_metadata_phases",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1791648315446,
+      "tag": "0020_daily_readiness",
+      "breakpoints": true
     }
   ]
 }

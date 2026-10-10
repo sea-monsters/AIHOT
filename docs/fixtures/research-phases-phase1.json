@@ -1,0 +1,64 @@
+{
+  "label": "phase1",
+  "measuredAt": "2026-10-10T15:55:58.920Z",
+  "node": "v24.11.1",
+  "platform": "win32",
+  "workload": {
+    "freshInMemoryDatabase": true,
+    "sources": 1,
+    "journalPages": 1,
+    "priorDoiRecords": 5,
+    "responseLatency": "local Response.json; zero real network",
+    "samples": 3,
+    "models": 0
+  },
+  "samples": [
+    {
+      "sample": 0,
+      "durationMs": 35.10849999999999,
+      "heapDeltaBytes": 1371608,
+      "peakRssKiB": 80348,
+      "counts": {
+        "journal": 1,
+        "recheck": 0,
+        "openalex": 0,
+        "other": 0
+      },
+      "status": "backfill_pending",
+      "retainedPapers": 6,
+      "queued": 1
+    },
+    {
+      "sample": 1,
+      "durationMs": 6.328800000000001,
+      "heapDeltaBytes": 395192,
+      "peakRssKiB": 80476,
+      "counts": {
+        "journal": 1,
+        "recheck": 0,
+        "openalex": 0,
+        "other": 0
+      },
+      "status": "backfill_pending",
+      "retainedPapers": 6,
+      "queued": 1
+    },
+    {
+      "sample": 2,
+      "durationMs": 7.72199999999998,
+      "heapDeltaBytes": -1713264,
+      "peakRssKiB": 82516,
+      "counts": {
+        "journal": 1,
+        "recheck": 0,
+        "openalex": 0,
+        "other": 0
+      },
+      "status": "backfill_pending",
+      "retainedPapers": 6,
+      "queued": 1
+    }
+  ],
+  "medianMs": 7.72199999999998,
+  "scope": "collection endpoint local fixture, not online speed or full pipeline latency"
+}

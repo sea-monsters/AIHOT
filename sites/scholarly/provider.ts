@@ -39,19 +39,19 @@ export async function reserveRequest(db:any,id:string,service:Service,keyed:bool
  return token;
 }
 /** All manual, agent, collection and maintenance transports use this single gateway. */
-export async function providerRequest(db:any,env:any,service:Service,url:string,signal:AbortSignal,options:{ownerId?:string;fetcher?:typeof fetch;bypassCache?:boolean;expectedRevision?:number;single?:boolean;validate?:(data:any)=>void;onReserved?:()=>Promise<void>}={}){
+export async function providerRequest(db:any,env:any,service:Service,url:string,signal:AbortSignal,options:{ownerId?:string;fetcher?:typeof fetch;bypassCache?:boolean;expectedRevision?:number;single?:boolean;body?:{ids:string[]};validate?:(data:any)=>void;onReserved?:()=>Promise<void>}={}){
  let config:any=null,id=options.ownerId;
  if(id)config=await rawSettings(db,id,service);else{const configs=(await db.prepare('SELECT * FROM scholarly_settings WHERE service=? LIMIT 2').bind(service).all()).results;if(configs.length>1)throw new AIError('scholarly_owner_ambiguous',409,'自动元数据查询需要唯一所有者配置');config=configs[0];id=config?.owner_id||'__anonymous__';}
  const revision=config?.revision||0;if(options.expectedRevision!==undefined&&options.expectedRevision!==revision)throw new AIError('settings_conflict',409,'设置版本已变化，请重新载入');
  if(config&&config.endpoint!==SERVICES[service].endpoint)throw new AIError('endpoint_not_allowed',400,'拒绝非官方数据源配置');
  const key=config?.key_ciphertext?await unseal(config.key_ciphertext,env,credentialContext(id!,service,config.endpoint)):'';
- const canonical=new URL(url);canonical.searchParams.sort();const cacheKey=await fingerprint('gateway-v1|'+id+'|'+service+'|'+revision+'|'+canonical.href);
+ const canonical=new URL(url);canonical.searchParams.sort();const cacheKey=await fingerprint('gateway-v2|'+id+'|'+service+'|'+revision+'|'+canonical.href+'|'+JSON.stringify(options.body||null));
  if(!options.bypassCache){const cached=await db.prepare('SELECT payload_json FROM scholarly_cache WHERE id=? AND owner_id=? AND expires_at>?').bind(cacheKey,id,new Date().toISOString()).first();if(cached){const data=JSON.parse(cached.payload_json);options.validate?.(data);return {data,cached:true,keyed:!!key};}}
  const token=await reserveRequest(db,id!,service,!!key,Date.now(),true),attemptId=crypto.randomUUID(),started=Date.now();
  const timeout=AbortSignal.any([signal,AbortSignal.timeout(30000)]);
  try{
   await options.onReserved?.();
-  const data=await fetchJSON(canonical.href,service,key,timeout,options.fetcher);options.validate?.(data);
+  const data=await fetchJSON(canonical.href,service,key,timeout,options.fetcher,options.body);options.validate?.(data);
   const retrievedAt=new Date().toISOString(),encoded=JSON.stringify(data);if(new TextEncoder().encode(encoded).byteLength>2000000)throw new AIError('scholarly_too_large',502,'元数据超过安全缓存范围');
   await db.batch([db.prepare('DELETE FROM scholarly_cache WHERE expires_at<?').bind(retrievedAt),db.prepare('DELETE FROM scholarly_cache WHERE id IN (SELECT id FROM scholarly_cache WHERE owner_id=? ORDER BY created_at DESC LIMIT -1 OFFSET 199)').bind(id),db.prepare('INSERT INTO scholarly_cache(id,owner_id,service,payload_json,expires_at,created_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,created_at=excluded.created_at').bind(cacheKey,id,service,encoded,new Date(Date.now()+(options.single?21600000:3600000)).toISOString(),retrievedAt)]);
   await writeLog(db,{component:'scholarly',event:'request_finished',severity:'info',outcome:'ok',sourceId:service,requestId:attemptId,durationMs:Date.now()-started,metadata:{service}});return {data,cached:false,keyed:!!key};
@@ -64,17 +64,18 @@ export function responseError(status:number){
  if(status===429)return new AIError('scholarly_rate_limit',429,'该数据源当前限流或额度不足；无密钥共享额度也可能耗尽，请稍后重试或在设置中配置该服务的 key');
  return new AIError('scholarly_http',502,`该数据源返回 HTTP ${status}，本次未获得可核对结果`);
 }
-export async function fetchJSON(url:string,service:Service,key:string,signal:AbortSignal,fetcher:typeof fetch=fetch){
+export async function fetchJSON(url:string,service:Service,key:string,signal:AbortSignal,fetcher:typeof fetch=fetch,body?:{ids:string[]}){
  const u=new URL(url);if(u.origin!==new URL(SERVICES[service].endpoint).origin||!url.startsWith(SERVICES[service].endpoint+'/'))throw new AIError('endpoint_not_allowed',400,'拒绝非官方数据源地址');
  const headers:Record<string,string>={Accept:'application/json','User-Agent':'HKIS/1.0 (personal scholarly metadata lookup)'};if(key)headers[service==='openalex'?'Authorization':'x-api-key']=service==='openalex'?'Bearer '+key:key;
- let r:Response;try{r=await fetcher(url,{headers,redirect:'manual',signal})}catch{throw new AIError(signal.aborted?'scholarly_timeout':'scholarly_network',504,signal.aborted?'本次查询已超过 20 秒，已停止；可稍后主动重试':'无法连接该数据源，请稍后重试')}
+ if(body){if(service!=='semanticscholar'||u.pathname!=='/graph/v1/paper/batch'||!body.ids.length||body.ids.length>100)throw new AIError('invalid_batch',400,'补全批量参数无效');headers['Content-Type']='application/json';}
+ let r:Response;try{r=await fetcher(url,{headers,method:body?'POST':'GET',body:body?JSON.stringify(body):undefined,redirect:'manual',signal})}catch{throw new AIError(signal.aborted?'scholarly_timeout':'scholarly_network',504,signal.aborted?'本次查询已超过 20 秒，已停止；可稍后主动重试':'无法连接该数据源，请稍后重试')}
  if(r.status>=300&&r.status<400){await r.body?.cancel();throw new AIError('scholarly_redirect',502,'数据源要求重定向，本站已停止以保护凭证；请使用最新论文标识')}
  if(!r.ok){const retryAfter=r.headers.get('retry-after');await r.body?.cancel();const e=responseError(r.status) as AIError&{retryAfter?:number;retryAt?:string};if(r.status===429){const until=Math.max(retryAfterDeadline(retryAfter),service==='openalex'&&r.headers.get('x-ratelimit-remaining')==='0'?retryAfterDeadline(r.headers.get('x-ratelimit-reset')):0);e.retryAt=new Date(until).toISOString();e.retryAfter=Math.ceil((until-Date.now())/1000)}throw e}
  if(!r.headers.get('content-type')?.includes('json')){await r.body?.cancel();throw new AIError('scholarly_format',502,'数据源未返回 JSON，未保存响应内容')}
  if(Number(r.headers.get('content-length'))>2000000){await r.body?.cancel();throw new AIError('scholarly_too_large',502,'数据源响应超过 2 MB，已停止')}
- let body='',size=0;const reader=r.body?.getReader();if(!reader)throw new AIError('scholarly_format',502,'数据源返回空响应');const decoder=new TextDecoder();
- try{while(true){if(signal.aborted)throw Error();const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>2000000){await reader.cancel();throw new AIError('scholarly_too_large',502,'数据源响应超过 2 MB，已停止')}body+=decoder.decode(value,{stream:true})}body+=decoder.decode();}catch(e){if(e instanceof AIError)throw e;throw new AIError('scholarly_timeout',504,'数据源响应未完整读取，已停止')}
- try{return redactPayload(JSON.parse(body),key)}catch{throw new AIError('scholarly_format',502,'数据源返回了无效 JSON，未保存响应内容')}
+ let responseBody='',size=0;const reader=r.body?.getReader();if(!reader)throw new AIError('scholarly_format',502,'数据源返回空响应');const decoder=new TextDecoder();
+ try{while(true){if(signal.aborted)throw Error();const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>2000000){await reader.cancel();throw new AIError('scholarly_too_large',502,'数据源响应超过 2 MB，已停止')}responseBody+=decoder.decode(value,{stream:true})}responseBody+=decoder.decode();}catch(e){if(e instanceof AIError)throw e;throw new AIError('scholarly_timeout',504,'数据源响应未完整读取，已停止')}
+ try{return redactPayload(JSON.parse(responseBody),key)}catch{throw new AIError('scholarly_format',502,'数据源返回了无效 JSON，未保存响应内容')}
 }
 export type PageData={service:Service;records:RecordData[];total:number|null;page:number;nextPage:number|null;limit:number;bounded:boolean;cacheKey:string;cached:boolean;retrievedAt:string;keyed:boolean};
 export async function lookup(db:any,id:string,env:any,service:Service,query:string,page:number,signal:AbortSignal,options:{bypassCache?:boolean;fetcher?:typeof fetch;expectedRevision?:number}={}):Promise<PageData>{

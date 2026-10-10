@@ -25,7 +25,9 @@ export async function reconcileBatches(db:any,at=new Date()){
 }
 export async function admitRun(db:any,sourceId:string,batchKey:string|null,entryPoint:string,started:string){
  const id=crypto.randomUUID(),until=new Date(Date.now()+SOURCE_LEASE_MS).toISOString(),lockValue=until+'|'+id,key='lock:'+sourceId;
- const allowed=batchKey?"EXISTS(SELECT 1 FROM research_batches WHERE key=? AND status='running')":'1';
+ const collectionIdle=`NOT EXISTS(SELECT 1 FROM research_batches WHERE status='running') AND NOT EXISTS(SELECT 1 FROM research_runs WHERE status='running' AND phase='collection' AND coalesce(lease_until,strftime('%Y-%m-%dT%H:%M:%fZ',started_at,'+10 minutes'))>${databaseNowSql})`;
+ const metadataIdle=`NOT EXISTS(SELECT 1 FROM research_settings WHERE key='lock:__metadata__' AND value>=${databaseNowSql})`;
+ const allowed=sourceId==='__metadata__'?collectionIdle:(batchKey?"EXISTS(SELECT 1 FROM research_batches WHERE key=? AND status='running') AND "+metadataIdle:metadataIdle);
  const result=await db.batch([
   db.prepare(`INSERT INTO research_settings(key,value) SELECT ?,? WHERE ${allowed} ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE research_settings.value<?`).bind(key,lockValue,...(batchKey?[batchKey]:[]),started),
   db.prepare("UPDATE research_runs SET status='interrupted',closed_at=?,close_reason='source_lease_expired' WHERE source_id=? AND status='running' AND EXISTS(SELECT 1 FROM research_settings WHERE key=? AND value=?)").bind(started,sourceId,key,lockValue),
