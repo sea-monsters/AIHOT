@@ -66,6 +66,24 @@ try{
   console.log('PROSE SPACING',width,JSON.stringify(spacing));
   record(`${width}: justified prose does not stretch Chinese gaps`,spacing.max<=1.5&&spacing.align==='justify'&&spacing.last==='start');
  }
+ // Read the rendered badge and ancestor colours, including alpha compositing and actual pointer states.
+ const badgeContrast=async selector=>evaluate(`(()=>{const badge=document.querySelector(${JSON.stringify(selector)}).querySelector('.changelog-category-label>span');const parse=value=>{const c=value.match(/[\\d.]+/g).map(Number);if(value.startsWith('color(srgb'))for(let i=0;i<3;i++)c[i]*=255;return [...c.slice(0,3),c[3]??1]};const chain=[];for(let e=badge;e;e=e.parentElement)chain.unshift(e);let bg=[255,255,255];for(const e of chain){const c=parse(getComputedStyle(e).backgroundColor);bg=bg.map((v,i)=>c[i]*c[3]+v*(1-c[3]))}const fg=parse(getComputedStyle(badge).color);const ink=bg.map((v,i)=>fg[i]*fg[3]+v*(1-fg[3]));const lum=c=>c.map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((s,v,i)=>s+v*[.2126,.7152,.0722][i],0);const a=lum(ink),b=lum(bg);return {ratio:(Math.max(a,b)+.05)/(Math.min(a,b)+.05),fg:ink,bg}})()`);
+ const contrasts=[];
+ for(const theme of ['light','dark']){
+  await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+  for(const kind of ['feature','fix','upstream']){
+   const selector=`[data-changelog-category="${kind}"] .changelog-category-toggle`;
+   const p=await evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:r.left+18,y:r.top+r.height/2}})()`);
+   await cdp('Input.dispatchMouseEvent',{type:'mouseMoved',x:1,y:1});await pause(200);
+   const inspect=async state=>{const value=await badgeContrast(selector);contrasts.push({theme,kind,state,...value});record(`${theme}/${kind}/${state}: rendered badge contrast >=4.5`,value.ratio>=4.5)};
+   await inspect('default');await cdp('Input.dispatchMouseEvent',{type:'mouseMoved',...p});await pause(200);await inspect('hover');
+   await cdp('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...p});await pause(200);await inspect('active');await cdp('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...p});
+  }
+ }
+ await cdp('Input.dispatchMouseEvent',{type:'mouseMoved',x:1,y:1});
+ await evaluate(`document.documentElement.dataset.theme='light'`);await pause(250);
+ await screenshot('changelog-badges-light');await evaluate(`document.documentElement.dataset.theme='dark'`);await pause(250);await screenshot('changelog-badges-dark');await evaluate(`document.documentElement.dataset.theme='light'`);await pause(250);
+ console.log('BADGE CONTRAST',JSON.stringify(contrasts));
  // Historical anchors must not acknowledge the newest changelog snapshot.
  await db.prepare("UPDATE navigation_seen SET seen_version=0 WHERE owner_id='browser-fixture' AND page_key='changelog'").run();
  await navigate('/changelog#change-'+historical.id);
@@ -90,7 +108,7 @@ try{
   await screenshot(`site-${name}-1440`);
  }
  record('no external Worker requests',networkProbes===0);record('no browser JavaScript exceptions',failures.length===0);
- await writeFile(join(output,'results.json'),JSON.stringify({checks:checks.length,passed:checks,networkProbes,failures,widths:[390,640,1440],syntheticIdentity:true,productionAccess:false},null,2));
+ await writeFile(join(output,'results.json'),JSON.stringify({checks:checks.length,passed:checks,contrasts,networkProbes,failures,widths:[390,640,1440],syntheticIdentity:true,productionAccess:false},null,2));
  console.log('BROWSER RESULT',JSON.stringify({passed:checks.length,output,networkProbes}));
 }finally{
  ws?.close();if(chrome&&!chrome.killed)chrome.kill();if(server)await new Promise(r=>server.close(r));await mf?.dispose();

@@ -27,7 +27,7 @@ export function meta() {
 }
 const KINDS: ChangeKind[] = ["feature", "fix", "upstream"];
 const LABELS: Record<ChangeKind, string> = { feature: "功能更新", fix: "问题修复", upstream: "上游同步" };
-const COLORS: Record<ChangeKind, string> = { feature: "bg-accent/10 text-accent", fix: "bg-ok/10 text-ok-ink", upstream: "bg-amber/10 text-amber-ink" };
+const COLORS: Record<ChangeKind, string> = { feature: "bg-selected text-accent-ink", fix: "bg-ok-soft text-ok-ink", upstream: "bg-amber-soft text-amber-ink" };
 const BASIS: Record<ChangeRelease["basis"], string> = { commit: "代码提交", integration: "合入 fork", record: "维护记录" };
 
 export function Entry({ entry, open }: { entry: ChangeRelease; open:boolean }) {

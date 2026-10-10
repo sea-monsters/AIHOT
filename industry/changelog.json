@@ -1,8 +1,20 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-10T07:08:45Z",
+  "latestVersion": "2026-10-10T07:31:42Z",
   "releases": [
+    {
+      "id": "changelog-category-badge-contrast-20261010",
+      "kind": "fix",
+      "basis": "record",
+      "at": "2026-10-10T07:31:42Z",
+      "title": "分类徽标使用实色配对，补齐浅深主题的交互对比检查",
+      "body": [
+        "功能更新、问题修复和上游同步徽标改用既有的实色背景与文字配对，避免半透明背景叠加栏目头后降低小字对比。浅色与深色的默认、悬停及按下状态均按实际混色检查。",
+        "保持暖纸白画布、橙色重点、整栏展开与标题时间同行；本次只修正分类徽标，不改变采集、模型、调度、权限或其他页面布局。"
+      ],
+      "sources": [{"label": "日志界面验证与审计", "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/changelog-ui-audit.md"}]
+    },
     {
       "id": "changelog-category-paper-surfaces-20261010",
       "kind": "fix",
