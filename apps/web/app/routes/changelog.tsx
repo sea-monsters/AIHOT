@@ -14,6 +14,7 @@ import {ChangelogCalendar} from '../features/changelog/Calendar';
 import {calendarToday,updateDays} from '../features/changelog/calendar-domain';
 import {anchorEntries,categoryKey,groupEntriesByKind,latestReadReady,toggleCategory} from "../features/changelog/disclosure";
 import { Inline, dateHeading, isProseParagraph } from "../features/changelog/text";
+import {useCategoryMotion} from '../features/changelog/motion';
 
 export function headers() {
   return { "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=600" };
@@ -30,18 +31,19 @@ const LABELS: Record<ChangeKind, string> = { feature: "功能更新", fix: "问�
 const COLORS: Record<ChangeKind, string> = { feature: "bg-selected text-accent-ink", fix: "bg-ok-soft text-ok-ink", upstream: "bg-amber-soft text-amber-ink" };
 const BASIS: Record<ChangeRelease["basis"], string> = { commit: "代码提交", integration: "合入 fork", record: "维护记录" };
 
-export function Entry({ entry, open }: { entry: ChangeRelease; open:boolean }) {
+export function Entry({ entry, open, detailsVisible=open, moving=false }: { entry: ChangeRelease; open:boolean; detailsVisible?:boolean; moving?:boolean }) {
   return <li id={`change-${entry.id}`} className="changelog-entry scroll-mt-8" data-open={open}>
     <article className="min-w-0">
-      <div className="changelog-entry-heading" data-has-sources={open&&entry.sources.length>0}>
+      <div className="changelog-entry-heading">
         <h4 id={`heading-${entry.id}`} tabIndex={-1} className="changelog-entry-title text-base font-semibold leading-relaxed text-ink">{entry.title}</h4>
-        {entry.sources.length>0 && <div id={`change-sources-${entry.id}`} className="changelog-sources" hidden={!open}>
+        <div className="changelog-entry-actions">
+        <span className="changelog-entry-meta text-ink-3"><span>{BASIS[entry.basis]}</span> <time dateTime={entry.at} className="mono">{beijingTime(entry.at)}</time></span>
+        {entry.sources.length>0 && <div id={`change-sources-${entry.id}`} className="changelog-sources" hidden={!open} inert={!open||moving} aria-hidden={!open}>
           {entry.sources.map((source,index) => <a key={`${entry.id}-source-${index}`} href={source.url} target="_blank" rel="noopener noreferrer" className={linkClass('source')}><span className="changelog-source-label">{source.label}</span><ExternalLinkMark/></a>)}
         </div>}
+        </div>
       </div>
-      <div className="changelog-entry-details">
-      <span className="changelog-entry-meta text-ink-3"><span>{BASIS[entry.basis]}</span> <time dateTime={entry.at} className="mono">{beijingTime(entry.at)}</time></span>
-      <div id={`change-content-${entry.id}`} className="changelog-content" hidden={!open}>
+      <div id={`change-content-${entry.id}`} className="changelog-content" hidden={!detailsVisible} inert={!open||moving} aria-hidden={!open}>
       <ul className="changelog-body">
         {entry.body.map((line, index) => <li key={index}><p className={isProseParagraph(line) ? 'changelog-prose' : undefined}><Inline text={line} /></p></li>)}
       </ul>
@@ -56,23 +58,23 @@ export function Entry({ entry, open }: { entry: ChangeRelease; open:boolean }) {
         </ol>
       </div>}
       </div>
-      </div>
     </article>
   </li>;
 }
 
 export function Category({ date, kind, entries, open, onToggle }: { date:string; kind:ChangeKind; entries:ChangeRelease[]; open:boolean; onToggle:()=>void }) {
+  const motion=useCategoryMotion(open);
   const categoryId=`change-category-${date}-${kind}`;
   const headingId=`${categoryId}-heading`;
   const controlledIds=entries.flatMap(entry=>[`change-content-${entry.id}`,...(entry.sources.length?[`change-sources-${entry.id}`]:[])]).join(' ');
-  return <section id={categoryId} className="changelog-category" aria-labelledby={headingId} data-changelog-category={kind}>
+  return <section ref={motion.ref} id={categoryId} className="changelog-category" aria-labelledby={headingId} data-changelog-category={kind} data-motion-active={motion.moving}>
     <h3 id={headingId} className="changelog-category-heading">
-      <button type="button" className={`changelog-category-toggle ${COLORS[kind]}`} aria-expanded={open} aria-controls={controlledIds} onClick={onToggle}>
+      <button type="button" className={`changelog-category-toggle ${COLORS[kind]}`} aria-expanded={open} aria-controls={controlledIds} onClick={()=>motion.toggle(onToggle)}>
         <span className="changelog-category-label">{LABELS[kind]}</span>
         <span className="changelog-category-actions"><span className="changelog-category-count">{entries.length}</span><DisclosureIndicator open={open} label={false}/></span>
       </button>
     </h3>
-    <ol className="changelog-entries" aria-label={LABELS[kind]}>{entries.map(entry=><Entry key={entry.id} entry={entry} open={open}/>)}</ol>
+    <ol className="changelog-entries" aria-label={LABELS[kind]}>{entries.map(entry=><Entry key={entry.id} entry={entry} open={open} detailsVisible={open||motion.keepDetails} moving={motion.moving}/>)}</ol>
   </section>;
 }
 

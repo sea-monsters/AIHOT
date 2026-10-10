@@ -97,3 +97,19 @@ node sites/test-changelog-browser.mjs
 复现针对性命令：`node --test sites/changelog-prose.test.mjs sites/reading-hierarchy.test.mjs sites/reading-interactions.test.mjs sites/control-reading-layout.test.mjs sites/surface-calendar.test.mjs sites/changelog.test.ts`。未运行 PostgreSQL 后端套件：本次只改 Sites 前端及相关说明/断言，环境没有配置隔离测试库；生产 UI 与官方 Sites 发布仍由父任务验收。
 
 本轮最终桌面预览已成功替换同一 Library 文件，保留版本历史。云端保存成功；官方 helper 对原本地截图的身份元数据写入仍因 Windows 不支持相应扩展属性失败，不声称本地身份已持久化。用户 Library 标识不写入公开仓库。
+
+## 时间同行、单行收起与局部抽屉（2026-10-10）
+
+基线为 `5de4ff86c5d8a0cfdbd8814205c2cdb095ff28a2`，工作区干净且远程 HEAD 一致。维护时间回到标题行右侧、来源左边，标题和元信息组垂直居中；窄屏展开组可安全换行，收起时始终是标题与时间的一行布局，长标题自然换行。来源折叠后不占轨道或焦点。正文不留固定窄列，所有段落统一 justify / text-align-last:start / normal letter-spacing、word-spacing。展开标题行上留白 9.6px、下留白 12.6px，浏览器同时核对计算值与实际内容边界恰好相差 3px。链接文字也在触控目标内垂直居中，避免只对齐外框。
+
+用户随后明确要求抽屉动效，因此只在日志栏目显式切换时使用原生 Web Animations：220ms，`cubic-bezier(.2,0,.2,1)`；条目高度加 overflow 裁切使后续分隔线跟随，标题和时间按实际局部坐标差做 translate，正文配合 opacity 显露。不加库或全站几何过渡。统一批量读取/写入测量，反向前捕获当前画面高度与位置，取消旧动画后从该状态继续；异步收尾使用代际标记，防止旧动画结束覆盖新状态。关闭详情立即 inert / aria-hidden，来源立即 hidden，视觉详情在动画结束后 hidden，再恢复自然高度。保留原有分类实色和 160ms 箭头反馈；移除日志详情的自动 opacity 入场。初始渲染、过滤恢复与锚点导航不启动抽屉；卸载、宽度变化、页面隐藏和减少动态效果可取消并恢复自然布局。减少动态效果下同一任务连续双切换也保持正确后续状态。
+
+最终真实 Chrome 172/172，通过 390/640/1440px 的展开、收起、长标题/链接、0/1/多/长来源、焦点、hash/read-state、颜色对比和既有页面检查。实际单行短标题条目：390/640 为 41.66–42.66px，1440 为 42.38–43.38px（有无分隔线差 1px）；标题/时间中心差 0。长标题高度按真实换行增加，不强制截断。暗色折叠与浅色展开均生成本地截图；本轮没有重复尝试 Windows 附件物化，需求依据父任务已实际查看后的描述，验收图片是本机 Chrome 实际生成。
+
+动效同时切换 8 条：三宽度都读到真实 height 及文字 transform 动画；关闭中的详情不可聚焦，后续分隔线与前条底部差 0px。采样收起高度分别从 427.78→182.17、243.30→90.98、194.03→91.66px 后中途反向；反向首帧高度跳变 0px，最大帧间隔 33.4ms。已覆盖五次连续切换、同任务双切换、动画中反向、减少动态效果即时切换及运行中开启该偏好、过滤导致动画栏目卸载、恢复栏目无入场动画。测量只代表 HK_LPT 本轮运行，不宣称所有设备帧率相同；文字自然换行，不做逐字缩放。
+
+字距使用真实相邻字符坐标与同字体 canvas advance 对照：三宽度短句宽度误差 0，中文相邻字距增量 0，DOI 标识符字符最大误差不超过 0.0152px；末行自然且短行未被拉满。36 组分类文字/计数的浅暗/default/hover/active 对比最低仍为 4.575195:1。预览 Worker 外部请求 0、浏览器异常 0。
+
+本轮针对性测试 41/41，`npm run typecheck`、`npm run build`（含日志校验）及 `node sites/test-worker.mjs` 通过。浏览器复现：先 `npm run build`，再 `node sites/test-changelog-browser.mjs`；证据在 `task-2/ui-inline-preview-20261010/`、`results.json` 和 `ui-inline-*.log`。未改采集、调度、模型、权限或生产数据；生产发布由父任务执行，未配置隔离 PostgreSQL 因而未运行该后端套件。
+
+最终桌面预览已成功替换同一 Library 文件，保留版本历史；云端保存成功，本地版本身份写入仍受 Windows 扩展属性限制，未绕过或伪造身份。已实际查看最终三宽度展开、桌面暗色折叠和长标题/来源图。

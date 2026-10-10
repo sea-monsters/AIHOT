@@ -59,7 +59,7 @@
 .topic-grid-controls button .disclosure-indicator{margin-left:0}
 .service-row-actions .ai-secondary{display:inline-flex;align-items:center;justify-content:center;gap:.35rem}
 .service-row-body[hidden],.changelog-content[hidden]{display:none}
-:where(details[open])>:not(summary),.changelog-content:not([hidden]),.service-row-body:not([hidden]){animation:reading-reveal var(--interaction-duration) var(--interaction-ease)}
+:where(details[open])>:not(summary),.service-row-body:not([hidden]){animation:reading-reveal var(--interaction-duration) var(--interaction-ease)}
 @keyframes reading-reveal{from{opacity:.72}to{opacity:1}}
 
 @media(hover:hover){

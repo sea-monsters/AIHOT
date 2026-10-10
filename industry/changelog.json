@@ -1,8 +1,21 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-10T14:38:25Z",
+  "latestVersion": "2026-10-10T15:08:17Z",
   "releases": [
+    {
+      "id": "changelog-inline-time-prose-spacing-20261010",
+      "kind": "fix",
+      "basis": "record",
+      "at": "2026-10-10T15:08:17Z",
+      "title": "维护时间同行、正文对齐，栏目增加抽屉响应",
+      "body": [
+        "维护时间放在标题行右侧、来源链接左边，与标题及链接垂直居中；窄屏安全换行，来源折叠时仍隐藏且不可聚焦。标题行下侧留白比上侧多三像素，正文继续使用完整宽度。",
+        "正文段落统一两端对齐，末行自然靠左；短段落和标识符保持正常字距。收起后标题和时间居中同行，条目高度按可见标题及必要留白收紧，不保留隐藏详情或来源的空白行；长标题仍自然换行。保留整栏分类实色、箭头旁计数与纸张背景，不修改采集、模型或定时任务。",
+        "栏目切换使用二百二十毫秒的局部抽屉响应：裁切高度与分隔线同步移动，标题和时间按实际位置差平滑过渡，正文随裁切逐渐显露。关闭时立即禁止详情聚焦，快速连续切换或反向会从当前画面继续；减少动态效果时立即切换，初始页面与导航不做入场动画。"
+      ],
+      "sources": [{"label": "排版及浏览器验证", "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/changelog-ui-audit.md"}]
+    },
     {
       "id": "changelog-heading-references-category-20261010",
       "kind": "fix",
