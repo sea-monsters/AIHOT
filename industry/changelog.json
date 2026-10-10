@@ -1,8 +1,27 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-10T01:35:47Z",
+  "latestVersion": "2026-10-10T02:09:24Z",
   "releases": [
+    {
+      "id": "collection-review-followup-20261010",
+      "kind": "fix",
+      "basis": "record",
+      "at": "2026-10-10T02:09:24Z",
+      "title": "收尾截止与身份歧义边界补修",
+      "body": [
+        "独立审查补上完成请求与最后一笔提交交错的反例：完成时间在终态数据库事务内确定，并且不早于已提交成员与运行完成时间；简报冻结和重复回读统一使用真实持久截止，避免排队期间新增论文被遗漏。",
+        "历史无DOI记录补齐身份后，共网址再次出现无DOI条目时，带明确原因跳过身份歧义，不把它误当并发冲突重试；健康邻项继续保存，已知论文不串篇，运行保留歧义计数与部分覆盖。",
+        "Crossref首页已经保存、后续DOI核对遭遇429时，将已发现论文留在受同一运行租约保护的有限补全队列；保持全局停止，不发送OpenAlex请求。",
+        "本轮仅增量修复与隔离模拟验收；32源、35次分页、每源2次、模型额度和真实调度均不变，生产部署与遗留批次收尾仍由父任务执行。"
+      ],
+      "sources": [
+        {
+          "label": "独立审查反例与增量验收",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/collection-recovery-audit.md"
+        }
+      ]
+    },
     {
       "id": "collection-recovery-20261010",
       "kind": "fix",

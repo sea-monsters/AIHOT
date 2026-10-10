@@ -13,7 +13,7 @@
 | 正常运行 | `running` | 运行登记与来源锁在同一 D1 事务内准入，准入必须看到批次仍 running |
 | 260/330 秒采集截止已到 | 只读派生 `executionState=awaiting_reconciliation` | 不改数据库、不调用网络或模型，不伪造完成 |
 | 显式 finish，仍有合法 run 租约或来源锁 | 409 `batch_in_flight` | 不关闭、不冻结，随后回读 |
-| 正常显式 finish，所有在途租约已退出 | CAS 变为 `finished` 并记录 `finished_at` | 失败后的重复 finish 可补齐缺失 brief；已有 published 内容永不改写 |
+| 正常显式 finish，所有在途租约已退出 | CAS 变为 `finished`；事务内数据库时钟、最新已提交成员 first_seen、run finished_at 的最大值成为持久 `finished_at` | 冻结/重复回读统一使用持久截止；失败后的重复 finish 可补齐缺失 brief；已有 published 内容永不改写 |
 | 全流程 540 秒已过，且所有在途租约/来源锁均已安全过期 | 授权写入口 reconcile 为 `interrupted`，记录 `closed_at` / `close_reason` | `finished_at` 保持空；即使零源或所有源 run 均成功也不推断采集完成；晚到 finish 不可复活 |
 
 540 秒宽限保留现有处理与显式收尾余量；不使用 75 秒网络截止推断数据库写入已退出。新 run 有 10 分钟租约与随机归属标识。旧 run 若无租约列，以 `started_at + 10 分钟` 保守处理；旧来源锁仍须退出。关闭 CAS 与准入在写事务中互斥，不能用先 SELECT 再盲 UPDATE 代替。
@@ -46,7 +46,7 @@
 
 没有对完整程序或真实供应商作“全部无问题”结论。范围外的后台必达、旧机构快照、已有疑似串篇和生产环境故障仍待处理。
 
-## 执行验证
+## 执行验证（首次修复 51324cb）
 
 所有采集、学术和模型响应均为 fixture，D1 为隔离临时库。验证命令从仓库根目录运行；真实結果以最终记录为准。
 
@@ -66,6 +66,26 @@
 最终核对另有三个本补丁边界反例，均先失败、修复后通过：异常终态后的独立来源写会自失 fence，改为同一受保护事务；真实 workerd D1 statement 自带 `raw()`，封装改用 WeakMap 识别自身 wrapper；已完成队列重新入队必须重新遵守共享容量。Node D1 proxy 通过不等于构建 Worker 通过，因此保留两层验收。
 
 旧 attribution Worker 合成浏览器请求缺少现有 `x-hkis-request:1`，403 后一直等待不会到达的 head barrier；补齐现有 CSRF 合同，并让 HTTP 提前返回直接失败，避免测试悬挂。没有放松生产检查或原并发断言。
+
+## 独立审查增量（2026-10-10T02:09:24Z）
+
+父任务在暂停部署的独立审查中给出三个可复现的发布阻塞，本轮在同一隔离副本修复，不扩大生产操作：
+
+1. **入场时钟过早**：51324cb 的 finish 首次 SELECT 后，末次采集可以完成成员/运行写入并释放锁，随后 CAS 却仍写入更早的函数参数时间；brief 按此截止永久遗漏该成员。现由同一终态 CAS 计算数据库时钟与已提交成员/run 时间的下界最大值；在途判定也用该 SQL 内的数据库时钟。finish 和 prepareBrief 的覆盖读取只用持久完成截止 +1ms，重试不采用调用者较早/较晚的时钟。没有重写已发布证据。
+2. **旧 URL 哈希身份歧义**：无 DOI 首见 → DOI a 补齐并保留旧 ID → 共 URL 的 DOI b → 再来无 DOI 输入时，51324cb 会撞上旧 URL 哈希 ID 并误当并发冲突重试三次。现带 `identity_ambiguous` 原因跳过，不分配伪造身份、也不触碰已知两篇；saveGroup 继续保存健康邻项。run 持久 `identityAmbiguous` 计数与警告，存在歧义时不会落为全完整 `ok`。先两个已知 DOI 再无 DOI 的旧合同一并采用相同保守策略；原始记录保留，不回填或清理历史。
+3. **recheck 429 丢失延期**：首页 200 已入库，随后 DOI recheck 429 设置 stop；旧代码绕过 enrichBatch，也绕过入队。现 stop 分支仍执行无外联的 queueEnrichment，继续受 run fence 与容量限制；全局停止保持，OA 请求 0，不睡眠后偷偷继续供应商调用。
+
+验证使用同样 fixture 与隔离 D1：
+
+- 四个定向反例：在 51324cb 上 0/4 通过，修复后 4/4；包括 SELECT/CAS 间最后提交、旧 URL 哈希顺序、健康 RSS 邻项以及 head200/recheck429。
+- `node --test sites/source-contract.test.ts sites/batch-contract.test.ts sites/collection-recovery.test.ts sites/briefs-visits-intervals.test.ts sites/research-attribution.test.ts`：43/43，4.149 秒。
+- `node sites/test-recovery-worker.mjs`：真实 D1 增加末次提交/finish 交错、数据库时钟不受入场参数回拨影响、持久 cutoff 回读；Node/D1 与构建 Worker 两层通过，0 真实外联/模型。
+- `node --test --test-concurrency=1 --test-timeout=120000 "sites/*.test.ts" "sites/scholarly/*.test.ts" "sites/ai/*.test.ts" "sites/anysearch/*.test.ts"`：本轮一次完整验收 432/432，0 取消/跳过，71.142 秒。
+- `npm run typecheck`、`npm run build`：退出 0；更新后的构建含 68 条 changelog 校验，仍仅使用独立副本的本地 hosting.example 配置。
+- 上述八个 `test-*-worker.mjs` 使用更新后构建各复验一次，全部退出 0；recovery 的构建 Worker 另外断言终态截止覆盖已提交成员并冻结 1 篇。供应商均 fixture，真实采集/付费调用 0。
+- 既有前台 16 项失败与 PostgreSQL 无隔离库的限制沿用首次记录；本轮没有改动相应 UI/PG 代码，不把未执行的套件计为通过。
+
+本轮不新增迁移，仍使用 0018；生产批次尚未按新代码运行，不能据此断言环境 403 恢复。旧作者/机构完整快照限制继续保留，不扩大删除/历史改写范围。
 
 ## 父任务需要审批/执行的运行操作
 

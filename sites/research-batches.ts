@@ -8,7 +8,7 @@ import {collectedDay} from './research-views.ts';
 import {dailyWindow,localHour} from './daily-domain.ts';
 import {AIError} from './ai/security.ts';
 import {batchScheduleContract} from './research-schedule.ts';
-import {batchLifecycle,noActiveBatchWork,reconcileBatches} from './research-lifecycle.ts';
+import {batchLifecycle,databaseNowSql,noActiveBatchWorkAt,reconcileBatches} from './research-lifecycle.ts';
 const parse=(s:any,f:any)=>{try{return JSON.parse(s)}catch{return f}};
 
 // Brief tracking starts with the first shared evening slot that the verified
@@ -193,11 +193,14 @@ export async function validateBatch(db:any,key:any,at=new Date()){
 }
 export async function finishBatch(db:any,key:any,at=new Date()){
  if(typeof key!=='string')throw new AIError('invalid_batch',400,'无效采集批次');const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();if(!row)throw new AIError('invalid_batch',404,'采集批次不存在');
- const now=at.toISOString();
- await db.prepare(`UPDATE research_batches SET status='finished',finished_at=? WHERE key=? AND status='running' AND ${noActiveBatchWork}`).bind(now,key,now,now).run();
+ // The SELECT above may wait behind the last collector. Capture completion in
+ // the terminal CAS, bounded below by all evidence already committed then.
+ const finishedAtSql=`max(${databaseNowSql},started_at,coalesce((SELECT max(first_seen) FROM research_batch_members m WHERE m.batch_key=research_batches.key),started_at),coalesce((SELECT max(finished_at) FROM research_runs r WHERE r.batch_key=research_batches.key),started_at))`;
+ await db.prepare(`UPDATE research_batches SET status='finished',finished_at=${finishedAtSql} WHERE key=? AND status='running' AND ${noActiveBatchWorkAt(databaseNowSql)}`).bind(key).run();
  const current=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();
  if(current.status==='running')throw new AIError('batch_in_flight',409,'采集请求或来源租约仍在运行，请稍后回读');
- return {batchKey:key,...await batchCoverage(db,key,new Date(at.getTime()+1).toISOString()),brief:current.status==='finished'?await prepareBrief(db,key,at):null};
+ const cutoff=new Date(Date.parse(current.finished_at||current.closed_at||at.toISOString())+1).toISOString();
+ return {batchKey:key,...await batchCoverage(db,key,cutoff),brief:current.status==='finished'?await prepareBrief(db,key):null};
 }
 export async function batchCoverage(db:any,key:string,cutoff:string){
  const batch=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();const expected=parse(batch?.sources_json,RESEARCH_SOURCES.map(s=>s.id));

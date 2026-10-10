@@ -10,7 +10,9 @@ export function batchLifecycle(batch:any,at=new Date()){
 }
 // Used inside the terminal CAS: admission and close both consult batch.status
 // in their write transaction, rather than relying on an earlier SELECT.
-export const noActiveBatchWork=`NOT EXISTS(SELECT 1 FROM research_runs r WHERE r.batch_key=research_batches.key AND r.status='running' AND coalesce(r.lease_until,strftime('%Y-%m-%dT%H:%M:%fZ',r.started_at,'+10 minutes'))>?) AND NOT EXISTS(SELECT 1 FROM research_settings l JOIN json_each(research_batches.sources_json) s ON l.key='lock:'||s.value WHERE l.value>=?)`;
+export const databaseNowSql="strftime('%Y-%m-%dT%H:%M:%fZ','now')";
+export const noActiveBatchWorkAt=(clock:string)=>`NOT EXISTS(SELECT 1 FROM research_runs r WHERE r.batch_key=research_batches.key AND r.status='running' AND coalesce(r.lease_until,strftime('%Y-%m-%dT%H:%M:%fZ',r.started_at,'+10 minutes'))>${clock}) AND NOT EXISTS(SELECT 1 FROM research_settings l JOIN json_each(research_batches.sources_json) s ON l.key='lock:'||s.value WHERE l.value>=${clock})`;
+export const noActiveBatchWork=noActiveBatchWorkAt('?');
 
 /** Reconcile only after the deadline AND all legitimate leases. No I/O/model. */
 export async function reconcileBatches(db:any,at=new Date()){
