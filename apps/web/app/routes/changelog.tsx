@@ -33,12 +33,15 @@ const BASIS: Record<ChangeRelease["basis"], string> = { commit: "代码提交", 
 export function Entry({ entry, open }: { entry: ChangeRelease; open:boolean }) {
   return <li id={`change-${entry.id}`} className="changelog-entry scroll-mt-8" data-open={open}>
     <article className="min-w-0">
-      <div className="changelog-entry-heading">
+      <div className="changelog-entry-heading" data-has-sources={open&&entry.sources.length>0}>
         <h4 id={`heading-${entry.id}`} tabIndex={-1} className="changelog-entry-title text-base font-semibold leading-relaxed text-ink">{entry.title}</h4>
-        <span className="changelog-entry-meta text-ink-3"><span>{BASIS[entry.basis]}</span> <time dateTime={entry.at} className="mono">{beijingTime(entry.at)}</time></span>
+        {entry.sources.length>0 && <div id={`change-sources-${entry.id}`} className="changelog-sources" hidden={!open}>
+          {entry.sources.map((source,index) => <a key={`${entry.id}-source-${index}`} href={source.url} target="_blank" rel="noopener noreferrer" className={linkClass('source')}><span className="changelog-source-label">{source.label}</span><ExternalLinkMark/></a>)}
+        </div>}
       </div>
-      <div id={`change-content-${entry.id}`} className="changelog-content" hidden={!open} data-has-sources={entry.sources.length>0}>
-      <div className="changelog-copy">
+      <div className="changelog-entry-details">
+      <span className="changelog-entry-meta text-ink-3"><span>{BASIS[entry.basis]}</span> <time dateTime={entry.at} className="mono">{beijingTime(entry.at)}</time></span>
+      <div id={`change-content-${entry.id}`} className="changelog-content" hidden={!open}>
       <ul className="changelog-body">
         {entry.body.map((line, index) => <li key={index}><p className={isProseParagraph(line) ? 'changelog-prose' : undefined}><Inline text={line} /></p></li>)}
       </ul>
@@ -53,9 +56,6 @@ export function Entry({ entry, open }: { entry: ChangeRelease; open:boolean }) {
         </ol>
       </div>}
       </div>
-      {entry.sources.length>0 && <div className="changelog-sources">
-        {entry.sources.map((source,index) => <a key={`${entry.id}-source-${index}`} href={source.url} target="_blank" rel="noopener noreferrer" className={linkClass('source')}><span className="changelog-source-label">{source.label}</span><ExternalLinkMark/></a>)}
-      </div>}
       </div>
     </article>
   </li>;
@@ -64,12 +64,12 @@ export function Entry({ entry, open }: { entry: ChangeRelease; open:boolean }) {
 export function Category({ date, kind, entries, open, onToggle }: { date:string; kind:ChangeKind; entries:ChangeRelease[]; open:boolean; onToggle:()=>void }) {
   const categoryId=`change-category-${date}-${kind}`;
   const headingId=`${categoryId}-heading`;
-  const controlledIds=entries.map(entry=>`change-content-${entry.id}`).join(' ');
+  const controlledIds=entries.flatMap(entry=>[`change-content-${entry.id}`,...(entry.sources.length?[`change-sources-${entry.id}`]:[])]).join(' ');
   return <section id={categoryId} className="changelog-category" aria-labelledby={headingId} data-changelog-category={kind}>
     <h3 id={headingId} className="changelog-category-heading">
-      <button type="button" className="changelog-category-toggle" aria-expanded={open} aria-controls={controlledIds} onClick={onToggle}>
-        <span className="changelog-category-label"><span className={`rounded-full px-2 py-0.5 font-medium ${COLORS[kind]}`}>{LABELS[kind]}</span><span className="changelog-category-count">{entries.length}</span></span>
-        <DisclosureIndicator open={open} label={false}/>
+      <button type="button" className={`changelog-category-toggle ${COLORS[kind]}`} aria-expanded={open} aria-controls={controlledIds} onClick={onToggle}>
+        <span className="changelog-category-label">{LABELS[kind]}</span>
+        <span className="changelog-category-actions"><span className="changelog-category-count">{entries.length}</span><DisclosureIndicator open={open} label={false}/></span>
       </button>
     </h3>
     <ol className="changelog-entries" aria-label={LABELS[kind]}>{entries.map(entry=><Entry key={entry.id} entry={entry} open={open}/>)}</ol>

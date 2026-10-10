@@ -13,15 +13,19 @@ test('update dates preserve all kinds and do not depend on timeline filters',()=
 test('calendar SSR has native navigation, non-colour update counts, today and unique desktop/mobile labels',()=>{const days=updateDays([{at:'2026-10-02T00:00:00Z',kind:'feature'}]);const html=render({today:'2026-10-02',month:'2026-10',selected:'2026-10-02',days,onMonth:()=>{},onDate:()=>{}});assert.match(html,/href="#d-2026-10-02"/);assert.match(html,/>1条<\/small>/);assert.match(html,/aria-current="date"/);assert.match(html,/is-selected/);assert.match(html,/aria-label="更新年份"/);assert.match(html,/aria-label="更新月份"/);assert.match(html,/aria-label="上个月"/);assert.match(html,/aria-label="下个月"/);const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(x=>x[1]);assert.equal(new Set(ids).size,ids.length);assert.ok(!html.includes('role="grid"'));assert.ok(!html.includes('shadow'));assert.match(render({today:'2026-10-02',month:'2025-03',selected:null,days,onMonth:()=>{},onDate:()=>{}}),/本月暂无更新/)});
 const lum=h=>{const c=h.match(/\w\w/g).map(x=>parseInt(x,16)/255).map(x=>x<=.04045?x/12.92:((x+.055)/1.055)**2.4);return .2126*c[0]+.7152*c[1]+.0722*c[2]};
 const contrast=(a,b)=>{const x=lum(a),y=lum(b);return(Math.max(x,y)+.05)/(Math.min(x,y)+.05)};
-test('actual category badge backgrounds compose above default, hover and active headers in both themes',async()=>{
+test('opaque category bar colour pairs retain contrast through default, hover and active in both themes',async()=>{
  const [css,route]=await Promise.all(['apps/web/app/app.css','apps/web/app/routes/changelog.tsx'].map(f=>readFile(f,'utf8')));
  const variants=Object.fromEntries([...route.slice(route.indexOf('const COLORS:'),route.indexOf('const BASIS:')).matchAll(/\b(feature|fix|upstream):\s*"([^"]+)"/g)].map(m=>[m[1],m[2]]));
  assert.deepEqual(Object.keys(variants).sort(),['feature','fix','upstream']);
+ assert.ok(route.includes('className={`changelog-category-toggle ${COLORS[kind]}`}'));
+ assert.ok(css.includes('.changelog-category-count{font-size:1rem;font-weight:500;line-height:1.45;color:inherit}'));
+ const interactions=await readFile('apps/web/app/interactions.css','utf8');assert.ok(interactions.includes('.changelog-category .changelog-category-toggle:active{background:var(--changelog-category-bg)}'));assert.ok(interactions.includes('.changelog-category .changelog-category-toggle:hover{background:var(--changelog-category-bg)}'));
  const blend=(fg,bg,alpha)=>'#'+fg.slice(1).match(/../g).map((v,i)=>Math.round(parseInt(v,16)*alpha+parseInt(bg.slice(1+i*2,3+i*2),16)*(1-alpha)).toString(16).padStart(2,'0')).join('');
  for(const [theme,block]of [['light',css.slice(css.indexOf(':root {'),css.indexOf('[data-theme="dark"] {'))],['dark',css.slice(css.indexOf('[data-theme="dark"] {'),css.indexOf('@layer base'))]]){
   const colors=Object.fromEntries([...block.matchAll(/--([\w-]+):\s*(#[\da-f]{6});/gi)].map(m=>[m[1],m[2]]));
   for(const [state,surface]of [['default','section'],['hover','selected'],['active','selected']])for(const [kind,classes]of Object.entries(variants)){
    const bg=classes.match(/\bbg-([\w-]+)(?:\/(\d+))?\b/),fg=classes.match(/\btext-([\w-]+)\b/);assert.ok(bg&&fg,kind);
+   assert.equal(bg[2],undefined);assert.ok(css.includes(`.changelog-category-toggle.bg-${bg[1]}{--changelog-category-bg:var(--${bg[1]});--changelog-category-ink:var(--${fg[1]})}`));
    for(const token of [bg[1],fg[1]])assert.ok(css.includes(`--color-${token}: var(--${token});`),token);
    const actual=blend(colors[bg[1]],colors[surface],bg[2]?Number(bg[2])/100:1),ratio=contrast(colors[fg[1]],actual);
    assert.ok(ratio>=4.5,`${theme}/${state}/${kind}: ${ratio.toFixed(4)}:1 on ${actual}`);

@@ -1,8 +1,21 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-10T08:08:26Z",
+  "latestVersion": "2026-10-10T14:38:25Z",
   "releases": [
+    {
+      "id": "changelog-heading-references-category-20261010",
+      "kind": "fix",
+      "basis": "record",
+      "at": "2026-10-10T14:38:25Z",
+      "title": "日志来源与时间上下互换，分类颜色铺满栏目标题栏",
+      "body": [
+        "展开时来源链接放在标题右侧的自适应区域，窄屏自然下移；更新时间移至下一行右侧，只占短标记自身宽度。正文首行避让时间后恢复整宽，释放原固定参考链接栏的空间；无来源条目不留空栏。折叠后来源隐藏且不能聚焦。",
+        "分类文字下的小胶囊改为整条标题栏的分类实色，沿用功能更新、问题修复与上游同步的色相。分类文字字号和左缩进对齐条目标题，计数稍放大并移到右侧折叠符号旁；保留整栏点击、键盘操作和展开状态语义。",
+        "继续使用紧凑标题与纸张背景，未修改采集、模型或定时任务。"
+      ],
+      "sources": [{"label": "布局与对比度审查", "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/changelog-ui-audit.md"}]
+    },
     {
       "id": "changelog-side-references-spacing-20261010",
       "kind": "fix",

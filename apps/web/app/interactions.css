@@ -49,6 +49,7 @@
 :where(details[open])>summary .disclosure-open-label{display:inline}
 :where(details[open])>summary .disclosure-caret,.disclosure-indicator[data-open=true]>.disclosure-caret{transform:rotate(180deg)}
 :is(.disclosure-summary,.rail-disclosure>summary,.changelog-category-toggle,.reading-control-toggle):active{background:var(--interaction-pressed)}
+.changelog-category .changelog-category-toggle:active{background:var(--changelog-category-bg)}
 :is(.research-panel,.progress-provenance,.scholarly-discovery)>summary.disclosure-summary{padding:.45rem .5rem;min-height:38px;margin:0}
 .ai-privacy>.disclosure-summary{min-height:30px}
 .reading-control-toggle{border-radius:var(--radius-control)}
@@ -62,7 +63,7 @@
 @keyframes reading-reveal{from{opacity:.72}to{opacity:1}}
 
 @media(hover:hover){
- .changelog-category .changelog-category-toggle:hover{background:var(--selected)}
+ .changelog-category .changelog-category-toggle:hover{background:var(--changelog-category-bg)}
  :is(.hkis-link,.research-back,.page-header>a,.weekly-links>a,.paper-bulk>a,.ai-actions>a,.info-page ul a,.research-pagination a):hover{background:var(--interaction-hover);border-color:var(--line-strong);color:var(--accent-ink);text-decoration:none}
  :is(.hkis-link-inline,.prose a,.page-prose p a,.weekly-citation,.weekly-evidence p a,.progress-provenance p a):hover{text-decoration-color:currentColor;background:var(--accent-soft)}
  :is(.research-card h2,.weekly-paper h3,.daily-source-paper h4)>a:hover{color:var(--accent-ink);text-decoration-color:currentColor}
