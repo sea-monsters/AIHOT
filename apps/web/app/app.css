@@ -859,7 +859,7 @@
 .changelog-entries{padding:0}
 .changelog-entry{padding:.8rem .85rem;border-top:1px solid var(--line-soft);transition:background-color 140ms ease}
 .changelog-entry:first-child{border-top:0}
-.changelog-entry-title{margin:0;overflow-wrap:anywhere}
+.changelog-entry-title{margin:0;font-size:1rem;font-weight:500;line-height:1.45;overflow-wrap:anywhere}
 .changelog-entry-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:.4rem .85rem}
 .changelog-entry-meta{font-size:.75rem;line-height:1.6;text-align:end;white-space:nowrap}
 .changelog-entry-meta>span{font-size:.6875rem}
@@ -901,7 +901,8 @@
 .reading-control-rail .research-panel,.changelog-page .reading-control-rail .card{padding:.85rem 0;border:0;border-top:1px solid var(--line);border-radius:0;background:transparent}
 @media(max-width:640px){
  .research-card,.daily-source-paper{padding:1rem .55rem}
- .research-card h2,.weekly-paper h3,.daily-source-paper h4,.changelog-category-toggle,.changelog-entry-title{font-size:1.0625rem}
+ .research-card h2,.weekly-paper h3,.daily-source-paper h4,.changelog-category-toggle{font-size:1.0625rem}
+ .changelog-entry-title{font-size:.96875rem}
  .research-stats>div{padding:.7rem .65rem}
  .research-stats>div:nth-child(odd){padding-inline-start:0}
  .research-stats>div:nth-child(even){border-inline-end:0}

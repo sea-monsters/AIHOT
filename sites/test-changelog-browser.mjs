@@ -37,11 +37,13 @@ try{
  const navigate=async path=>{await cdp('Page.navigate',{url:origin+path});await until(`location.pathname===${JSON.stringify(path.split('#')[0])} && document.readyState==='complete' && !!document.querySelector('main')`,'page loaded');await pause(350)};
  const screenshot=async name=>{const r=await cdp('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});await writeFile(join(output,name+'.png'),Buffer.from(r.data,'base64'))};
  const click=async(selector,edge=false)=>{const p=await evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:${edge?'r.right-18':'r.left+18'},y:r.top+r.height/2}})()`);await cdp('Input.dispatchMouseEvent',{type:'mouseMoved',...p});await cdp('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...p});await cdp('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...p})};
- const toggle='.changelog-category-toggle';
+ const toggle='.changelog-category-toggle';const titleStyles=[];
  for(const width of [390,640,1440]){
   await cdp('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:false});
   await navigate('/changelog');
   record(`${width}: collapsed titles and times visible`,await evaluate(`[...document.querySelectorAll('.changelog-entry')].every(e=>e.querySelector('h4').getBoundingClientRect().height>0&&e.querySelector('time').getBoundingClientRect().height>0&&e.querySelector('.changelog-content').hidden)`));
+  const titleStyle=await evaluate(`(()=>{const s=getComputedStyle(document.querySelector('.changelog-entry-title'));return {size:parseFloat(s.fontSize),weight:Number(s.fontWeight),line:parseFloat(s.lineHeight)}})()`);titleStyles.push({width,...titleStyle});
+  record(`${width}: reduced title typography rendered correctly`,titleStyle.size===(width<=640?15.5:16)&&titleStyle.weight===500&&Math.abs(titleStyle.line/titleStyle.size-1.45)<.01);
   record(`${width}: no horizontal overflow`,await evaluate('document.documentElement.scrollWidth<=innerWidth'));
   record(`${width}: header spans entire category`,await evaluate(`(()=>{const e=document.querySelector('${toggle}');return Math.abs(e.getBoundingClientRect().width-e.closest('.changelog-category').getBoundingClientRect().width)<2})()`));
   await screenshot(`changelog-${width}-collapsed`);
@@ -108,7 +110,7 @@ try{
   await screenshot(`site-${name}-1440`);
  }
  record('no external Worker requests',networkProbes===0);record('no browser JavaScript exceptions',failures.length===0);
- await writeFile(join(output,'results.json'),JSON.stringify({checks:checks.length,passed:checks,contrasts,networkProbes,failures,widths:[390,640,1440],syntheticIdentity:true,productionAccess:false},null,2));
+ await writeFile(join(output,'results.json'),JSON.stringify({checks:checks.length,passed:checks,titleStyles,contrasts,networkProbes,failures,widths:[390,640,1440],syntheticIdentity:true,productionAccess:false},null,2));
  console.log('BROWSER RESULT',JSON.stringify({passed:checks.length,output,networkProbes}));
 }finally{
  ws?.close();if(chrome&&!chrome.killed)chrome.kill();if(server)await new Promise(r=>server.close(r));await mf?.dispose();

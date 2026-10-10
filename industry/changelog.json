@@ -1,8 +1,20 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-10T07:31:42Z",
+  "latestVersion": "2026-10-10T07:51:54Z",
   "releases": [
+    {
+      "id": "changelog-entry-title-density-20261010",
+      "kind": "fix",
+      "basis": "record",
+      "at": "2026-10-10T07:51:54Z",
+      "title": "日志条目标题减轻字号、字重与行距",
+      "body": [
+        "仅调整日志每条记录的标题：桌面由十八像素降为十六像素，窄屏由十七像素降为十五点五像素；改用中等字重并收紧标题行距，减轻连续阅读时的视觉强度。",
+        "日期大标题、分类栏目头、正文及其他页面样式保持原值；标题与时间仍同行靠右，整栏折叠、日期及条目锚点和最新日志已读门控保持原有行为。"
+      ],
+      "sources": [{"label": "日志标题调整与验证", "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/changelog-ui-audit.md"}]
+    },
     {
       "id": "changelog-category-badge-contrast-20261010",
       "kind": "fix",
