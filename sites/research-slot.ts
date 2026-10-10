@@ -24,7 +24,7 @@ export async function runResearchSlot(call:Call,slot:8|20,now=Date.now,started=n
  const preparationMs=now()-started,collectionBudgetMs=Math.min(slot===8?260000:330000,Math.max(0,remaining()-110000));
  const batch=await invoke('start','/api/site/research/batch/start',{slot},15000);if(!batch?.batchKey)return {status:batch?.status||'unknown',reason:batch?.reason,preparationMs,collectionBudgetMs,steps};
  const collectionDeadline=now()+collectionBudgetMs;
- let collectionStoppedForCooldown=false;
+ let collectionStoppedForCooldown=/rate_limit|cooldown|429/.test(batch.collectionControl?.reason||'');
  if(batch.status==='running'){
   let control=batch.collectionControl;
   const deferredSources=new Set<string>();

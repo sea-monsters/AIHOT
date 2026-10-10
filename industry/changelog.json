@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-10T17:10:51Z",
+  "latestVersion": "2026-10-10T17:14:18Z",
   "releases": [
     {
       "id": "research-collection-phases-20261010",
       "kind": "feature",
       "basis": "record",
-      "at": "2026-10-10T17:10:51Z",
+      "at": "2026-10-10T17:14:18Z",
       "title": "研究采集首轮优先，统一补全与日报准备队列分阶段执行",
       "body": [
         "提供一次确定性串行脚本，先完成或明确延期全部到期信源首轮，再公平续页；保留总计三十五页、每源两页、原采集和整轮时限及共享限流。锁忙、限流、截止延期与未知请求如实记录，不把首屏成功称完整覆盖，不重放未知请求。",
