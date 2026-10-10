@@ -1,0 +1,98 @@
+/** Real local Chromium checks against the built Worker and disposable D1. No external service is allowed. */
+import assert from 'node:assert/strict';
+import {spawn} from 'node:child_process';
+import {createServer} from 'node:http';
+import {mkdir,mkdtemp,readFile,readdir,writeFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {resolve,join} from 'node:path';
+import {Miniflare,convertV4MiniflareOptions} from 'miniflare';
+const output=resolve(process.env.UI_SCREENSHOT_DIR||'.sites-runtime/ui-screenshots');
+await mkdir(output,{recursive:true});
+const releases=JSON.parse(await readFile('industry/changelog.json','utf8')).releases;
+const latest=releases[0],historical=releases.at(-1);
+let networkProbes=0,chrome,server,mf,ws;
+const failures=[],checks=[];
+const record=(name,value=true)=>{assert.ok(value,name);checks.push(name);console.log('BROWSER OK',name)};
+const pause=ms=>new Promise(r=>setTimeout(r,ms));
+const profile=await mkdtemp(join(tmpdir(),'hkis-ui-chrome-'));
+try{
+ mf=new Miniflare(convertV4MiniflareOptions({modules:true,scriptPath:'dist/server/index.js',compatibilityDate:'2026-09-01',compatibilityFlags:['nodejs_compat'],d1Databases:['DB'],bindings:{HKIS_OWNER_EMAIL:'fixture@example.org'},outboundService:async()=>{networkProbes++;return new Response('External access disabled in UI fixture',{status:599})},assets:{directory:'dist/client',binding:'ASSETS',run_worker_first:true,routerConfig:{has_user_worker:true}}}));
+ const db=await mf.getD1Database('DB');
+ for(const f of (await readdir('drizzle')).filter(f=>f.endsWith('.sql')).sort())for(const s of (await readFile('drizzle/'+f,'utf8')).split('--> statement-breakpoint').map(s=>s.trim()).filter(Boolean))await db.prepare(s).run();
+ await db.prepare('INSERT INTO navigation_seen(owner_id,page_key,seen_revision,seen_version,enabled) VALUES(?,?,?,?,1)').bind('browser-fixture','changelog',0,0).run();
+ server=createServer(async(req,res)=>{try{const chunks=[];for await(const chunk of req)chunks.push(chunk);const headers=new Headers(req.headers);headers.set('oai-authenticated-user-id','browser-fixture');headers.set('oai-authenticated-user-email','fixture@example.org');const response=await mf.dispatchFetch(`http://127.0.0.1:${server.address().port}${req.url}`,{method:req.method,headers,...(!['GET','HEAD'].includes(req.method)?{body:Buffer.concat(chunks)}:{})});res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()))}catch(e){res.writeHead(500);res.end(String(e))}});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));
+ const origin=`http://127.0.0.1:${server.address().port}`;
+ chrome=spawn(process.env.CHROME_PATH||(process.platform==='win32'?'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe':'google-chrome'),['--headless=new','--disable-gpu','--no-first-run','--no-default-browser-check','--disable-background-networking','--disable-component-update','--disable-sync','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'],{windowsHide:true,stdio:'ignore'});
+ let launchError;chrome.on('error',e=>{launchError=e});
+ let port;for(let i=0;i<100&&!port;i++){if(launchError)throw launchError;try{port=Number((await readFile(join(profile,'DevToolsActivePort'),'utf8')).split('\n')[0])}catch{}if(!port)await pause(100)}assert.ok(port,'Chromium DevTools started');
+ const targets=await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+ ws=new WebSocket(targets.find(t=>t.type==='page').webSocketDebuggerUrl);await new Promise((r,j)=>{ws.onopen=r;ws.onerror=j});
+ let sequence=0;const pending=new Map();
+ ws.onmessage=e=>{const v=JSON.parse(e.data);if(v.id){const p=pending.get(v.id);if(p){pending.delete(v.id);clearTimeout(p.timer);v.error?p.reject(Error(JSON.stringify(v.error))):p.resolve(v.result)}}else if(v.method==='Runtime.exceptionThrown')failures.push(v.params.exceptionDetails.text+': '+(v.params.exceptionDetails.exception?.description||''))};
+ const cdp=(method,params={})=>new Promise((resolve,reject)=>{const id=++sequence,timer=setTimeout(()=>{pending.delete(id);reject(Error('CDP timeout '+method))},15000);pending.set(id,{resolve,reject,timer});ws.send(JSON.stringify({id,method,params}))});
+ const evaluate=async expression=>{const r=await cdp('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(JSON.stringify(r.exceptionDetails));return r.result.value};
+ const until=async(expression,label)=>{for(let i=0;i<100;i++){if(await evaluate(expression))return;await pause(100)}throw Error('Timed out: '+label+' '+JSON.stringify(await evaluate(`({url:location.href,ready:document.readyState,main:!!document.querySelector('main'),modules:[...document.scripts].filter(s=>s.type==='module').length,body:document.body.innerText.slice(0,400)})`)))};
+ await cdp('Page.enable');await cdp('Runtime.enable');
+ const navigate=async path=>{await cdp('Page.navigate',{url:origin+path});await until(`location.pathname===${JSON.stringify(path.split('#')[0])} && document.readyState==='complete' && !!document.querySelector('main')`,'page loaded');await pause(350)};
+ const screenshot=async name=>{const r=await cdp('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});await writeFile(join(output,name+'.png'),Buffer.from(r.data,'base64'))};
+ const click=async(selector,edge=false)=>{const p=await evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:${edge?'r.right-18':'r.left+18'},y:r.top+r.height/2}})()`);await cdp('Input.dispatchMouseEvent',{type:'mouseMoved',...p});await cdp('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...p});await cdp('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...p})};
+ const toggle='.changelog-category-toggle';
+ for(const width of [390,640,1440]){
+  await cdp('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:false});
+  await navigate('/changelog');
+  record(`${width}: collapsed titles and times visible`,await evaluate(`[...document.querySelectorAll('.changelog-entry')].every(e=>e.querySelector('h4').getBoundingClientRect().height>0&&e.querySelector('time').getBoundingClientRect().height>0&&e.querySelector('.changelog-content').hidden)`));
+  record(`${width}: no horizontal overflow`,await evaluate('document.documentElement.scrollWidth<=innerWidth'));
+  record(`${width}: header spans entire category`,await evaluate(`(()=>{const e=document.querySelector('${toggle}');return Math.abs(e.getBoundingClientRect().width-e.closest('.changelog-category').getBoundingClientRect().width)<2})()`));
+  await screenshot(`changelog-${width}-collapsed`);
+  await click(toggle,true);await until(`document.querySelector('${toggle}').getAttribute('aria-expanded')==='true'`,'edge click opens category');
+  record(`${width}: whole header click opens all entries`,await evaluate(`[...document.querySelector('${toggle}').closest('section').querySelectorAll('.changelog-content')].every(e=>!e.hidden)`));
+  record(`${width}: no redundant labels or fold text`,await evaluate(`![...document.querySelectorAll('.changelog-entry .rounded-full')].length&&!document.querySelector('${toggle}').textContent.match(/展开|收起/)`));
+  record(`${width}: time stays beside title`,await evaluate(`[...document.querySelectorAll('.changelog-entry-heading')].every(e=>{const a=e.querySelector('h4').getBoundingClientRect(),b=e.querySelector('.changelog-entry-meta').getBoundingClientRect();return a.right<=b.left+1&&Math.abs(a.top-b.top)<10})`));
+  await evaluate(`document.querySelector('${toggle}').focus()`);
+  record(`${width}: category receives keyboard focus`,await evaluate(`document.activeElement.matches('${toggle}')`));
+  await cdp('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',text:'\r',unmodifiedText:'\r',windowsVirtualKeyCode:13});await cdp('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+  await until(`document.querySelector('${toggle}').getAttribute('aria-expanded')==='false'`,'Enter collapses');record(`${width}: Enter toggles`);
+  await cdp('Input.dispatchKeyEvent',{type:'keyDown',key:' ',code:'Space',text:' ',unmodifiedText:' ',windowsVirtualKeyCode:32});await cdp('Input.dispatchKeyEvent',{type:'keyUp',key:' ',code:'Space',windowsVirtualKeyCode:32});
+  await until(`document.querySelector('${toggle}').getAttribute('aria-expanded')==='true'`,'Space opens');record(`${width}: Space toggles`);
+  record(`${width}: keyboard focus visible`,await evaluate(`getComputedStyle(document.querySelector('${toggle}')).outlineStyle!=='none'`));
+  await evaluate('scrollTo(0,0)');await screenshot(`changelog-${width}-expanded`);
+  const original=await evaluate(`document.querySelector('.changelog-entry-title').textContent`);
+  await evaluate(`document.querySelector('.changelog-entry-title').textContent=${JSON.stringify('用于检查窄屏长标题换行与右侧时间是否互相遮挡的本地合成标题，'.repeat(4))}`);
+  record(`${width}: synthetic long title wraps without time collision`,await evaluate(`(()=>{const e=document.querySelector('.changelog-entry-heading'),a=e.querySelector('h4').getBoundingClientRect(),b=e.querySelector('.changelog-entry-meta').getBoundingClientRect();return a.height>30&&a.right<=b.left&&Math.abs(a.top-b.top)<10&&document.documentElement.scrollWidth<=innerWidth})()`));
+  await screenshot(`changelog-${width}-long-title`);await evaluate(`document.querySelector('.changelog-entry-title').textContent=${JSON.stringify(original)}`);
+  // Test the narrowly scoped prose style with controlled plain/mixed/list paragraphs.
+  const spacing=await evaluate(`(()=>{const p=document.createElement('p');p.className='changelog-prose';p.textContent='分类栏目保留每条标题与记录时间，点击整个栏目头即可查看完整详情。'.repeat(7);document.querySelector('.changelog-body li').append(p);const style=getComputedStyle(p),canvas=document.createElement('canvas').getContext('2d');canvas.font=style.font;const text=p.firstChild,gaps=[];for(let i=0;i<text.length;i++){if(!/[\\u3400-\\u9fff]/.test(text.textContent[i]))continue;const r=new Range();r.setStart(text,i);r.setEnd(text,i+1);gaps.push(r.getBoundingClientRect().width-canvas.measureText(text.textContent[i]).width)}const result={max:Math.max(...gaps),align:style.textAlign,last:style.textAlignLast};p.remove();return result})()`);
+  console.log('PROSE SPACING',width,JSON.stringify(spacing));
+  record(`${width}: justified prose does not stretch Chinese gaps`,spacing.max<=1.5&&spacing.align==='justify'&&spacing.last==='start');
+ }
+ // Historical anchors must not acknowledge the newest changelog snapshot.
+ await db.prepare("UPDATE navigation_seen SET seen_version=0 WHERE owner_id='browser-fixture' AND page_key='changelog'").run();
+ await navigate('/changelog#change-'+historical.id);
+ await until(`document.querySelector('#change-${historical.id} .changelog-content')?.hidden===false`,'historical anchor opens');
+ record('historical hash opens correct category and focuses title',await evaluate(`document.activeElement.id==='heading-${historical.id}'`));
+ record('historical hash preserves latest unread',Number((await db.prepare("SELECT seen_version FROM navigation_seen WHERE owner_id='browser-fixture' AND page_key='changelog'").first()).seen_version)===0);
+ await navigate('/changelog');
+ record('collapsed latest remains unread',Number((await db.prepare("SELECT seen_version FROM navigation_seen WHERE owner_id='browser-fixture' AND page_key='changelog'").first()).seen_version)===0);
+ await click(toggle);await until(`document.querySelector('${toggle}').getAttribute('aria-expanded')==='true'`,'latest opens');
+ for(let i=0;i<40;i++){const seen=await db.prepare("SELECT seen_version FROM navigation_seen WHERE owner_id='browser-fixture' AND page_key='changelog'").first();if(Number(seen.seen_version)===Date.parse(latest.at))break;await pause(100)}
+ record('visible expanded latest acknowledges only loaded version',Number((await db.prepare("SELECT seen_version FROM navigation_seen WHERE owner_id='browser-fixture' AND page_key='changelog'").first()).seen_version)===Date.parse(latest.at));
+ // Native calendar activation clears filters and reveals every kind on that date.
+ await evaluate(`document.querySelectorAll('.reading-kind-filters button')[1].click()`);
+ const date=new Date(latest.at).toLocaleDateString('en-CA',{timeZone:'Asia/Shanghai'});
+ await click(`a[href="#d-${date}"]`);
+ await until(`document.querySelector('.reading-kind-filters button').getAttribute('aria-pressed')==='true'`,'calendar clears filter');
+ record('calendar clears filter, opens day and focuses date',await evaluate(`document.activeElement.id==='heading-${date}'&&[...document.querySelectorAll('#d-${date} .changelog-content')].every(e=>!e.hidden)`));
+ await cdp('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+ for(const [name,path] of [['home','/'],['research','/research'],['daily','/daily'],['topics','/topics'],['changelog','/changelog'],['settings','/settings']]){
+  await navigate(path);record(`${name}: shared warm paper background`,await evaluate(`getComputedStyle(document.body).backgroundColor==='rgb(250, 247, 241)'`));
+  record(`${name}: one document scroll and no horizontal overflow`,await evaluate(`document.documentElement.scrollWidth<=innerWidth&&[...document.querySelectorAll('.reading-control-rail')].every(e=>!['auto','scroll'].includes(getComputedStyle(e).overflowY))`));
+  await screenshot(`site-${name}-1440`);
+ }
+ record('no external Worker requests',networkProbes===0);record('no browser JavaScript exceptions',failures.length===0);
+ await writeFile(join(output,'results.json'),JSON.stringify({checks:checks.length,passed:checks,networkProbes,failures,widths:[390,640,1440],syntheticIdentity:true,productionAccess:false},null,2));
+ console.log('BROWSER RESULT',JSON.stringify({passed:checks.length,output,networkProbes}));
+}finally{
+ ws?.close();if(chrome&&!chrome.killed)chrome.kill();if(server)await new Promise(r=>server.close(r));await mf?.dispose();
+ // Keep the isolated profile and screenshots for review; never remove another browser's files.
+}

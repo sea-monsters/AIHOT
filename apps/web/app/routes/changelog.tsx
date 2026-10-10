@@ -13,7 +13,7 @@ import {RailDisclosure} from "../components/ui/AdaptiveRail";
 import {ChangelogCalendar} from '../features/changelog/Calendar';
 import {calendarToday,updateDays} from '../features/changelog/calendar-domain';
 import {anchorEntries,categoryKey,groupEntriesByKind,latestReadReady,toggleCategory} from "../features/changelog/disclosure";
-import { Inline, dateHeading } from "../features/changelog/text";
+import { Inline, dateHeading, isProseParagraph } from "../features/changelog/text";
 
 export function headers() {
   return { "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=600" };
@@ -33,14 +33,13 @@ const BASIS: Record<ChangeRelease["basis"], string> = { commit: "代码提交", 
 export function Entry({ entry, open }: { entry: ChangeRelease; open:boolean }) {
   return <li id={`change-${entry.id}`} className="changelog-entry scroll-mt-8" data-open={open}>
     <article className="min-w-0">
-      <div className="changelog-entry-meta flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]" hidden={!open}>
-        <span className={`rounded-full px-2 py-0.5 font-medium ${COLORS[entry.kind]}`}>{LABELS[entry.kind]}</span>
-        <span className="text-ink-3">{BASIS[entry.basis]} <time dateTime={entry.at} className="mono">{beijingTime(entry.at)}</time></span>
+      <div className="changelog-entry-heading">
+        <h4 id={`heading-${entry.id}`} tabIndex={-1} className="changelog-entry-title text-base font-semibold leading-relaxed text-ink">{entry.title}</h4>
+        <span className="changelog-entry-meta text-ink-3"><span>{BASIS[entry.basis]}</span> <time dateTime={entry.at} className="mono">{beijingTime(entry.at)}</time></span>
       </div>
-      <h4 id={`heading-${entry.id}`} tabIndex={-1} className="changelog-entry-title text-base font-semibold leading-relaxed text-ink">{entry.title}</h4>
       <div id={`change-content-${entry.id}`} className="changelog-content" hidden={!open}>
       <ul className="changelog-body">
-        {entry.body.map((line, index) => <li key={index}><Inline text={line} /></li>)}
+        {entry.body.map((line, index) => <li key={index}><p className={isProseParagraph(line) ? 'changelog-prose' : undefined}><Inline text={line} /></p></li>)}
       </ul>
       <div className="changelog-sources mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
         {entry.sources.map((source,index) => <a key={`${entry.id}-source-${index}`} href={source.url} target="_blank" rel="noopener noreferrer" className={linkClass('source')}>{source.label}<ExternalLinkMark/></a>)}
@@ -68,7 +67,7 @@ export function Category({ date, kind, entries, open, onToggle }: { date:string;
     <h3 id={headingId} className="changelog-category-heading">
       <button type="button" className="changelog-category-toggle" aria-expanded={open} aria-controls={controlledIds} onClick={onToggle}>
         <span className="changelog-category-label"><span className={`rounded-full px-2 py-0.5 font-medium ${COLORS[kind]}`}>{LABELS[kind]}</span><span className="changelog-category-count">{entries.length}</span></span>
-        <DisclosureIndicator open={open}/>
+        <DisclosureIndicator open={open} label={false}/>
       </button>
     </h3>
     <ol className="changelog-entries" aria-label={LABELS[kind]}>{entries.map(entry=><Entry key={entry.id} entry={entry} open={open}/>)}</ol>
