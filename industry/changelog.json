@@ -23,6 +23,54 @@
       ]
     },
     {
+      "id": "changelog-provenance-classification-20261010",
+      "at": "2026-10-10T16:48:37Z",
+      "basis": "record",
+      "kind": "fix",
+      "title": "按实际来源更正三条上游择取记录，补充编写类型提示",
+      "body": [
+        "核对原有74条日志的来源和实际提交，将导航与安全适配、Atom纯文本解析、source-map-js依赖修复三条历史记录从问题修复更正为上游同步；保留原ID、日期、正文和来源，本地修复及功能不随关键词改类。",
+        "现有JSON编写文档与检查命令明确提供功能更新、问题修复、上游同步三项类型；选择性适配的维护记录须同时附上游证据和本站审查文档，完整合并继续校验真实合入日期与提交范围。",
+        "分类计数、UTC+08月历、日期和条目锚点继续基于同一数据源，最新记录仍须展开其栏目并进入视口才能标记已读。"
+      ],
+      "sources": [
+        {
+          "label": "分类证据与验证审计",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/changelog-classification-audit.md"
+        },
+        {
+          "label": "类型选择与编写规则",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/changelog.md"
+        }
+      ]
+    },
+    {
+      "id": "upstream-navigation-maintenance-review-20261010",
+      "at": "2026-10-10T16:48:37Z",
+      "basis": "record",
+      "kind": "upstream",
+      "title": "审查上游13项提交，仅适配导航维护验收要求",
+      "body": [
+        "固定审查范围8ef28eb至9cf2a3c的13项上游提交，仅适配18ddc7b的导航维护验收说明：默认与非默认配置均须检查桌面侧栏、手机底栏、返回、更多和入口减少后的布局；本站当前4项TABBAR加助手共5项，隐藏入口不能代替权限校验。",
+        "本轮没有生产功能cherry-pick，也未合入新的付费措辞修订模型、NAV.hidden、PhoneBar、PostgreSQL补期与事件索引、旧评测器或飞书告警；逐项适用性理由见上游记录。",
+        "选择性审查截至9cf2a3c，最后完整merge仍为cf8f8d0。记录时间是本站维护时刻，上游head原始提交时间为2026-10-10T13:32:05Z；不把审查数量、文档适配或源码提交写成生产部署。"
+      ],
+      "sources": [
+        {
+          "label": "本轮逐项审查与同步索引",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/upstream-sync.md"
+        },
+        {
+          "label": "13项上游提交完整比较",
+          "url": "https://github.com/KKKKhazix/AIHOT/compare/8ef28ebcd167b311ffab8c0308181e2912262ae2...9cf2a3c261d3e4d8f4350ece98d1f9e197a71a8b"
+        },
+        {
+          "label": "适配的导航维护要求",
+          "url": "https://github.com/KKKKhazix/AIHOT/commit/18ddc7b17f59923d2e9f297fac7839dac3b4043a"
+        }
+      ]
+    },
+    {
       "id": "changelog-inline-time-prose-spacing-20261010",
       "kind": "fix",
       "basis": "record",
@@ -186,7 +234,7 @@
     },
     {
       "id": "upstream-source-map-safety-20261007",
-      "kind": "fix",
+      "kind": "upstream",
       "basis": "record",
       "at": "2026-10-07T13:53:10Z",
       "title": "审查上游10项更新，择取构建依赖安全修复",
@@ -404,7 +452,7 @@
     },
     {
       "id": "upstream-atom-baseline-20261006",
-      "kind": "fix",
+      "kind": "upstream",
       "at": "2026-10-06T11:16:30Z",
       "basis": "record",
       "title": "核对上游19项更新，保留 Atom 纯文本论文内容",
@@ -622,7 +670,7 @@
       "id": "upstream-navigation-safety-2026-10-04",
       "at": "2026-10-04T14:24:45Z",
       "basis": "record",
-      "kind": "fix",
+      "kind": "upstream",
       "title": "选择性适配新一轮上游导航与安全修复",
       "body": [
         "审查上游新增12个提交，选取文档渲染失败的受限旧构建恢复、导航响应类型兼容、旧RSS请求目标保护及服务端渲染日志脱敏。仅旧构建确认丢失且没有未保存输入时允许一次恢复。",

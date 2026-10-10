@@ -1,11 +1,11 @@
 # 按日更新日志维护
 
-`/changelog` 统一记录 HKIS 网站功能、修复和已合入 fork 的上游变化。唯一数据源是 `industry/changelog.json`，通过 `packages/contracts/src/changelog.ts` 的共享类型和校验读取；Sites 与原 Node API 使用同一份内容。页面不在每次访问时调用 GitHub，也不写数据库或调用模型。
+`/changelog` 统一记录 HKIS 网站功能、修复，以及已有 fork 证据的上游合并、选择性适配和审查。唯一数据源是 `industry/changelog.json`，通过 `packages/contracts/src/changelog.ts` 的共享类型和校验读取；Sites 与原 Node API 使用同一份内容。页面不在每次访问时调用 GitHub，也不写数据库或调用模型。
 
 ## 每次网站代码变更
 
 1. 在提交/发布前更新 `industry/changelog.json`，同一提交内包含变更和记录。沿用稳定且唯一的 `id`；新条目放最前，`latestVersion` 等于最新条目的 `at`。
-2. `kind` 只用 `feature`（功能）、`fix`（修复）、`upstream`（上游同步）。写简洁中文，说明用户可见结果和必要限制，不能把配置项、测试通过或源码合并写成外部服务已连通。
+2. 编写时显式选择 `kind`：`feature`（功能更新）、`fix`（问题修复）、`upstream`（上游同步），按下表核对实际来源。写简洁中文，说明用户可见结果和必要限制，不能把配置项、测试通过或源码合并写成外部服务已连通。
 3. 所有 `at` 使用完整 UTC 时间 `YYYY-MM-DDTHH:mm:ssZ`，页面统一换算为 UTC+08 并按天归档。`basis: commit` 使用 GitHub fork 的实际提交时间；`integration` 使用 fork 合并时间；新改动的同批记录可用实际维护时刻与 `record`。不要猜上线时间。
 4. `sources` 必须包含已核实的 GitHub commit、compare 或仓库文件链接。已知历史用完整 40 位 SHA。当前提交的 SHA 尚未产生时，可链接到本次会一起提交的 `blob/main/industry/changelog.json` 或 `docs/*.md`，推送后再次验证；不要伪造自引用 SHA。Site 内部导出 SHA 不是 GitHub fork SHA。
 5. 保持新旧顺序、所有历史内容和来源。未来如果更正已发布条目，应在最新维护记录说明更正，而不是悄悄改写历史事实。
@@ -14,11 +14,24 @@
 
 ## 上游同步条目
 
-- 仅在真实合并后加入主时间线；主条目的日期是 fork 合入时间。
-- `upstream.repository`、`base`、`head`、`compareUrl` 必须与 GitHub 比较结果匹配。`commits` 列出范围内全部提交的完整 SHA、原始提交时间、中文说明和上游 commit URL；不包括 base，包括 head。
+- 完整合并使用 `basis: integration`，主条目的日期是 fork 实际合入时间。`upstream.repository`、`base`、`head`、`compareUrl` 必须与 GitHub 比较结果匹配；`commits` 列出范围内全部提交的完整 SHA、原始提交时间、中文说明和上游 commit URL，不包括 base，包括 head。
+- 选择性适配或只有维护说明的上游审查可使用 `basis: record`，保留真实维护时刻，不填冒充完整合并的 `upstream` 对象。`sources` 同时附上游完整 SHA commit/compare 和 fork 审查文档；正文、文档明确审查数量、实际采用内容、未采用理由和最后完整 merge 基线。审查 13 项不能写成“合入 13 项”，文档适配不能写成生产功能修复。
+- 既有、已核实合入时间的选择性同步记录可继续使用 `integration` 与完整审查范围，并在每项说明中区分采用/未采用。不要为历史分类更正改写原有 `at` 或 `basis`。
 - 原始上游提交时间在展开列表内单列，不能把上游早一天提交写成本站早一天上线。
 - 区分“代码已经合并”和“Sites 中实际运行”。原 Node/PostgreSQL 功能未迁移时必须注明；记录保留的 HKIS 定制能力和真实验证范围。
 - 本次补录范围从 2026-09-30 的首次 Sites 适配开始。2026-10-01 的上游合并覆盖 885b736…cf8f8d0 共 12 个提交，具体见 [同步说明](upstream-sync.md)。
+
+## 编写入口与类型选择
+
+本站目前以受版本控制的 JSON 编写日志，没有在线编辑器。现有 `npm run check:changelog -- --help` 提供可选类型和判定提示；正常检查同时输出各类型数量。校验器遇到非法类型也列出三项选项，不能代替人工审查 provenance。
+
+| 可选值 | 显示名称 | 何时选择 |
+| --- | --- | --- |
+| `feature` | 功能更新 | 本站新增或扩展功能。借上游做实验或测试参考、但实际交付是本地功能时，按本地功能记录。 |
+| `fix` | 问题修复 | 修复本站自身缺陷。标题含“同步”“来源”或“恢复”不构成上游来源证明。 |
+| `upstream` | 上游同步 | 经实际 commit/diff 与 fork 适配记录证实的完整合并、择取修复或上游维护审查。择取的是修复，也归此类；写清采用范围。 |
+
+写新条目前先核对“实际来自本站实现，还是上游补丁/审查？”并显式填上述一个值。混合提交已有独立日志时按各条实际内容归类，不复制条目、不为换分类拆分历史；真有必要区分独立交付才写独立条目。分类更正应新增说明记录，保留历史 ID、日期、正文、来源和阅读锚点；本次 3 条更正证据见 [分类审计](changelog-classification-audit.md)。
 
 ## 安全与边界
 

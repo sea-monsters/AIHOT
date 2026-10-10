@@ -115,7 +115,8 @@ try{
    }
   }
   const motion=await evaluate(`(async()=>{
-   const button=document.querySelector('${toggle}'),category=button.closest('section'),entries=[...category.querySelectorAll('.changelog-entry')],first=entries[0],next=entries[1];
+   const button=[...document.querySelectorAll('${toggle}')].find(b=>b.closest('section').querySelectorAll('.changelog-entry').length>=2),category=button.closest('section'),entries=[...category.querySelectorAll('.changelog-entry')],first=entries[0],next=entries[1];
+   if(button.getAttribute('aria-expanded')!=='true'){button.click();await new Promise(r=>requestAnimationFrame(r));for(let i=0;i<30&&category.dataset.motionActive!=='false';i++)await new Promise(r=>requestAnimationFrame(r));}
    const frame=()=>new Promise(r=>requestAnimationFrame(r));const sample=()=>{const a=first.getBoundingClientRect(),b=next.getBoundingClientRect();return {height:a.height,separatorGap:Math.abs(b.top-a.bottom)}};
    const full=sample().height,times=[],samples=[];button.click();await frame();
    const heightAnimation=first.getAnimations().some(a=>a.effect.getKeyframes().some(k=>'height'in k)),positionAnimation=first.querySelector('.changelog-entry-meta').getAnimations().some(a=>a.effect.getKeyframes().some(k=>'transform'in k));
@@ -180,6 +181,22 @@ try{
  await evaluate(`document.documentElement.dataset.theme='light'`);await pause(250);
  await screenshot('changelog-badges-light');await evaluate(`document.documentElement.dataset.theme='dark'`);await pause(250);await screenshot('changelog-badges-dark');await evaluate(`document.documentElement.dataset.theme='light'`);await pause(250);
  console.log('BADGE CONTRAST',JSON.stringify(contrasts));
+ // Provenance corrections must flow through actual rendered counts, filters, dates and anchors.
+ record('all-type badge count matches the complete changelog',await evaluate(`document.querySelector('.reading-kind-filters button').textContent.trim().endsWith(' '+${releases.length})`));
+ for(const [index,kind] of ['feature','fix','upstream'].entries()){
+  const ids=releases.filter(entry=>entry.kind===kind).map(entry=>entry.id);
+  await evaluate(`document.querySelectorAll('.reading-kind-filters button')[${index+1}].click()`);
+  await until(`[...document.querySelectorAll('[data-changelog-category]')].every(e=>e.dataset.changelogCategory==='${kind}')`,'actual '+kind+' filter renders');
+  record(`${kind}: badge count matches actual records`,await evaluate(`document.querySelectorAll('.reading-kind-filters button')[${index+1}].textContent.trim().endsWith(' '+${ids.length})`));
+  record(`${kind}: rendered filtered IDs are exact and unique`,await evaluate(`(()=>{const expected=${JSON.stringify(ids)},actual=[...document.querySelectorAll('.changelog-entry')].map(e=>e.id.replace('change-',''));return expected.length===actual.length&&new Set(actual).size===actual.length&&expected.every(id=>actual.includes(id))})()`));
+ }
+ await db.prepare("UPDATE navigation_seen SET seen_version=0 WHERE owner_id='browser-fixture' AND page_key='changelog'").run();
+ for(const id of ['upstream-navigation-safety-2026-10-04','upstream-atom-baseline-20261006','upstream-source-map-safety-20261007']){
+  await navigate('/changelog#change-'+id);
+  await until(`document.querySelector('#change-${id} .changelog-content')?.hidden===false`,'reclassified historical anchor opens');
+  record(`${id}: anchor opens upstream category and focuses its unchanged heading`,await evaluate(`document.querySelector('#change-${id}').closest('[data-changelog-category]').dataset.changelogCategory==='upstream'&&document.activeElement.id==='heading-${id}'`));
+  record(`${id}: historical anchor leaves newest version unread`,Number((await db.prepare("SELECT seen_version FROM navigation_seen WHERE owner_id='browser-fixture' AND page_key='changelog'").first()).seen_version)===0);
+ }
  // Historical anchors must not acknowledge the newest changelog snapshot.
  await db.prepare("UPDATE navigation_seen SET seen_version=0 WHERE owner_id='browser-fixture' AND page_key='changelog'").run();
  await navigate('/changelog#change-'+historical.id);

@@ -3,7 +3,9 @@
 This record covers the selective Sites adaptation on fork baseline
 `18f98e5d512a6f775a999f610aa43e113c3e001f`. The upstream review window was
 `8e34e05feb161cb5838e592ee22715f791c7f814..8ef28ebcd167b311ffab8c0308181e2912262ae2`
-(18 commits); merge baseline `cf8f8d07d68dfa9079becc72b0717a45b33485f3` was not merged.
+(18 commits). The last full merge remained
+`cf8f8d07d68dfa9079becc72b0717a45b33485f3`; this review did not merge the new window.
+The current review index is maintained in [upstream-sync.md](upstream-sync.md).
 
 ## P1 — durable batch/brief missingness
 

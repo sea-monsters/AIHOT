@@ -1,6 +1,11 @@
 import { beijingDate } from './time.ts';
 
 export type ChangeKind = 'feature' | 'fix' | 'upstream';
+export const CHANGE_KIND_OPTIONS = {
+  feature: { label: '功能更新', description: '本站新增或扩展的功能；引用上游作参考不等于上游同步。' },
+  fix: { label: '问题修复', description: '本站自身问题的修复；按实际来源判断，不按标题中的关键词判断。' },
+  upstream: { label: '上游同步', description: '有提交证据的完整合并、选择性适配或已提交的上游审查；明确实际采用范围。' },
+} as const;
 export interface ChangeSource { label: string; url: string }
 export interface UpstreamCommit { sha: string; at: string; title: string; url: string }
 export interface ChangeRelease {
@@ -57,7 +62,7 @@ export function validateChangelog(value: unknown): Changelog {
     requireValue(Date.parse(release.at) <= previous, 'releases must be newest first');
     previous = Date.parse(release.at);
     requireValue(['commit', 'integration', 'record'].includes(String(release.basis)), 'date basis');
-    requireValue(['feature', 'fix', 'upstream'].includes(String(release.kind)), 'change kind');
+    requireValue(typeof release.kind === 'string' && Object.hasOwn(CHANGE_KIND_OPTIONS, release.kind), 'change kind: feature（功能更新） / fix（问题修复） / upstream（上游同步）; choose by actual provenance');
     requireValue(nonempty(release.title) && Array.isArray(release.body) && release.body.length > 0 && release.body.every(nonempty), 'release copy');
     requireValue(Array.isArray(release.sources) && release.sources.length > 0, 'release sources');
     for (const source of release.sources) {
@@ -66,6 +71,12 @@ export function validateChangelog(value: unknown): Changelog {
       sourceUrl(source.url);
     }
     if (release.kind === 'upstream') {
+      // A selective adaptation/review keeps its verified maintenance date. It is not merge evidence.
+      if (release.basis === 'record' && release.upstream === undefined) {
+        requireValue(release.sources.some(source => /^https:\/\/github\.com\/KKKKhazix\/AIHOT\/(commit|compare)\//.test(source.url)), 'upstream maintenance record requires upstream commit or comparison evidence');
+        requireValue(release.sources.some(source => /^https:\/\/github\.com\/sea-monsters\/AIHOT\/blob\/(main|[a-f0-9]{40})\/docs\//.test(source.url)), 'upstream maintenance record requires a fork review document');
+        continue;
+      }
       requireValue(release.basis === 'integration', 'upstream uses fork integration date');
       const up = release.upstream;
       object(up, ['repository', 'base', 'head', 'compareUrl', 'commits'], 'upstream');
