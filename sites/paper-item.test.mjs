@@ -17,14 +17,14 @@ test('DOI normalization retains the complete identifier and creates a safe HTTPS
  for(const bad of ['javascript:alert(1)','http://example.invalid','https://user:password@example.invalid'])assert.equal(paperSource(null,bad).href,null);
  assert.deepEqual(paperSource(null,'https://example.invalid/paper'),{doi:null,href:'https://example.invalid/paper'});
 });
-test('default rows retain long titles, every keyword and unit; missing scores are not fabricated',()=>{
+test('rows retain full data with a concise score and recoverable institutions; missing scores are not fabricated',()=>{
  const title='Synthetic long title '.repeat(24),keywords=Array.from({length:18},(_,i)=>'keyword-'+i),affiliations=Array.from({length:8},(_,i)=>'Institute-'+i);
  const html=render({title,keywords,affiliations,abstract:'FULL ABSTRACT LAST SENTENCE',updatedAt:'2026-10-10T16:00:00Z',priority:0,doi:'10.1234/abc'});
  assert.ok(html.includes(title));for(const text of [...keywords,...affiliations,'FULL ABSTRACT LAST SENTENCE'])assert.ok(html.includes(text),text);
  assert.match(html,/aria-expanded="false" aria-controls="[^"]+"/);assert.match(html,/class="paper-item-content" hidden="" inert="" aria-hidden="true"/);
  assert.match(html,/class="paper-item-source" hidden="" inert=""/);assert.match(html,/target="_blank" rel="noopener noreferrer"/);
- assert.match(html,/阅读优先级（规则分）<\/dt><dd>0/);assert.match(html,/AI 评分：未提供/);
- const missing=render({title:'Missing evidence',publishedAt:'2025-01-01'});assert.match(missing,/<dt>更新<\/dt><dd>未提供/);assert.match(missing,/<dt>单位机构<\/dt><dd>未提供/);assert.match(missing,/<dt>关键词<\/dt><dd>未提供/);assert.match(missing,/阅读优先级（规则分）<\/dt><dd>未提供/);
+ assert.match(html,/阅读优先级<\/dt><dd><span class="paper-item-score-value" data-missing="false">0<\/span><small>规则分/);assert.match(html,/AI 评分：未提供/);
+ const missing=render({title:'Missing evidence',publishedAt:'2025-01-01'});assert.match(missing,/<dt>更新<\/dt><dd>未提供/);assert.match(missing,/<dt>单位机构<\/dt><dd><span class="paper-item-affiliation-preview">未提供/);assert.match(missing,/<dt>关键词<\/dt><dd>未提供/);assert.match(missing,/阅读优先级<\/dt><dd><span class="paper-item-score-value" data-missing="true">未提供/);
  assert.equal(paperUpdate('invalid'),null);assert.deepEqual(paperWords(['a',{label:'b'},'a',null]),['a','b']);
 });
 test('detail cache reuses complete stored data, expires and respects revision and abort boundaries',async()=>{
@@ -35,7 +35,9 @@ test('detail cache reuses complete stored data, expires and respects revision an
 });
 test('raw and supplemented institutions remain visible together; rule and AI scores remain separate',()=>{
  const html=render({title:'Independent fields',affiliations:['Original Institute'],metadata:{institutions:[{label:'Original Institute'},{label:'Supplemented Institute'}]},priority:81,analysis:{status:'completed',result:{importanceScore:54,qualityEvidenceScore:60}}});
- assert.ok(html.includes('Original Institute；Supplemented Institute'));assert.match(html,/阅读优先级（规则分）<\/dt><dd>81/);assert.ok(html.includes('AI 重要性 54'));
+ const summary=html.slice(html.indexOf('class="paper-item-summary"'),html.indexOf('class="paper-item-content"'));
+ assert.ok(summary.includes('Original Institute'));assert.ok(summary.includes('共 2 项'));assert.ok(!summary.includes('Supplemented Institute'));assert.ok(!summary.includes('AI 重要性'));
+ assert.ok(html.includes('Original Institute；Supplemented Institute'));assert.match(html,/阅读优先级<\/dt><dd><span class="paper-item-score-value" data-missing="false">81/);assert.ok(html.includes('AI 重要性 54'));
 });
 test('successful metadata supplementation invalidates cached and pending detail without retaining obsolete data',async()=>{
  const signal=new AbortController().signal;let abstract=null,finish;
@@ -50,4 +52,11 @@ test('successful metadata supplementation invalidates cached and pending detail 
  finish({id:'known',abstract:null});await assert.rejects(obsolete,{name:'AbortError'});
  assert.equal((await delayed.read('known',':',signal)).abstract,abstract);assert.equal(calls,2);
  const cleared=delayed.read('other',':',signal);delayed.clear();await assert.rejects(cleared,{name:'AbortError'});
+});
+
+test('archived reading priority and version never borrow the current rule evidence',()=>{
+ const html=render({title:'Archived score',priority:92,ruleVersion:'current-rules',readingScore:{value:73,ruleVersion:'archived-rules'}});
+ const summary=html.slice(html.indexOf('class="paper-item-summary"'),html.indexOf('class="paper-item-content"'));
+ assert.ok(summary.includes('73'));assert.ok(summary.includes('归档规则分'));assert.ok(!summary.includes('92'));assert.ok(!summary.includes('archived-rules'));
+ assert.ok(html.includes('archived-rules'));assert.ok(!html.includes('current-rules'));
 });

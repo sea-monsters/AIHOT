@@ -1,8 +1,30 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-11T08:46:05Z",
+  "latestVersion": "2026-10-11T13:19:17Z",
   "releases": [
+    {
+      "id": "paper-reading-hierarchy-20261011",
+      "at": "2026-10-11T13:19:17Z",
+      "kind": "feature",
+      "basis": "record",
+      "title": "论文折叠信息明确阅读层级",
+      "body": [
+        "标题保持完整并作为主阅读入口，关键词单列；机构与更新时间采用较轻字号和细线分区，主阅读优先级独立靠右对齐。",
+        "折叠时只显示主规则分；规则版本、AI 重要性及摘要方法证据移入展开资料，并注明不代表科学质量。机构默认首项预览和总数，展开可读全部原始机构，未合并或改写机构别名。",
+        "全站共用论文条目沿用收藏、已读、完整已存摘要与 DOI 行为，以及原 220ms 局部抽屉动效。本次记录以实际维护时刻为准；采集、调度与模型配置不变。"
+      ],
+      "sources": [
+        {
+          "label": "本站维护记录（随本轮提交）",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/industry/changelog.json"
+        },
+        {
+          "label": "已合入的论文抽屉与共享控件基线",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/d3c48698347d7bb6601d1888d3540c551220e717"
+        }
+      ]
+    },
     {
       "id": "shared-controls-feedback-20261011",
       "at": "2026-10-11T08:46:05Z",
