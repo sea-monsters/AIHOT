@@ -3,7 +3,7 @@
 :root{--interaction-duration:160ms;--interaction-ease:cubic-bezier(.2,.7,.3,1);--interaction-hover:var(--bg-sunk);--interaction-pressed:var(--selected);--interaction-disabled:var(--ink-3)}
 :where(a,button,summary,input,select,textarea){-webkit-tap-highlight-color:var(--selected)}
 :where(a,button,summary):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-:where(a,button,summary){transition:background-color var(--interaction-duration) var(--interaction-ease),border-color var(--interaction-duration) var(--interaction-ease),color var(--interaction-duration) var(--interaction-ease),text-decoration-color var(--interaction-duration) var(--interaction-ease)}
+:where(a,button,summary){transition:background-color var(--interaction-duration) var(--interaction-ease),border-color var(--interaction-duration) var(--interaction-ease),color var(--interaction-duration) var(--interaction-ease),text-decoration-color var(--interaction-duration) var(--interaction-ease),opacity var(--interaction-duration) var(--interaction-ease),transform var(--interaction-duration) var(--interaction-ease)}
 
 /* Explicit variants, plus existing semantic component aliases for legacy route families. */
 .hkis-link,.research-back,.page-header>a,.research-pagination :is(a,button),.weekly-links>a,.paper-bulk>a,.ai-actions>a,.info-page ul a{
@@ -84,3 +84,16 @@
 .keyword-disclosure>.disclosure-indicator{margin-left:auto}
 .keyword-disclosure:active{background:var(--interaction-pressed)}
 @media(hover:hover){.keyword-disclosure:hover{background:var(--interaction-hover)}}
+
+/* Local action feedback; no list entrances, layout tween or delayed interactive exits. */
+:is(.research-primary,.ai-secondary,.paper-text-button,.paper-favorite):active:not(:disabled){transform:translateY(1px)}
+.research-primary:active:not(:disabled){background:var(--accent-ink)}
+:is(.ai-secondary,.paper-favorite,.calendar-controls>button,.calendar-heading button,.calendar-day.has-update):active:not(:disabled){background:var(--interaction-pressed);color:var(--accent-ink)}
+.paper-favorite svg{transition:opacity var(--interaction-duration) var(--interaction-ease)}
+:is(.research-primary,.ai-secondary,.paper-text-button,.paper-favorite)[aria-busy=true],:is(.research-primary,.ai-secondary,.paper-text-button,.paper-favorite)[aria-busy=true]:disabled{opacity:.72}
+.ai-actions>button,.web-search-header>button{border-radius:var(--radius-control)}
+@media(hover:hover){:is(.ai-actions>button,.web-search-header>button):hover{background:var(--interaction-hover)}}
+:is(.ai-actions>button,.web-search-header>button):active{background:var(--interaction-pressed)}
+.ai-dialog[open],.web-search-dialog[open]{animation:control-dialog-enter var(--interaction-duration) var(--interaction-ease)}
+@keyframes control-dialog-enter{from{opacity:.9;transform:translateY(2px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:1119px){.reading-control-panel[data-open=true]{animation:reading-reveal var(--interaction-duration) var(--interaction-ease)}}

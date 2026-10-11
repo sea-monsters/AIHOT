@@ -114,3 +114,7 @@ trace 的 click–settled 窗口：Layout 累计 6.9–8.4ms、最大单次 1.5�
 三组 fixture 均 8/8 检查通过：明确展开按钮显示完整已存摘要与完整 DOI；稳定折叠后的摘要/来源 getClientRects 为 0，区域 hidden + inert，来源 focus 被拒绝；全部收起与重开读者写入 0、已有 read_at 仍为空、其他论文 JS 测量 0、Worker 外部请求 0、模型回执 0、浏览器异常 0。诊断流程只点击并命中论文 toggle，没有点击来源链接或发起原文入口动作。关闭起始仍由既有 UI 立即隐藏来源并 inert 内容，摘要裁切收尾后 hidden；没有因折叠控制写已读。
 
 原始 `results.json` 和 trace 保留在上述三个 `.sites-runtime/` 目录，不提交运行日志或一次性数据。可复现命令：设置 `PAPER_MOTION_DIAGNOSTIC=1`、`PAPER_DIAGNOSTIC_REVISION=52ee707b8d8255b188a315f71a222135e1cbb6e8`，并给 `UI_SCREENSHOT_DIR` 独立目录，运行 `node sites/test-paper-item-browser.mjs`；首次 trace 对照再设置 `PAPER_DIAGNOSTIC_COLD_TRACE=timing` 或 `geometry`。变量只控制测试 fixture，不添加产品 API、调度或长期 observer。本轮只更新限定诊断脚本、证据文档及维护记录；main 和站点不变。
+
+## 2026-10-11 继续整合
+
+保留以上历史证据和未归因 100ms 长帧限制，继续普通合并 main `a4e226e7dc444dd1c4d8954957f7be061ff193ef`，补共享控件反馈并完成最新复测。全量 Sites 539/539、论文 Chrome 75/75 与共享控件/原日志结果、实际性能及剩余 Windows/数据库限制见 [共享控件继续审计](shared-controls-audit.md)。本阶段推送 review 给父复核；复核后可按父任务指示正常合入并推 main，部署仍由父执行。此前“本分支不推 main”是历史 review 阶段状态，不构成用户对后续正常合入的禁止。

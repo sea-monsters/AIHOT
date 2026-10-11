@@ -183,8 +183,8 @@ export async function startBatch(db:any,slot:number,at=new Date()){
  await reconcileBatches(db,at);
  const date=collectedDay(at.toISOString())!,key=date+'/'+String(slot).padStart(2,'0');
  const plan=await intervalPlan(db,at);if(!plan.value.verified)throw new AIError('interval_owner_ambiguous',409,'无法确认采集间隔所属账户，请由所有者保存配置');
- await db.prepare("INSERT OR IGNORE INTO research_batches(key,date,slot,status,sources_json,started_at) VALUES(?,?,?,'running',?,?)").bind(key,date,slot,JSON.stringify(plan.sources.filter(s=>s.due).sort((a,b)=>String(a.lastAttempt||'').localeCompare(String(b.lastAttempt||''))||a.id.localeCompare(b.id)).map(s=>s.id)),at.toISOString()).run();
- const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();return {batchKey:key,status:row.status,startedAt:row.started_at,...batchLifecycle(row,at),collectionControl:await collectionControl(db,key,at)};
+ await db.prepare(`INSERT OR IGNORE INTO research_batches(key,date,slot,status,sources_json,started_at) SELECT ?,?,?,'running',?,? WHERE NOT EXISTS(SELECT 1 FROM research_settings WHERE key='lock:__metadata__' AND value>=${databaseNowSql})`).bind(key,date,slot,JSON.stringify(plan.sources.filter(s=>s.due).sort((a,b)=>String(a.lastAttempt||'').localeCompare(String(b.lastAttempt||''))||a.id.localeCompare(b.id)).map(s=>s.id)),at.toISOString()).run();
+ const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();if(!row)return {status:'deferred',reason:'metadata_in_progress',batchKey:null};return {batchKey:key,status:row.status,startedAt:row.started_at,...batchLifecycle(row,at),collectionControl:await collectionControl(db,key,at)};
 }
 export async function validateBatch(db:any,key:any,at=new Date()){
  if(key===undefined||key===null)return null;

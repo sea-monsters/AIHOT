@@ -21,10 +21,15 @@ export async function collectionControl(db:any,batchKey:string|null,at=new Date(
  const expected:string[]=parse(batch.sources_json,[]),states=(await db.prepare("SELECT key,value FROM research_settings WHERE key LIKE 'crossref:%'").all()).results;
  const byId=new Map<string,any>(states.map((r:any)=>[r.key.slice(9),parse(r.value,{})]));
  const pages=(id:string)=>{const s=byId.get(id);return s?.cycle?.key===cycle?s.cycle.pages:0};
- const heads=expected.filter(id=>pages(id)===0);
- const continuations=expected.filter(id=>pages(id)===1&&(byId.get(id)?.latest?.some((j:any)=>j.status==='pending')||byId.get(id)?.history?.length)).sort((a,b)=>String(byId.get(a)?.lastContinuationAttemptAt||'').localeCompare(String(byId.get(b)?.lastContinuationAttemptAt||''))||a.localeCompare(b));
+ const runs=(await db.prepare('SELECT source_id,status,details_json FROM research_runs WHERE batch_key=? ORDER BY started_at,id').bind(batchKey).all()).results;
+ const headSettled=new Set<string>(),deferredHeads=new Set<string>();
+ for(const r of runs){const d=parse(r.details_json,{});if(d.crossrefPages?.some((p:any)=>p.head&&['complete','pending'].includes(p.status)))headSettled.add(r.source_id);else if(d.headOutcome==='deferred'){headSettled.add(r.source_id);deferredHeads.add(r.source_id)}}
+ const deferred=(await db.prepare("SELECT key FROM research_settings WHERE key LIKE ?").bind('head-deferred:'+batchKey+':%').all()).results;
+ for(const r of deferred){const id=r.key.slice(('head-deferred:'+batchKey+':').length);headSettled.add(id);deferredHeads.add(id)}
+ const heads=expected.filter(id=>!headSettled.has(id)).sort((a,b)=>headOrder({id:a,crossref:byId.get(a)},{id:b,crossref:byId.get(b)}));
+ const continuations=expected.filter(id=>headSettled.has(id)&&!deferredHeads.has(id)&&pages(id)===1&&(byId.get(id)?.latest?.some((j:any)=>j.status==='pending')||byId.get(id)?.history?.length)).sort((a,b)=>String(byId.get(a)?.lastContinuationAttemptAt||'').localeCompare(String(byId.get(b)?.lastContinuationAttemptAt||''))||a.localeCompare(b));
  const nextSourceId=(heads.length?heads:continuations)[0]||null;
- return {stop:!nextSourceId,scope:'batch',reason:nextSourceId?null:'sources_exhausted',nextAction:nextSourceId?'sync_next':'finish_batch',nextSourceId,deadlineAt:new Date(Date.parse(batch.started_at)+maxMs).toISOString(),pass:heads.length?'head':'continuation',headSourcesRemaining:heads,expectedSources:expected};
+ return {stop:!nextSourceId,scope:'batch',reason:nextSourceId?null:'sources_exhausted',nextAction:nextSourceId?'sync_next':'finish_batch',nextSourceId,deadlineAt:new Date(Date.parse(batch.started_at)+maxMs).toISOString(),pass:heads.length?'head':'continuation',headSourcesRemaining:heads,headDeferredSources:[...deferredHeads],expectedSources:expected};
 }
 export async function stopCrossrefSlot(db:any,at=new Date()){
  const row=await db.prepare("SELECT value FROM research_settings WHERE key='crossref_http_cooldown'").first();

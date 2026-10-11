@@ -6,8 +6,8 @@ import { useEntrance } from "../../lib/hydration";
 /** Where each switch's thumb sat when it last left, relative to its track. */
 const thumbs = new Map<string, { left: number; width: number; at: number }>();
 
-function placeOf(el: HTMLElement) {
-  const tab = el.parentElement!.getBoundingClientRect();
+function placeOf(el: HTMLElement, visual = false) {
+  const tab = (visual ? el : el.parentElement!).getBoundingClientRect();
   const track = el.closest("[data-pill-track]")?.getBoundingClientRect();
   return { left: tab.left - (track?.left ?? 0), width: tab.width, at: Date.now() };
 }
@@ -24,15 +24,23 @@ function Thumb({ id }: { id: string }) {
     if (!el) return;
     const now = placeOf(el);
     const prev = thumbs.get(id);
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (entrance && !reduce && prev && now.at - prev.at < 1000 && (prev.left !== now.left || prev.width !== now.width) && el.animate) {
-      el.animate(
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let animation: Animation | undefined;
+    const stop = () => { animation?.cancel(); media.removeEventListener("change", onMotion); };
+    const onMotion = () => { if (media.matches) stop(); };
+    if (entrance && !media.matches && prev && now.at - prev.at < 1000 && (prev.left !== now.left || prev.width !== now.width) && el.animate) {
+      animation = el.animate(
         [{ transform: `translateX(${prev.left - now.left}px)`, width: `${prev.width}px` }, { transform: "translateX(0)", width: `${now.width}px` }],
         { duration: 160, easing: "cubic-bezier(0.25, 1, 0.5, 1)" },
       );
     }
+    if (animation) {
+      media.addEventListener("change", onMotion);
+      void animation.finished.then(stop, stop);
+    }
     return () => {
-      thumbs.set(id, placeOf(el));
+      thumbs.set(id, placeOf(el, !media.matches));
+      stop();
     };
   }, [id, entrance]);
   return <span ref={ref} className={THUMB} />;
