@@ -24,22 +24,32 @@ export function PaperItem({paper:p,className='',heading=2,prefix='',lazy=false,d
  const authorsWords=paperWords(p.keywords),categories=paperWords(p.categories),words=authorsWords.length?authorsWords:categories;
  const affiliations=[...new Set([...paperWords(p.affiliations),...paperWords(p.metadata?.institutions)])];
  const priority=scoreLabel?score:p.readingScore?.value??p.priority??p.ruleScore;
- const updated=paperUpdate(p.updatedAt),label=scoreLabel||(p.readingScore?'阅读优先级（归档规则分）':'阅读优先级（规则分）');
+ const updated=paperUpdate(p.updatedAt),label=scoreLabel||'阅读优先级',scoreSource=scoreLabel?'':p.readingScore?'归档规则分':'规则分',ruleVersion=p.readingScore?.ruleVersion||p.ruleVersion;
  return <PaperCardState id={p.id} title={p.title} className={'paper-item '+className}>
   <div ref={motion.ref} className="paper-item-drawer" data-open={open} data-motion-active={motion.moving}>
    <div className="paper-item-heading">
     <Heading className="paper-item-title" data-paper-motion-part>{p.id?<Link to={'/research/'+encodeURIComponent(p.id)} onClick={onNavigate}>{prefix}{p.title}</Link>:<>{prefix}{p.title}</>}</Heading>
-    <button type="button" className="paper-item-toggle" aria-label={(open?'收起':'展开')+'论文摘要：'+p.title} aria-expanded={open} aria-controls={id} onClick={()=>motion.toggle(()=>setOpen(v=>!v))}><span>{open?'收起摘要':'展开摘要'}</span><DisclosureIndicator open={open} label={false}/></button>
+    <button type="button" className="paper-item-toggle" aria-label={(open?'收起':'展开')+'论文摘要与资料：'+p.title} aria-expanded={open} aria-controls={id} onClick={()=>motion.toggle(()=>setOpen(v=>!v))}><span>{open?'收起详情':'展开详情'}</span><DisclosureIndicator open={open} label={false}/></button>
    </div>
-   <dl className="paper-item-meta" data-paper-motion-part>
-    <div className="paper-item-keywords"><dt>关键词</dt><dd>{words.join(' · ')||'未提供'}{words.length>0&&<small>{authorsWords.length?p.keywordLabel||(typeof p.keywords[0]==='string'?'作者关键词':'分类词，来源见详情'):'分类词，来源见详情'}</small>}{authorsWords.length>0&&categories.length>0&&<small>分类：{categories.join(' · ')}</small>}</dd></div>
-    <div><dt>更新</dt><dd>{updated?<time dateTime={p.updatedAt}>{updated}</time>:'未提供'}</dd></div>
-    <div className="paper-item-affiliations"><dt>单位机构</dt><dd>{affiliations.join('；')||'未提供'}</dd></div>
-    <div className="paper-item-score"><dt>{label}</dt><dd>{typeof priority==='number'&&Number.isFinite(priority)?priority:'未提供'}{p.ruleVersion&&<small>{p.ruleVersion}</small>}<span className="paper-item-ai">{scoreLabel?.startsWith('AI')?'':p.analysis?<AssessmentBadge paper={p}/>:'AI 评分：未提供'}</span></dd></div>
-   </dl>
+   <div className="paper-item-summary" data-paper-motion-part>
+    <dl className="paper-item-keywords"><dt>关键词</dt><dd>{words.join(' · ')||'未提供'}</dd></dl>
+    <div className="paper-item-foot">
+     <dl className="paper-item-meta">
+      <div className="paper-item-affiliations"><dt>单位机构</dt><dd><span className="paper-item-affiliation-preview">{affiliations[0]||'未提供'}</span>{affiliations.length>1&&<small>共 {affiliations.length} 项 · 展开查看完整机构</small>}</dd></div>
+      <div className="paper-item-updated"><dt>更新</dt><dd>{updated?<time dateTime={p.updatedAt}>{updated}</time>:'未提供'}</dd></div>
+     </dl>
+     <dl className="paper-item-score"><dt>{label}</dt><dd><span className="paper-item-score-value" data-missing={!(typeof priority==='number'&&Number.isFinite(priority))}>{typeof priority==='number'&&Number.isFinite(priority)?priority:'未提供'}</span>{scoreSource&&<small>{scoreSource}</small>}</dd></dl>
+    </div>
+   </div>
    {note&&<div className="paper-item-note">{note}</div>}
    <div id={id} className="paper-item-content" hidden={!(open||motion.keepDetails)} inert={!open||motion.moving} aria-hidden={!open}>
     <p className="paper-item-context">{p.publisher} {p.journal}{p.publishedAt&&<> · 发表 {p.publishedAt}{p.datePrecision==='month'?'（卷期月份）':''}</>}{p.authors?.length>0&&<> · {p.authors.map((a:any)=>a.name).join('；')}</>}</p>
+    <dl className="paper-item-details">
+     <div><dt>完整单位机构</dt><dd>{affiliations.join('；')||'未提供'}</dd></div>
+     <div><dt>关键词来源</dt><dd>{words.length?(authorsWords.length?p.keywordLabel||(typeof p.keywords[0]==='string'?'作者关键词':'分类词，来源见详情'):'分类词，来源见详情'):'未提供'}</dd></div>
+     {authorsWords.length>0&&categories.length>0&&<div><dt>分类</dt><dd>{categories.join(' · ')}</dd></div>}
+     <div><dt>评分依据</dt><dd>{scoreLabel||'阅读优先级（'+scoreSource+'）'}{ruleVersion&&<span> · {ruleVersion}</span>}<span className="paper-item-ai">{scoreLabel?.startsWith('AI')?'':p.analysis?<AssessmentBadge paper={p}/>:'AI 评分：未提供'}</span><small>阅读优先级用于安排阅读；AI 重要性与摘要方法证据分另列，不代表科学质量。</small></dd></div>
+    </dl>
     <p className="paper-item-abstract">{lazy&&!data?(error||'正在读取完整已存摘要…'):data?.abstract?.trim()||'当前已存记录未提供摘要。'}</p>
     {error&&<button type="button" className="paper-text-button" onClick={()=>setRetry(v=>v+1)}>重试读取</button>}
     <p className="paper-item-provenance">摘要来源：{data?.provenance?.abstract||data?.abstractSource||'未提供'}{data?.truncated||data?.abstractTruncated?' · 来源保存内容已标记截断':''}</p>

@@ -205,7 +205,10 @@ try{
  record('historical hash preserves latest unread',Number((await db.prepare("SELECT seen_version FROM navigation_seen WHERE owner_id='browser-fixture' AND page_key='changelog'").first()).seen_version)===0);
  await navigate('/changelog');
  record('collapsed latest remains unread',Number((await db.prepare("SELECT seen_version FROM navigation_seen WHERE owner_id='browser-fixture' AND page_key='changelog'").first()).seen_version)===0);
- await click(toggle);await until(`document.querySelector('${toggle}').getAttribute('aria-expanded')==='true'`,'latest opens');
+ const latestToggle='#'+await evaluate(`document.querySelector('#change-${latest.id}').closest('[data-changelog-category]').id`)+' '+toggle;
+ const firstIsLatest=await evaluate(`document.querySelector('${toggle}')===document.querySelector('${latestToggle}')`);
+ if(!firstIsLatest){await click(toggle);await until(`document.querySelector('${toggle}').closest('section').dataset.motionActive==='false'`,'other category opens');record('expanded other category keeps latest unread',Number((await db.prepare("SELECT seen_version FROM navigation_seen WHERE owner_id='browser-fixture' AND page_key='changelog'").first()).seen_version)===0);}
+ await click(latestToggle);await until(`document.querySelector('${latestToggle}').getAttribute('aria-expanded')==='true'`,'latest opens');
  for(let i=0;i<40;i++){const seen=await db.prepare("SELECT seen_version FROM navigation_seen WHERE owner_id='browser-fixture' AND page_key='changelog'").first();if(Number(seen.seen_version)===Date.parse(latest.at))break;await pause(100)}
  record('visible expanded latest acknowledges only loaded version',Number((await db.prepare("SELECT seen_version FROM navigation_seen WHERE owner_id='browser-fixture' AND page_key='changelog'").first()).seen_version)===Date.parse(latest.at));
  // Native calendar activation clears filters and reveals every kind on that date.
