@@ -17,7 +17,7 @@
       "sources": [
         {
           "label": "采集取消与阶段顺序审查",
-          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-cancellation-recovery.md"
+          "url": "https://github.com/sea-monsters/AIHOT/blob/21f63ad78ca5b0b0acade3f8fd1655b39ee33e54/docs/research-cancellation-recovery.md"
         }
       ]
     },
