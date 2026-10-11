@@ -9,12 +9,13 @@ const mf=new Miniflare(convertV4MiniflareOptions({modules:true,script:"export de
 try{
  const db=await mf.getD1Database('DB');const files=(await readdir('drizzle')).filter(f=>f.endsWith('.sql')).sort();
  const apply=async file=>{for(const q of(await readFile('drizzle/'+file,'utf8')).split('--> statement-breakpoint').map(s=>s.trim()).filter(Boolean))await db.prepare(q).run()};
- for(const f of files.filter(f=>!f.startsWith('0018_')))await apply(f);
+ for(const f of files.filter(f=>f<'0018_'))await apply(f);
  const at=new Date(),key='2026-10-10/08';
  await db.prepare("INSERT INTO research_batches(key,date,slot,status,sources_json,started_at) VALUES(?,'2026-10-10',8,'running','[\"ieee-ted\"]',?)").bind(key,at.toISOString()).run();
  await db.prepare("INSERT INTO research_runs(id,source_id,batch_key,started_at,status) VALUES('legacy','ieee-ted',?,?,'running')").bind(key,at.toISOString()).run();
  await db.prepare('INSERT INTO research_settings(key,value) VALUES(?,?)').bind('lock:ieee-ted',new Date(at.getTime()+600000).toISOString()).run();
  await apply('0018_collection_recovery.sql');
+ for(const f of files.filter(f=>f>'0018_collection_recovery.sql'))await apply(f);
  assert.equal((await db.prepare('SELECT count(*) n FROM research_runs').first()).n,1);
  await assert.rejects(finishBatch(db,key,at),{code:'batch_in_flight'});
  assert.equal((await reconcileBatches(db,new Date(at.getTime()+540000))).closed,0);

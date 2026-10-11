@@ -8,7 +8,7 @@ import {collectedDay} from './research-views.ts';
 import {dailyWindow,localHour} from './daily-domain.ts';
 import {AIError} from './ai/security.ts';
 import {batchScheduleContract} from './research-schedule.ts';
-import {batchLifecycle,databaseNowSql,noActiveBatchWorkAt,reconcileBatches} from './research-lifecycle.ts';
+import {batchLifecycle,databaseNowSql,noActiveBatchWorkAt,reconcileBatches,metadataIdle,processingIdle} from './research-lifecycle.ts';
 const parse=(s:any,f:any)=>{try{return JSON.parse(s)}catch{return f}};
 
 // Brief tracking starts with the first shared evening slot that the verified
@@ -183,7 +183,7 @@ export async function startBatch(db:any,slot:number,at=new Date()){
  await reconcileBatches(db,at);
  const date=collectedDay(at.toISOString())!,key=date+'/'+String(slot).padStart(2,'0');
  const plan=await intervalPlan(db,at);if(!plan.value.verified)throw new AIError('interval_owner_ambiguous',409,'无法确认采集间隔所属账户，请由所有者保存配置');
- await db.prepare(`INSERT OR IGNORE INTO research_batches(key,date,slot,status,sources_json,started_at) SELECT ?,?,?,'running',?,? WHERE NOT EXISTS(SELECT 1 FROM research_settings WHERE key='lock:__metadata__' AND value>=${databaseNowSql})`).bind(key,date,slot,JSON.stringify(plan.sources.filter(s=>s.due).sort((a,b)=>String(a.lastAttempt||'').localeCompare(String(b.lastAttempt||''))||a.id.localeCompare(b.id)).map(s=>s.id)),at.toISOString()).run();
+ await db.prepare(`INSERT OR IGNORE INTO research_batches(key,date,slot,status,sources_json,started_at) SELECT ?,?,?,'running',?,? WHERE ${metadataIdle} AND ${processingIdle}`).bind(key,date,slot,JSON.stringify(plan.sources.filter(s=>s.due).sort((a,b)=>String(a.lastAttempt||'').localeCompare(String(b.lastAttempt||''))||a.id.localeCompare(b.id)).map(s=>s.id)),at.toISOString()).run();
  const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();if(!row)return {status:'deferred',reason:'metadata_in_progress',batchKey:null};return {batchKey:key,status:row.status,startedAt:row.started_at,...batchLifecycle(row,at),collectionControl:await collectionControl(db,key,at)};
 }
 export async function validateBatch(db:any,key:any,at=new Date()){
@@ -196,9 +196,13 @@ export async function finishBatch(db:any,key:any,at=new Date()){
  // The SELECT above may wait behind the last collector. Capture completion in
  // the terminal CAS, bounded below by all evidence already committed then.
  const finishedAtSql=`max(${databaseNowSql},started_at,coalesce((SELECT max(first_seen) FROM research_batch_members m WHERE m.batch_key=research_batches.key),started_at),coalesce((SELECT max(finished_at) FROM research_runs r WHERE r.batch_key=research_batches.key),started_at))`;
- await db.prepare(`UPDATE research_batches SET status='finished',finished_at=${finishedAtSql} WHERE key=? AND status='running' AND ${noActiveBatchWorkAt(databaseNowSql)}`).bind(key).run();
+ await db.prepare(`UPDATE research_batches SET status='finished',finished_at=${finishedAtSql} WHERE key=? AND status='running' AND ${noActiveBatchWorkAt(databaseNowSql)} AND NOT EXISTS(SELECT 1 FROM research_runs r WHERE r.batch_key=research_batches.key AND r.close_reason='client_canceled')`).bind(key).run();
  const current=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();
- if(current.status==='running')throw new AIError('batch_in_flight',409,'采集请求或来源租约仍在运行，请稍后回读');
+ if(current.status==='running'){
+  const canceled=await db.prepare("SELECT id FROM research_runs WHERE batch_key=? AND close_reason='client_canceled' LIMIT 1").bind(key).first();
+  if(canceled)throw new AIError('collection_canceled',409,'本批采集曾取消；停止后续阶段，回读租约后显式 reconcile，不记为完成');
+  throw new AIError('batch_in_flight',409,'采集请求或来源租约仍在运行，请稍后回读');
+ }
  const cutoff=new Date(Date.parse(current.finished_at||current.closed_at||at.toISOString())+1).toISOString();
  return {batchKey:key,...await batchCoverage(db,key,cutoff),brief:current.status==='finished'?await prepareBrief(db,key):null};
 }

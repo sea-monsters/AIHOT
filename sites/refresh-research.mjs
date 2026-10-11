@@ -16,5 +16,7 @@ const localHour=new Date(started+8*3600000).getUTCHours();const maxMs=localHour=
 const options={maxPagesPerSource:Math.min(2,Math.max(1,Number(input.maxPagesPerSource)||1)),maxMs};
 const sync=async sourceId=>{const result=await call('/api/site/research/sync',{maxPages:1,...(sourceId?{sourceId}:{}),...(input.batchKey?{batchKey:input.batchKey}:{})});console.log(JSON.stringify(result));return result;};
 const results=input.batchKey&&!input.sourceIds?await collectResearchBatch(()=>sync(),options):await collectResearch(before.sources.filter(s=>ids.includes(s.id)),sync,options);
-if(input.processAI!==false&&Date.now()-started<=540000-240000){console.log(JSON.stringify({processing:await call('/api/site/research/process',{maxPapers:Math.min(3,Math.max(0,Number(input.maxPapers??3)))})}));}
+// This compatibility helper only collects. Full phase ordering is owned by
+// run-research-slot; an unknown transport can never fall through to scoring.
+if(results.some(r=>['unknown','interrupted'].includes(r.status))){input.token='';process.stderr.write('采集结果未确认，停止后续派发；请回读并显式核对收尾。\n');process.exitCode=2;}
 const after=await call('/api/site/research/status');console.log(JSON.stringify({verification:{total:after.total,counts:after.counts,sources:after.sources,schedule:after.schedule,processing:after.processing},runs:results.length}));

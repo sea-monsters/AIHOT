@@ -1,21 +1,22 @@
 export const SLOT_LIMITS={totalMs:540000,collection8Ms:260000,collection20Ms:330000,longRequestReserveMs:110000};
 type Call=(path:string,body?:any,timeoutMs?:number)=>Promise<any>;
-const blocked=(value:any)=>!value||!!value.error||!!value.code||['busy','blocked','deferred','error','failed','interrupted'].includes(value.status);
+const blocked=(value:any)=>!value||!!value.error||!!value.code||['busy','blocked','deferred','error','failed','interrupted','unknown'].includes(value.status);
+const preparationBlocked=(value:any)=>blocked(value)||value.status==='partial'||Number(value.deferred)>0||Number(value.scopePending)>0;
 /** Single client, serial dispatch. Unknown outcomes end this invocation without replay. */
 export async function runResearchSlot(call:Call,slot:8|20,now=Date.now,started=now()){
  const deadline=started+SLOT_LIMITS.totalMs,steps:any[]=[];
  const remaining=()=>Math.max(0,deadline-now());
  const invoke=async(phase:string,path:string,body:any,limit:number)=>{
-  const at=now();try{const value=await call(path,body,Math.max(1,Math.min(limit,remaining())));steps.push({phase,status:value.status||value.batchStatus||'ok',startedMs:at-started,endedMs:now()-started,runId:value.runId||null,reason:value.reason||value.deferredReason||value.collectionControl?.reason||null,pages:value.crossrefPages?.length||0,ready:value.ready??null,abstained:value.abstained??null,deferred:value.deferred??null,scopePending:value.scopePending??null});return value;}
+  const at=now();try{const value=await call(path,body,Math.max(1,Math.min(limit,remaining())));steps.push({phase,status:value.status||value.batchStatus||'ok',startedMs:at-started,endedMs:now()-started,runId:value.runId||null,reason:value.reason||value.deferredReason||value.collectionControl?.reason||value.code||null,pages:value.crossrefPages?.length||0,ready:value.ready??null,abstained:value.abstained??null,deferred:value.deferred??null,scopePending:value.scopePending??null});return value;}
   catch{steps.push({phase,status:'unknown',startedMs:at-started,endedMs:now()-started});return null;}
  };
  // The previous day's journals have already been collected. Prepare that cohort
  // before opening today's batch; today's papers cannot enter the prior-day report.
  if(slot===8){
   let prepare=true;
-  if(remaining()>=110000){const value=await invoke('metadata','/api/site/research/enrich',{cohort:'previous_day',maxMs:75000},90000);if(!value)return {status:'unknown',steps};prepare=!blocked(value);}
+  if(remaining()>=110000){const value=await invoke('metadata','/api/site/research/enrich',{cohort:'previous_day',maxMs:75000},90000);if(!value)return {status:'unknown',steps};prepare=!preparationBlocked(value);}
   else prepare=false;
-  if(prepare&&remaining()>=110000){const value=await invoke('scoring','/api/site/research/process',{maxPapers:1,cohort:'previous_day',maxMs:Math.min(120000,remaining())},120000);if(!value)return {status:'unknown',steps};prepare=!blocked(value);}
+  if(prepare&&remaining()>=110000){const value=await invoke('scoring','/api/site/research/process',{maxPapers:1,cohort:'previous_day',maxMs:Math.min(120000,remaining())},120000);if(!value)return {status:'unknown',steps};prepare=!preparationBlocked(value);}
   else prepare=false;
   if(prepare&&remaining()>=190000){if(!await invoke('daily','/api/site/research/daily/generate',{maxCalls:2},190000))return {status:'unknown',steps};}
   else steps.push({phase:'daily',status:'deferred',reason:prepare?'deadline':'preparation_deferred'});
@@ -35,11 +36,12 @@ export async function runResearchSlot(call:Call,slot:8|20,now=Date.now,started=n
    const maxMs=Math.min(75000,collectionDeadline-now()-15000);
    const result=await invoke(control?.pass||'head','/api/site/research/sync',{batchKey:batch.batchKey,maxPages:1,maxMs},maxMs+15000);
    if(!result)return {status:'unknown',batchKey:batch.batchKey,reason:'sync_outcome_unknown_do_not_finish_in_flight',steps};
+   if(result.code||result.status==='interrupted'||result.status==='unknown'||result.error==='collection_canceled')return {status:result.status==='unknown'?'unknown':'deferred',batchKey:batch.batchKey,reason:'collection_interrupted_readback_reconcile',steps};
    if(blocked(result))deferredSources.add(result.sourceId||control.nextSourceId);
    control=result.collectionControl;if(!control)break;
   }
   const finish=await invoke('finish','/api/site/research/batch/finish',{batchKey:batch.batchKey},15000);
-  if(!finish||blocked(finish)||!['finished','interrupted'].includes(finish.batchStatus))return {status:'deferred',batchKey:batch.batchKey,reason:'finish_unconfirmed_do_not_start_maintenance',steps};
+  if(!finish||blocked(finish)||!['finished','interrupted'].includes(finish.batchStatus))return {status:finish?'deferred':'unknown',batchKey:batch.batchKey,reason:'finish_unconfirmed_do_not_start_maintenance',steps};
   collectionStoppedForCooldown=/rate_limit|cooldown|429/.test(control?.reason||'');
  }
  else if(!['finished','interrupted'].includes(batch.status))return {status:'deferred',batchKey:batch.batchKey,reason:'batch_not_terminal',steps};
@@ -48,7 +50,7 @@ export async function runResearchSlot(call:Call,slot:8|20,now=Date.now,started=n
  if(slot===20&&remaining()>=110000){
   const enriched=await invoke('metadata','/api/site/research/enrich',slot===8?{cohort:'previous_day',maxMs:75000}:{cohort:'pending',maxMs:75000},90000);
   if(!enriched)return {status:'unknown',batchKey:batch.batchKey,steps};
-  metadataReady=!blocked(enriched);
+  metadataReady=!preparationBlocked(enriched);
  }else if(slot===20){metadataReady=false;steps.push({phase:'metadata',status:'deferred',reason:'deadline'});}
  if(slot===20&&metadataReady&&remaining()>=200000){
   const processed=await invoke('scoring','/api/site/research/process',{maxPapers:2,cohort:'current',maxMs:Math.min(210000,remaining())},210000);

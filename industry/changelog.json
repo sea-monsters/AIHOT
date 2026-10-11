@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-11T08:46:05Z",
+  "latestVersion": "2026-10-11T12:50:06Z",
   "releases": [
+    {
+      "id": "research-cancellation-phase-gates-20261011",
+      "at": "2026-10-11T12:50:06Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "采集取消后如实保留中断状态，阻止处理阶段越序",
+      "body": [
+        "采集、资料补全和评分采用服务端原子互斥；旧评分调用仅处理当天有匹配就绪证据的论文，不自动扫描历史积压。",
+        "采集取消保留已保存内容与原归属，中断不记为完成；结果未知、收尾未确认或补全延期后停止后续派发，等待回读与显式核对。",
+        "本记录对应审查分支的代码修复；真实采集任务文本、部署及运行时取消信号支持仍需维护者核对。本轮不改调度、限流、配额或冻结日报，不补跑采集。"
+      ],
+      "sources": [
+        {
+          "label": "采集取消与阶段顺序审查",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-cancellation-recovery.md"
+        }
+      ]
+    },
     {
       "id": "shared-controls-feedback-20261011",
       "at": "2026-10-11T08:46:05Z",

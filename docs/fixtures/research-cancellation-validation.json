@@ -1,0 +1,90 @@
+{
+  "checkedAt": "2026-10-11T13:04:34Z",
+  "environment": {
+    "node": "v24.11.1",
+    "platform": "win32",
+    "database": "isolated SQLite and Miniflare D1",
+    "baseline": "d3c48698347d7bb6601d1888d3540c551220e717",
+    "reviewBranch": "review/research-cancellation-gates-20261011",
+    "miniflareCompatibilityFlags": ["nodejs_compat", "enable_request_signal"]
+  },
+  "frozenBehavioralBaseline": {
+    "command": "node --test sites/research-cancellation.test.ts (first six frozen counterexamples before implementation)",
+    "tests": 6,
+    "pass": 0,
+    "fail": 6,
+    "scope": "stage admission, old-body ready evidence, cooperative cancellation boundaries, new and legacy dispatch gates"
+  },
+  "checks": [
+    {
+      "command": "node --test --test-concurrency=1 --test-timeout=120000 \"sites/*.test.ts\" \"sites/*.test.mjs\" \"sites/scholarly/*.test.ts\" \"sites/ai/*.test.ts\" \"sites/anysearch/*.test.ts\" \"sites/anysearch/*.test.mjs\"",
+      "exitCode": 0,
+      "tests": 553,
+      "pass": 553,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "durationMs": 80274.9218
+    },
+    {"command": "npm run typecheck", "exitCode": 0},
+    {"command": "npm run check:changelog", "exitCode": 0, "releases": 82},
+    {"command": "node --test sites/changelog.test.ts", "exitCode": 0, "tests": 19, "pass": 19},
+    {
+      "command": "node sites/test-cancellation-worker.mjs",
+      "exitCode": 0,
+      "scope": "actual D1 opposing admission orders, processing/start exclusion, canceled run, finish409, explicit reconciliation and late-write fence; actual dist/server/index.js old HTTP body"
+    },
+    {
+      "command": "node sites/test-recovery-worker.mjs",
+      "exitCode": 0,
+      "scope": "actual D1 and compiled Worker recovery, legacy migration ordering, pure reads, in-flight finish, expired leases and late-write protection"
+    },
+    {
+      "command": "node sites/test-pipeline-worker.mjs",
+      "exitCode": 0,
+      "scope": "actual D1, synthetic provider responses, ready evidence, cache/receipt/origin/configuration invariants"
+    },
+    {"command": "node sites/test-worker.mjs", "exitCode": 0, "transport": "isolated workerd and synthetic outbound responses"},
+    {
+      "command": "npm run build",
+      "exitCode": 1,
+      "compilation": "Web client, SSR and Sites Worker bundle succeed",
+      "packaging": "final copy blocked by missing ignored .openai/hosting.json; no private hosting configuration copied or fabricated"
+    },
+    {
+      "command": "node --test --test-timeout=120000 \"apps/web/tests/*.test.ts\"",
+      "exitCode": 1,
+      "tests": 48,
+      "pass": 34,
+      "fail": 14,
+      "reason": "web process exits before assertions: ERR_UNSUPPORTED_ESM_URL_SCHEME for c: on Windows; web server/tests unchanged in this review"
+    },
+    {"command": "git diff --check", "exitCode": 0}
+  ],
+  "notExecuted": [
+    "PostgreSQL npm test and deployment smoke: no isolated _test/_ci PostgreSQL supplied",
+    "Real collector prompt/body/timeout and production request-signal capability verification",
+    "Production collection, provider/model calls, production reconciliation, schedule changes, main merge and deployment"
+  ],
+  "preservedContracts": {
+    "collectionPages": 35,
+    "pagesPerSource": 2,
+    "slotSeconds": 540,
+    "providerBudgets": "unchanged",
+    "unknownPaidReceipt": "no automatic replay",
+    "frozenAttributionAndEvidence": "unchanged",
+    "databaseMigrationsAdded": 0,
+    "finish": "in-flight/canceled collection cannot become finished; original deadline plus all valid leases governs reconciliation"
+  },
+  "externalEffects": {
+    "realProviderCalls": 0,
+    "paidModels": 0,
+    "productionWrites": 0,
+    "scheduleChanges": 0,
+    "siteDeployments": 0
+  },
+  "limitations": [
+    "Cooperative cancellation requires runtime request signals and surviving JavaScript; hard termination can still leave a durable lease for explicit safe reconciliation.",
+    "The production cancellation initiator and slow substage are not uniquely determined by supplied evidence; progress checkpoints distinguish future attempts without exposing response bodies."
+  ]
+}

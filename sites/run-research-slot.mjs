@@ -17,7 +17,7 @@ export async function privateSlotMain(){
  const hour=new Date(Date.now()+8*3600000).getUTCHours(),slot=input.slot??hour;if(![8,20].includes(slot)||slot!==hour)throw Error('只支持当前实际 UTC+08 08/20 窗口');
  const started=input.automationStartedAt==null?processStarted:Date.parse(input.automationStartedAt);
  if(!Number.isFinite(started)||started>processStarted)throw Error('Invalid automation start');
- const call=async(path,body,timeoutMs)=>{const r=await fetch(origin+path,{method:'POST',redirect:'error',headers:{'OAI-Sites-Authorization':'Bearer '+input.token,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(timeoutMs)});if(!r.ok){await r.body?.cancel();throw Error('service_request_unconfirmed');}return r.json();};
+ const call=async(path,body,timeoutMs)=>{const r=await fetch(origin+path,{method:'POST',redirect:'error',headers:{'OAI-Sites-Authorization':'Bearer '+input.token,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(timeoutMs)});if(!r.ok){let code='service_http_'+r.status;try{const value=await r.json();if(['batch_in_flight','batch_closed','collection_canceled','collection_lease_lost','owner_required','invalid_deadline','invalid_batch'].includes(value.code))code=value.code;}catch{}return {status:'deferred',code};}return r.json();};
  try{const result=await runResearchSlot(call,slot,Date.now,started);process.stdout.write(JSON.stringify(result).replaceAll(input.token,'[redacted]')+'\n');if(result.status==='unknown')process.exitCode=2;}finally{input.token='';}
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)privateSlotMain().catch(()=>{process.stderr.write('执行未确认；停止派发，不重试未知请求。请回读持久状态。\n');process.exitCode=2;});

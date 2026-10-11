@@ -5,7 +5,7 @@ import {readFileSync,readdirSync} from 'node:fs';
 import {monthWindow,inUpdateWindow,analysisFields,digest,analysisGate,parseAssessment,configurationFields} from './research-pipeline.ts';
 import {processingConfig,processRecent,processingStatus,attachAnalyses} from './research-processing.ts';
 import {validateScheduleMirror,researchSchedule} from './research-schedule.ts';
-import {initResearch,savePaper,rowPaper,syncSource,researchApi} from './research.ts';
+import {initResearch,savePaper as saveRawPaper,rowPaper,syncSource,researchApi} from './research.ts';
 import {fromCrossref,type Paper} from './research-domain.ts';
 import {RESEARCH_SOURCES} from './research-config.ts';
 import {seal} from './ai/security.ts';
@@ -13,6 +13,15 @@ function fixture(){const sql=new DatabaseSync(':memory:');for(const f of readdir
 const abstract='We compared TCAD device simulation of GAA transistors with measured interface trap transport. The proposed mechanism explains differences between measurements and model predictions. This abstract reports the device methods and comparative observations but does not establish independently verified reproducibility.';
 const paper=(doi='10.9999/pipeline'):Paper=>({doi,title:'TCAD interface traps in GAA transistors',url:'https://doi.org/'+doi,publisher:'IEEE',journal:'Test journal',sourceId:'ieee-ted',issn:'0018-9383',publishedAt:monthWindow().endDate,datePrecision:'day',authors:[],affiliations:[],abstract,keywords:[],provenance:{abstract:'crossref',publishedAt:'crossref'},sourceIndexedAt:null,discovery:'crossref'});
 async function settings(f:ReturnType<typeof fixture>,endpoint='https://api.deepseek.com',limit=30){const ciphertext=await seal('UNIT_TEST_NOT_A_REAL_CREDENTIAL',f.env,'owner|'+endpoint);await f.db.prepare("INSERT INTO ai_settings(owner_id,endpoint,model,protocol,reasoning,key_ciphertext,enabled,daily_limit,max_tokens,revision,updated_at,test_status) VALUES('owner',?,'deepseek-test','chat-completions','high',?,1,?,384000,1,?,'ok')").bind(endpoint,ciphertext,limit,new Date().toISOString()).run()}
+// These are current ready-scoring fixtures, not production legacy imports.
+// Keep the provider/cache/budget oracles; explicitly supply the new readiness
+// contract instead of allowing tests to scan an unattributed legacy backlog.
+async function savePaper(db:any,p:Paper,at?:string){
+ const saved=await saveRawPaper(db,p,at),cohort=monthWindow().endDate+'/08';
+ await db.prepare("UPDATE research_papers SET metadata_status='ready' WHERE id=?").bind(saved.id).run();
+ await db.prepare("INSERT INTO research_ready_evidence SELECT id,?,NULL,first_seen,updated_at,content_hash,'{}','fixture_ready' FROM research_papers WHERE id=? ON CONFLICT(paper_id) DO UPDATE SET content_hash=excluded.content_hash,ready_at=excluded.ready_at").bind(cohort,saved.id).run();
+ return saved;
+}
 const valid={decision:'assessed',confidence:'high',importanceScore:75,qualityEvidenceScore:50,summary:'需要核对全文的暂定判断',limitations:'未读取全文',keywords:['TCAD'],topics:['tcad','logic'],rubric:{importance:'与器件仿真相关',qualityEvidence:'摘要提及比较'},evidence:[{field:'abstract',quote:'We compared TCAD device simulation of GAA transistors with measured interface trap transport.'}]};
 function response(){return Response.json({choices:[{message:{content:JSON.stringify(valid)},finish_reason:'stop'}],usage:{total_tokens:100}})}
 test('calendar-month clamps leap/non-leap months, includes endpoints and rolls at UTC+08 midnight',()=>{assert.equal(monthWindow(new Date('2026-03-31T01:00:00Z')).startDate,'2026-02-28');assert.equal(monthWindow(new Date('2024-03-31T01:00:00Z')).startDate,'2024-02-29');assert.equal(monthWindow(new Date('2026-12-31T16:00:00Z')).startDate,'2026-12-01');const w=monthWindow(new Date('2026-10-02T01:00:00Z'));for(const date of ['2026-09-02','2026-10-02'])assert.ok(inUpdateWindow({...paper(),publishedAt:date},w));for(const date of ['2026-09-01','2026-10-03','2026-10',null])assert.ok(!inUpdateWindow({...paper(),publishedAt:date},w));assert.ok(!inUpdateWindow({...paper(),provenance:{publicationDates:{online:'2026-09'}}},w));});

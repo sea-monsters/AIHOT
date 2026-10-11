@@ -4,7 +4,7 @@ import {batchLifecycle,batchBudgetMs} from './research-lifecycle.ts';
 const parse=(s:any,f:any)=>{try{return JSON.parse(s)}catch{return f}};
 export const headAge=(s:any)=>String(s.crossref&&'lastHeadAttemptAt' in s.crossref?s.crossref.lastHeadAttemptAt||'':s.crossref?.headPlannedThrough||'');
 export const headOrder=(a:any,b:any)=>headAge(a).localeCompare(headAge(b))||a.id.localeCompare(b.id);
-export function collectionStopped(result:any){return result?.collectionControl?.stop===true||/HTTP 429|shared cooldown/.test(result?.error||'');}
+export function collectionStopped(result:any){return !!result?.code||['unknown','interrupted'].includes(result?.status)||result?.collectionControl?.stop===true||/HTTP 429|shared cooldown/.test(result?.error||'');}
 export async function collectionControl(db:any,batchKey:string|null,at=new Date()):Promise<any>{
  const cycle=collectionCycle(at.toISOString(),null);
  const rows=(await db.prepare("SELECT key,value FROM research_settings WHERE key IN ('crossref_http_cooldown',?,?)").bind('collection-stop:'+cycle,'collection-budget:'+cycle).all()).results;
@@ -21,7 +21,8 @@ export async function collectionControl(db:any,batchKey:string|null,at=new Date(
  const expected:string[]=parse(batch.sources_json,[]),states=(await db.prepare("SELECT key,value FROM research_settings WHERE key LIKE 'crossref:%'").all()).results;
  const byId=new Map<string,any>(states.map((r:any)=>[r.key.slice(9),parse(r.value,{})]));
  const pages=(id:string)=>{const s=byId.get(id);return s?.cycle?.key===cycle?s.cycle.pages:0};
- const runs=(await db.prepare('SELECT source_id,status,details_json FROM research_runs WHERE batch_key=? ORDER BY started_at,id').bind(batchKey).all()).results;
+ const runs=(await db.prepare('SELECT source_id,status,details_json,close_reason FROM research_runs WHERE batch_key=? ORDER BY started_at,id').bind(batchKey).all()).results;
+ if(runs.some((r:any)=>r.close_reason==='client_canceled'))return {stop:true,scope:'batch',reason:'collection_canceled',nextAction:'readback_reconcile',...batchLifecycle(batch,at)};
  const headSettled=new Set<string>(),deferredHeads=new Set<string>();
  for(const r of runs){const d=parse(r.details_json,{});if(d.crossrefPages?.some((p:any)=>p.head&&['complete','pending'].includes(p.status)))headSettled.add(r.source_id);else if(d.headOutcome==='deferred'){headSettled.add(r.source_id);deferredHeads.add(r.source_id)}}
  const deferred=(await db.prepare("SELECT key FROM research_settings WHERE key LIKE ?").bind('head-deferred:'+batchKey+':%').all()).results;

@@ -2,6 +2,8 @@
 
 本合同替代 `paper-daily.md` 中旧版逐源 sync 后立即补全和 08 点直接生成日报的执行步骤。源码、测试和运行说明已经改变；真实 Site 自动化文本、调度、凭据和部署由维护者审查后另行更新。本改动不代表生产已经运行。
 
+取消与服务器阶段门控见 [恢复审查](research-cancellation-recovery.md)：旧 process 省略 cohort 仅处理当天原归属的匹配 ready 版本；采集、补全和评分在服务端原子互斥。sync 未知/取消或 finish 409 后停止依赖阶段，合作取消保留已提交证据并等待显式 reconcile。旧 refresh 手动采集不再隐式评分。
+
 ## 同一归属的顺序
 
 期刊页 / RSS 采集 → 公平 continuation → 保存并释放采集租约、finish → 统一信息补全 → 规则评分 / 有选择的 AI 评估 → 筛选和日报。首屏成功不等于完整覆盖。32 个 head 都成功或明确延期后，35 页总量最多只剩 3 页续页；仍保留每源最多 2 页、源内 latest/history 交替、head 最旧实际检查优先、continuation 最旧实际续页尝试优先。

@@ -5,6 +5,7 @@ import {providerCall} from './ai/provider.ts';
 import {writeLog} from './runtime-logs.ts';
 import {rowPaper} from './research.ts';
 import {preparationCohort} from './research-cohorts.ts';
+import {collectionIdle,metadataIdle,databaseNowSql} from './research-lifecycle.ts';
 import {PIPELINE_VERSION,ANALYSIS_SCHEMA,MAX_ASSESSMENT_INPUT_BYTES,monthWindow,inUpdateWindow,digest,analysisFields,analysisGate,configurationFields,ASSESSMENT_SYSTEM,assessmentInput,parseAssessment} from './research-pipeline.ts';
 const stamp=()=>new Date().toISOString();
 const parse=(s:any,fallback:any={})=>{try{return JSON.parse(s)}catch{return fallback}};
@@ -51,10 +52,14 @@ export async function processRecent(db:any,env:any,body:any={},request?:Request)
  const safeConfig=configurationFields(config,{keywords:preferences.keywords||[],excludedKeywords:preferences.excludedKeywords||[]});const configHash=await digest(safeConfig);
  const maxPapers=Math.min(PROCESSING_LIMITS.papersPerRequest,Math.max(0,Math.floor(Number(body.maxPapers??1)||0)));
  const maxMs=Math.min(PROCESSING_LIMITS.requestMs,Math.max(1,Number(body.maxMs??PROCESSING_LIMITS.requestMs)));
- const today=new Date(Date.now()+8*3600000).toISOString().slice(0,10),day=body.cohort==='previous_day'?await preparationCohort(db,today):body.cohort==='current'?today:null;const cohortGate=day?" AND EXISTS(SELECT 1 FROM research_ready_evidence e WHERE e.paper_id=p.id AND e.daily_cohort_key IN (?,?))":'';const cohortArgs=day?[day+'/08',day+'/20']:[];
+ // Old callers omit cohort: retain the body shape, but never spend on an
+ // unbounded legacy/month backlog. Only this cohort's current ready version.
+ const today=new Date(Date.now()+8*3600000).toISOString().slice(0,10),day=body.cohort==='previous_day'?await preparationCohort(db,today):today;const cohortGate=" AND EXISTS(SELECT 1 FROM research_ready_evidence e WHERE e.paper_id=p.id AND e.content_hash=p.content_hash AND e.daily_cohort_key IN (?,?))";const cohortArgs=[day+'/08',day+'/20'];
  const started=stamp(),expires=new Date(Date.now()+6*60000).toISOString();
- const lock=await db.prepare("INSERT INTO research_settings(key,value) VALUES('processing_lock',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE research_settings.value<?").bind(expires,started).run();
- if(!lock.meta?.changes)return {status:'busy',attempted:0};
+ // Admission and every inverse admission test the same durable locks inside
+ // the SQLite write, so collection/metadata cannot enter after a read check.
+ const lock=await db.prepare(`INSERT INTO research_settings(key,value) SELECT 'processing_lock',? WHERE ${collectionIdle} AND ${metadataIdle} ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE research_settings.value<${databaseNowSql}`).bind(expires).run();
+ if(!lock.meta?.changes){const gate=await db.prepare(`SELECT (${collectionIdle}) collection_idle,(${metadataIdle}) metadata_idle`).first();return {status:gate.collection_idle&&gate.metadata_idle?'busy':'deferred',reason:!gate.collection_idle?'collection_in_progress':!gate.metadata_idle?'metadata_in_progress':'processing_in_progress',attempted:0};}
  const timing=phaseTiming(started),phaseId=crypto.randomUUID();const result:any={status:blocked?'blocked':'ok',blocked,window,scanned:0,rulesOnly:0,insufficient:0,queued:0,attempted:0,completed:0,deferred:0,failed:0,cached:0,limits:PROCESSING_LIMITS};
  try{
   const publication="coalesce(nullif(json_extract(provenance_json,'$.publicationDates.online'),''),CASE WHEN date_precision='day' THEN published_at END)";
@@ -101,5 +106,5 @@ export async function processRecent(db:any,env:any,body:any={},request?:Request)
   const remaining=await db.prepare("SELECT count(*) n FROM research_analyses a JOIN research_papers p ON p.id=a.paper_id AND p.content_hash=a.content_hash WHERE a.config_hash=? AND a.schema_version=? AND a.status='queued' AND coalesce(nullif(json_extract(p.provenance_json,'$.publicationDates.online'),''),p.published_at)>=? AND coalesce(nullif(json_extract(p.provenance_json,'$.publicationDates.online'),''),p.published_at)<=?").bind(configHash,ANALYSIS_SCHEMA,window.startDate,window.endDate).first();result.remainingQueued=remaining?.n||0;
   await writeLog(db,{component:'research',event:'request_finished',severity:result.failed?'warning':'info',outcome:result.failed?'partial':'ok',metadata:{purpose:'paper_assessment',providerCalls:result.attempted,cacheHits:result.cached}});
   return result;
- }finally{await phaseEvent(db,{runId:phaseId,phase:'scoring'},timing,result.status,0,{modelCalls:result.attempted,maxPapers,maxMs});await db.prepare("DELETE FROM research_settings WHERE key='processing_lock' AND value=?").bind(expires).run();}
+ }finally{try{await phaseEvent(db,{runId:phaseId,phase:'scoring'},timing,result.status,0,{modelCalls:result.attempted,maxPapers,maxMs});}finally{await db.prepare("DELETE FROM research_settings WHERE key='processing_lock' AND value=?").bind(expires).run();}}
 }
