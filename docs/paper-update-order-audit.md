@@ -56,6 +56,8 @@ HK_LPT 实际 Chrome/154.0.8037.98、临时 profile、一次性 Miniflare/D1、�
 
 同一简化日期/评分排序 SQL 的 EXPLAIN 基线为 idx_research_papers_priority 加 TEMP B-TREE；本轮为 COVERING INDEX idx_research_papers_update_day_priority，无临时排序。普通分页的实际 SQL trace 保持一条有界论文读取，回看行不加入分析扩充。基线与新日期模式的口径不同，不据此声称同一工作负载加速；可比的旧 priority/latest 成本列在表中，不能把微小差别当性能保证。两轮外部请求与模型回执均为 0。
 
+此处无临时排序只针对上述简化排序探针，不涵盖所有组合条件。现有 5000 条基准没有 publisher 组合筛选；该条件可能使 SQLite 选择旧 idx_research_papers_publisher，并产生 TEMP B-TREE。是否采用索引还受数据分布和查询计划影响，本轮不扩大优化，也不宣称所有组合均无临时排序。
+
 ## 320 条抽屉帧指标
 
 完整 Chrome 最终单次样本 n=1；原生指针点击至下一帧观察到 inactive，包含调度/懒读。探针自身几何读取不计入组件 JS 计数，采样时无其他构建或测试。
@@ -71,6 +73,8 @@ HK_LPT 实际 Chrome/154.0.8037.98、临时 profile、一次性 Miniflare/D1、�
 
 ## 验证与基线归因
 
+以下完整台账对应首候选 c24ac56e0b19393e2f818b6ff924abfbcdf294aa；审查补强的增量验证单列在后。
+
 - 通过：typecheck、完整 build（含 86 条中文日志校验，38 feature/42 fix/6 upstream）、git diff --check；全 Sites 最终 571/571，使用 rg 列出的 61 个 .test.ts/.test.mjs 文件串行运行。
 - 通过：取消/Crossref 定向 31/31；通用与 HKIS Worker/D1 烟测、真实 Chrome 论文 154、分组 40、共享控件 78、日志 186。供应商、模型及网络诊断出口都是隔离模拟响应。
 - 初次全 Sites 570/571：RSS 取消测试硬编码当天 /20 预算键，凌晨实际预算为前一天 /20。干净 main 7eb 的同一命令复现 TypeError。只把断言改为隔离空库中有且仅有一个预算值 1；缺失、重复或多扣仍失败，论文/原归属/中断及 finish 拒绝断言保留。没有改 collectionCycle、预算或采集实现，修正后全量重跑。
@@ -78,3 +82,11 @@ HK_LPT 实际 Chrome/154.0.8037.98、临时 profile、一次性 Miniflare/D1、�
 - 未执行：根 PostgreSQL npm test/迁移（没有独立空测试库）、原 Node API scripts/smoke.ts（本轮运行实际 Sites Worker）、物理手机、生产账号/数据、真实供应商或付费模型、正式迁移/部署。
 - 执行器一次返回 exec-server transport disconnected，未把该调用当作执行成功；恢复后用实际命令核对现场并重新完成干净基线复现，没有等待丢失的退出码。其余结果有收尾日志与退出状态。
 - 本机构建使用 ignored .openai/hosting.json 的 fixture-only 配置；正式部署须由父任务使用官方配置。提交不含截图、bundle、运行日志、私有 hosting、密钥或用户数据。
+
+## 独立审查后的测试补强
+
+2026-10-11T21:34:36Z 维护记录：审查指出先前取消断言只核对唯一值 1，未核对正确 cycle key。本轮同时断言唯一记录的 key 等于 collection-budget: 加 collectionCycle(at,null)，value 严格为字符串 1。at 是被测 syncSource 使用的同一固定 ISO 开始时刻；批次日期和 Crossref 合成发表日也由它派生，不在断言或 mock 响应阶段重新取当天日期。没有修改生产 collectionCycle、时段或预算写入。
+
+基准范围已明确补充：publisher 组合筛选可能选择旧出版商索引并产生 TEMP B-TREE。已有 5000 条数据中虽有两个出版商，测量请求没有 publisher 参数，不能证明该组合没有临时排序；本轮不增加索引或扩大优化。查询与动效实现未变，沿用上文已执行样本，不将它们写成本轮重测。
+
+本次通过：取消/Crossref/日志相关 50/50、npm run typecheck、npm run build（含 check:changelog，87 条：38 feature/43 fix/6 upstream）、通用和 HKIS Worker/D1 烟测、git diff --check。全 Sites、Web、Chrome、查询/帧基准没有重复执行，上一候选结果与已知限制按前述台账保留。新增中文 fix 日志与本次测试/审计同批提交，仍只推送 review 分支，未合入 main 或部署。

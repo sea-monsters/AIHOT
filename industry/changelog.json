@@ -1,8 +1,29 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-11T21:19:00Z",
+  "latestVersion": "2026-10-11T21:34:36Z",
   "releases": [
+    {
+      "id": "cancellation-budget-cycle-review-20261012",
+      "at": "2026-10-11T21:34:36Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "审查补强取消验收的预算时段键",
+      "body": [
+        "隔离取消测试同时核对唯一预算记录的正确 cycle key 与值 1，使用操作开始时固定的 at；批次日和合成发表日也使用该时刻，避免跨午夜取时不一致。错误时段、遗漏、重复或多扣仍会失败。",
+        "审计明确出版商组合筛选可能使用旧索引产生临时排序，现有 5000 条基准不涵盖该组合。本轮只增强测试和证据边界，不改变生产预算、采集、索引或模型逻辑。"
+      ],
+      "sources": [
+        {
+          "label": "已推送候选审查基线",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/c24ac56e0b19393e2f818b6ff924abfbcdf294aa"
+        },
+        {
+          "label": "本轮审查补强记录",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/paper-update-order-audit.md"
+        }
+      ]
+    },
     {
       "id": "cancellation-budget-test-clock-20261012",
       "at": "2026-10-11T21:19:00Z",
