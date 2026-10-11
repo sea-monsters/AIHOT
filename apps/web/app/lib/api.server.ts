@@ -22,7 +22,13 @@ export class ApiError extends Error {
 export async function apiGet<T>(path: string, init?: { signal?: AbortSignal; headers?: Record<string, string>; responseHeaders?: Headers }): Promise<T> {
   const ctx = siteContext.getStore();
   try {
-  const res = ctx ? await siteApi(new Request(`https://site.internal${path}`), ctx.env) : await fetch(`${API_BASE}${path}`, {
+  // Only the dispatcher-supplied identity reaches internal owner-only SSR reads.
+  const identity = new Headers();
+  if (ctx) for (const name of ['oai-authenticated-user-id','oai-authenticated-user-email']) {
+    const value = ctx.request.headers.get(name);
+    if (value) identity.set(name, value);
+  }
+  const res = ctx ? await siteApi(new Request(`https://site.internal${path}`, {headers:identity}), ctx.env) : await fetch(`${API_BASE}${path}`, {
     headers: { accept: "application/json", "x-aihot-ssr": "1", ...init?.headers },
     signal: init?.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
   });

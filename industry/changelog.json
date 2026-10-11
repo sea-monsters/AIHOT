@@ -1,8 +1,47 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-11T13:20:50Z",
+  "latestVersion": "2026-10-11T21:19:00Z",
   "releases": [
+    {
+      "id": "cancellation-budget-test-clock-20261012",
+      "at": "2026-10-11T21:19:00Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "取消验收核对真实预算扣减，不硬编码当天时段",
+      "body": [
+        "隔离 RSS 取消测试原先硬编码当天 20 点预算键，凌晨实际归入前一天时段时误报；干净主分支已复现。改为核对空 fixture 中有且仅有一次预算扣减，缺失、重复或多扣仍会失败。",
+        "仅修正测试断言；保留中断状态、已存论文、冻结归属与终止门控检查，不改变实际采集、调度、预算或生产数据。"
+      ],
+      "sources": [
+        {
+          "label": "排序验收与基线归因记录",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/paper-update-order-audit.md"
+        }
+      ]
+    },
+    {
+      "id": "paper-update-order-20261012",
+      "at": "2026-10-11T21:04:35Z",
+      "kind": "feature",
+      "basis": "record",
+      "title": "论文情报按更新日期分组，可切换全局评分",
+      "body": [
+        "论文情报默认按论文资料更新时间的 UTC+08 日期倒序，同一天按既有阅读优先级降序；提供全局评分快捷切换，旧首次入库排序链接继续可用。",
+        "排序与阅读状态筛选作用于完整匹配结果再分页；切换保留搜索、出版商、主题及关键词并回到第一页，跨页日期明确接续上一页，同分以稳定标识兜底。已读和收藏保存确认后刷新相关筛选，空末页回到有效页。",
+        "新增日期与评分组合索引，普通列表只补齐当前页资料；保持论文抽屉、日报与热点口径、既有评分门槛、采集调度及模型调用不变。本记录为实际维护时刻，不表示已部署。"
+      ],
+      "sources": [
+        {
+          "label": "更新日期分组与评分切换审计",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/paper-update-order-audit.md"
+        },
+        {
+          "label": "已核实的主分支基线",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/7eb0976dc013a7bcca83fef71c4d86a5c8ae8c15"
+        }
+      ]
+    },
     {
       "id": "research-client-outcome-review-20261011",
       "at": "2026-10-11T13:20:50Z",

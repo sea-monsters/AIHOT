@@ -1,7 +1,7 @@
 /** Stable page keys. Increment only a page's version when its actual content or interpretation changes. */
 export const UPDATE_PAGES = [
  {key:'home',path:'/',label:'首页',version:4},
- {key:'research',path:'/research',label:'论文情报',version:2},
+ {key:'research',path:'/research',label:'论文情报',version:3},
  {key:'all',path:'/all',label:'研究进展',version:1},
  {key:'hot',path:'/hot',label:'热点榜',version:1},
  {key:'daily',path:'/daily',label:'论文日报',version:3},
@@ -25,7 +25,7 @@ export function samePageRevision(a:PageRevision|null|undefined,b:PageRevision|nu
 /** Restrict acknowledgements to an unfiltered first-page overview. Local chart highlighting does not reload data. */
 export function isPageOverview(key:UpdatePageKey,search:string){
  const q=new URLSearchParams(search);
- const defaults:Record<string,string>={page:'1',min:'0',sort:key==='research'||key==='home'?'priority':'latest',scope:'related',basis:key==='hot'?'updated':'collection',metric:'rule'};
+ const defaults:Record<string,string>={page:'1',min:'0',sort:key==='research'?'updated':key==='home'?'priority':'latest',scope:'related',basis:key==='hot'?'updated':'collection',metric:'rule'};
  return [...q].every(([k,v])=>!v||k==='month'||key==='daily'&&k==='date'||defaults[k]===v);
 }
 /** An unread daily indicator links to the actual latest archive, even before today's report exists. */
