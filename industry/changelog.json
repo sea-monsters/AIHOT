@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-11T12:50:06Z",
+  "latestVersion": "2026-10-11T13:20:50Z",
   "releases": [
+    {
+      "id": "research-client-outcome-review-20261011",
+      "at": "2026-10-11T13:20:50Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "网关未知结果停止整轮，保留授权完成最后回查",
+      "body": [
+        "审查补充修复：网关 502/503/504、不可解析响应及未确认业务码保持未知；只有核实的业务码与 HTTP 状态组合可记为明确延期，任何阶段未知后均停止整轮且不重试。",
+        "08 点日报结果未知时不再启动今日采集；旧采集脚本保留凭据至最终只读回查结束，再清空，避免空授权请求丢失核对结果。",
+        "代码仍在独立审查分支，未合入或部署；不改服务端门控、预算、调度或冻结归属，也不据本地测试声明断连消除或全源覆盖。"
+      ],
+      "sources": [
+        {
+          "label": "客户端未知结果与授权回查审查",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-client-outcomes-review.md"
+        }
+      ]
+    },
     {
       "id": "research-cancellation-phase-gates-20261011",
       "at": "2026-10-11T12:50:06Z",

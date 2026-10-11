@@ -83,6 +83,26 @@
     "scheduleChanges": 0,
     "siteDeployments": 0
   },
+  "clientReviewFollowUp": {
+    "checkedAt": "2026-10-11T13:24:11Z",
+    "baseline": "b70c79647253a1de57eb110053445226a1e58690",
+    "scope": "P1 gateway/semantic unknown at every slot phase; P2 authorized legacy final GET and finally cleanup",
+    "frozenBaseline": {"command": "node --test --test-concurrency=1 sites/research-client-outcomes.test.ts", "tests": 8, "pass": 1, "fail": 7, "control": "confirmed allowlisted 409 remains deferred"},
+    "checks": [
+      {"command": "node --test --test-concurrency=1 sites/research-client-outcomes.test.ts sites/research-slot.test.ts sites/research-cancellation.test.ts", "exitCode": 0, "tests": 27, "pass": 27, "fail": 0},
+      {"command": "node --test --test-concurrency=1 --test-timeout=120000 \"sites/*.test.ts\" \"sites/*.test.mjs\" \"sites/scholarly/*.test.ts\" \"sites/ai/*.test.ts\" \"sites/anysearch/*.test.ts\" \"sites/anysearch/*.test.mjs\"", "exitCode": 0, "tests": 561, "pass": 561, "fail": 0, "cancelled": 0, "skipped": 0, "durationMs": 80015.5312},
+      {"command": "npm run typecheck", "exitCode": 0},
+      {"command": "npm run check:changelog", "exitCode": 0, "releases": 83},
+      {"command": "node --test sites/changelog.test.ts", "exitCode": 0, "tests": 19, "pass": 19, "scope": "final 83-release record checked after the joint suite"},
+      {"command": "node sites/test-worker.mjs", "exitCode": 0, "transport": "rebuilt actual Worker, isolated D1 and synthetic outbound responses"},
+      {"command": "node sites/test-cancellation-worker.mjs", "exitCode": 0, "scope": "actual D1 admission/cancellation/recovery plus rebuilt actual Worker old-body process gate"},
+      {"command": "npm run build", "exitCode": 1, "compilation": "Web client, SSR and Worker succeed again", "packaging": "same missing private .openai/hosting.json at final copy"},
+      {"command": "git diff --check", "exitCode": 0}
+    ],
+    "reusedEvidence": "Prior recovery/pipeline Worker scripts and web Windows failure concern unchanged paths; original records above remain scoped to their checkedAt, not presented as newly executed.",
+    "notExecuted": "PostgreSQL, production smoke, real collector/timeout verification and production request-signal verification remain unexecuted.",
+    "externalEffects": {"realProviderCalls": 0, "paidModels": 0, "productionWrites": 0, "scheduleChanges": 0, "siteDeployments": 0}
+  },
   "limitations": [
     "Cooperative cancellation requires runtime request signals and surviving JavaScript; hard termination can still leave a durable lease for explicit safe reconciliation.",
     "The production cancellation initiator and slow substage are not uniquely determined by supplied evidence; progress checkpoints distinguish future attempts without exposing response bodies."

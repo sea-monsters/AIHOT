@@ -2,6 +2,8 @@
 
 维护记录：2026-10-11T12:50:06Z。审查基线为 `d3c48698347d7bb6601d1888d3540c551220e717`，本轮只准备 review 分支，不代表已合入、部署或更改真实采集任务。具体生产日志、私有 request/run ID 和库计数不进入仓库。
 
+后续独立审查补充的网关未知分类、各阶段终止和兼容 helper 授权回查修复见[客户端补充审查](research-client-outcomes-review.md)。本页原服务端验证与生产诊断界限保持。
+
 ## 根因证据和限制
 
 提供的运行证据显示：第 16 次 sync 结果未知，官方 Worker outcome 为 canceled，墙钟约 31.9 秒；来源登记有成功时间，但该 run 仍 running、finished 为空、details 尚未收尾。随后 finish 返回 409，执行者报告仍继续完成了选择性处理。官方 scoring 遥测约 29.7 秒且无 metadata 事件，支持越序处理已经发生；累计处理数和 HTTP 200 本身不能证明某个 run 的实际模型调用次数。
