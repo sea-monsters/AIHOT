@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-12T06:35:37Z",
+  "latestVersion": "2026-10-12T13:08:40Z",
   "releases": [
+    {
+      "id": "research-local-finalize-review-20261012",
+      "at": "2026-10-12T13:08:40Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "采集截止后可在原预算内纯本地收尾",
+      "body": [
+        "修复截止后同步停止、持久工作尚未清空而 finish/补全相互阻挡的同轮通路；finish 使用专用短恢复租约，只提交本批已接收候选，清空并释放租约后才结束批次。",
+        "不重抓供应商、不调用模型或增页额，不改原归属；未知或在飞结果仍阻挡。新版脚本只有明确已提交进度且真实整轮余量足够才续片，旧调用保持一次保守尝试。",
+        "独立 review 阶段，合成端到端与原生 D1 回归已记录；未部署、改生产或真实调度，不据本地验收宣称 collector 已采用或简报在生产已完成。"
+      ],
+      "sources": [
+        {
+          "label": "纯本地收尾恢复审查",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-local-finalize-review.md"
+        }
+      ]
+    },
     {
       "id": "paper-update-order-main-integration-20261012",
       "at": "2026-10-12T06:35:37Z",

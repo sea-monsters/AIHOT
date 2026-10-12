@@ -12,6 +12,7 @@ export function batchLifecycle(batch:any,at=new Date()){
 // in their write transaction, rather than relying on an earlier SELECT.
 export const databaseNowSql="strftime('%Y-%m-%dT%H:%M:%fZ','now')";
 export const processingIdle=`NOT EXISTS(SELECT 1 FROM research_settings WHERE key='processing_lock' AND value>=${databaseNowSql})`;
+export const finalizingAdmissionOpen=`NOT EXISTS(SELECT 1 FROM research_settings l JOIN research_batches b ON l.key='batch-finalizing:'||b.key WHERE b.status='running') AND NOT EXISTS(SELECT 1 FROM research_settings WHERE key='lock:__finalize__' AND value>=${databaseNowSql})`;
 export const collectionIdle=`NOT EXISTS(SELECT 1 FROM research_batches WHERE status='running') AND NOT EXISTS(SELECT 1 FROM research_runs WHERE status='running' AND phase='collection' AND coalesce(lease_until,strftime('%Y-%m-%dT%H:%M:%fZ',started_at,'+10 minutes'))>${databaseNowSql}) AND NOT EXISTS(SELECT 1 FROM research_settings WHERE key LIKE 'lock:%' AND key<>'lock:__metadata__' AND value>=${databaseNowSql})`;
 export const metadataIdle=`NOT EXISTS(SELECT 1 FROM research_settings WHERE key='lock:__metadata__' AND value>=${databaseNowSql}) AND NOT EXISTS(SELECT 1 FROM research_runs WHERE status='running' AND phase='metadata' AND coalesce(lease_until,strftime('%Y-%m-%dT%H:%M:%fZ',started_at,'+10 minutes'))>${databaseNowSql})`;
 export function checkCollectionCancellation(signal?:AbortSignal){if(signal?.aborted)throw new AIError('collection_canceled',409,'采集请求已取消，停止派发；已保存证据保留，批次须回读并显式核对收尾');}
@@ -30,7 +31,7 @@ export async function reconcileBatches(db:any,at=new Date()){
 }
 export async function admitRun(db:any,sourceId:string,batchKey:string|null,entryPoint:string,started:string){
  const id=crypto.randomUUID(),until=new Date(Date.now()+SOURCE_LEASE_MS).toISOString(),lockValue=until+'|'+id,key='lock:'+sourceId;
- const allowed=processingIdle+' AND '+(sourceId==='__metadata__'?collectionIdle:(batchKey?"EXISTS(SELECT 1 FROM research_batches WHERE key=? AND status='running') AND "+metadataIdle:metadataIdle));
+ const allowed=processingIdle+' AND '+finalizingAdmissionOpen+' AND '+(sourceId==='__metadata__'?collectionIdle:(batchKey?"EXISTS(SELECT 1 FROM research_batches WHERE key=? AND status='running') AND "+metadataIdle:metadataIdle));
  const result=await db.batch([
   db.prepare(`INSERT INTO research_settings(key,value) SELECT ?,? WHERE ${allowed} ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE research_settings.value<?`).bind(key,lockValue,...(batchKey?[batchKey]:[]),started),
   db.prepare("UPDATE research_runs SET status='interrupted',closed_at=?,close_reason='source_lease_expired' WHERE source_id=? AND status='running' AND EXISTS(SELECT 1 FROM research_settings WHERE key=? AND value=?)").bind(started,sourceId,key,lockValue),
