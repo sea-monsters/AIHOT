@@ -5,7 +5,7 @@ import {normalizeDoi,normalizedTitle} from './research-domain.ts';
 import {digest} from './research-pipeline.ts';
 import {checkCollectionCancellation} from './research-lifecycle.ts';
 import type {OperationTrace} from './research-operations.ts';
-export const INGEST_LIMITS={records:20,payloadBytes:131072,rows:512,statements:800,requestMs:20000,finishReserveMs:3000};
+export const INGEST_LIMITS={records:20,payloadBytes:131072,rows:512,statements:600,requestMs:20000,finishReserveMs:3000};
 const parse=(s:any)=>JSON.parse(s),stamp=()=>new Date().toISOString();
 const bytes=(s:string)=>new TextEncoder().encode(s).length;
 const rawHash=async(s:string)=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)))].map(n=>n.toString(16).padStart(2,'0')).join('').slice(0,32);
@@ -47,8 +47,14 @@ async function preload(db:any,entries:any[]){
  * planning against the shared snapshot; never submit two stale CAS writes. */
 function collapseEntries(papers:any[],entries:any[]){
  const groups=new Map<string,any>();
+ const same=(a:any,b:any)=>a.sourceId===b.sourceId&&(a.url===b.url||normalizedTitle(a.title)===normalizedTitle(b.title)&&[...normalizedTitle(a.title)].length>24);
  for(const entry of entries){const p=entry.paper,doi=normalizeDoi(p.doi),row=match(papers,p),ambiguous=!doi&&papers.filter(r=>r.source_id===p.sourceId&&(r.url===p.url||r.normalized_title===normalizedTitle(p.title))&&r.doi).length>1;
-  const id=ambiguous?'ambiguous:'+p.sourceId+':'+p.url:row?.id||doi||p.sourceId+':'+p.url,previous=groups.get(id);
+  let id=ambiguous?'ambiguous:'+p.sourceId+':'+p.url:row?'row:'+row.id:doi?'doi:'+doi:null;
+  if(!id){const related=entries.filter(e=>same(e.paper,p)&&!match(papers,e.paper)),known=[...new Set(related.map(e=>normalizeDoi(e.paper.doi)).filter(Boolean))];
+   if(known.length>1)throw Object.assign(Error('ambiguous fresh paper identity'),{code:'record_conflict'});
+   id=known.length?'doi:'+known[0]:'fresh:'+entries.indexOf(related[0]||entry);
+  }
+  const previous=groups.get(id);
   if(previous){const before=normalizeDoi(previous.paper.doi);if(before&&doi&&before!==doi)throw Object.assign(Error('conflicting final paper identities'),{code:'record_conflict'});groups.set(id,{paper:mergeCandidate(p,previous.paper),store:entry.store||previous.store,scope:entry.scope&&previous.scope});}
   else groups.set(id,entry);
  }

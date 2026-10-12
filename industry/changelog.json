@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-12T04:34:36Z",
+  "latestVersion": "2026-10-12T05:23:13Z",
   "releases": [
+    {
+      "id": "research-operation-budget-validation-20261012",
+      "at": "2026-10-12T05:23:13Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "采集 SQL 预算留足日志与冲突余量，冻结隔离验收证据",
+      "body": [
+        "原生 CAS 反例将日志、预读和失败事务纳入总成本，持久工作写入预算从 800 收紧为 600；完整候选保留，分次恢复明确显示 partial，未扩大平台或供应商配额。",
+        "实际 Worker/D1 合成 RSS 成本从 1691 次数据库调用/2788 条 SQL 降为 125/354；原生取消、硬终止、竞争版本与丢确认通过。空库同论文两种条目顺序合并且隔离不同 DOI；未知网关也保留安全操作关联，未知结果不重放。",
+        "独立 review 的完整 Sites 579/579 与 typecheck 退出 0；本地发布包装因缺私有 hosting 配置退出 1，真实断连传播、正式构建、collector 正文、main 合入与部署仍由父端核对，未改生产或真实调度。"
+      ],
+      "sources": [
+        {
+          "label": "操作预算与隔离验收记录",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-operation-checkpoints-review.md"
+        }
+      ]
+    },
     {
       "id": "research-operation-review-closed-20261012",
       "at": "2026-10-12T04:34:36Z",
@@ -17,7 +35,7 @@
       "sources": [
         {
           "label": "采集操作审查与验收范围",
-          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-operation-checkpoints-review.md"
+          "url": "https://github.com/sea-monsters/AIHOT/blob/9693d13a143e7a2cd09d94d80f16431edede7fc0/docs/research-operation-checkpoints-review.md"
         }
       ]
     },

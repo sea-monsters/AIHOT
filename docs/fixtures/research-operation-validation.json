@@ -1,0 +1,80 @@
+{
+  "base": "7eb0976dc013a7bcca83fef71c4d86a5c8ae8c15",
+  "scope": "isolated HK_LPT, no production writes, no actual external provider/model calls",
+  "sites": {
+    "exitCode": 0,
+    "passed": 579,
+    "failed": 0
+  },
+  "typecheck": {
+    "exitCode": 0
+  },
+  "changelog": {
+    "releases": 87,
+    "exitCode": 0
+  },
+  "native": {
+    "workerSignalInjection": [
+      "HTTP",
+      "parse_before_candidates",
+      "30s_persistence_after_atomic_commit"
+    ],
+    "realHttpSignalPropagation": "not_verified: local Miniflare v5 ready and direct listeners reported false; injection does not replace this check",
+    "hardTerminationPersistentD1": "passed: own child/runtime killed; no finally assumed; lease expiry closes interrupted, unfinished operation remains unknown; original attribution resumed",
+    "cas": {
+      "passed": true,
+      "rpc": 123,
+      "sql": 805,
+      "queryCeiling": 1000
+    },
+    "unknownCommitAcknowledgment": {
+      "passed": true,
+      "rpc": 71,
+      "sql": 286,
+      "committedRecordsBeforeStop": 20,
+      "automaticReplay": false
+    },
+    "allCandidates": "150 restored; 200-candidate/150-paper bound regression passes; pending never evicted",
+    "externalNetwork": 0,
+    "modelCalls": 0
+  },
+  "compiledBundle": {
+    "cancellationAndLegacyGate": "passed",
+    "ingestionAndD1Reservations": "passed",
+    "genericSiteSmoke": "passed",
+    "finalSourceVerified": true
+  },
+  "build": {
+    "clientSsrWorkerCompilation": "passed",
+    "fullPackagingExitCode": 1,
+    "blocker": "ignored .openai/hosting.json missing; do not fabricate or commit private hosting configuration; parent official checkout must validate final Sites build"
+  },
+  "notExecuted": [
+    "new production sampling/collection",
+    "production reconciliation/writes",
+    "real collector body/runtime verification",
+    "real schedule changes",
+    "real providers/models",
+    "PostgreSQL suite (local prerequisite unavailable)",
+    "Windows web test fixes outside scope"
+  ],
+  "p1TestFile": "sites/research-operation-checkpoints.test.ts",
+  "p1Tests": [
+    "cross-day scope candidate becoming stored preserves the original queue time/run/batch/cohort as one tuple",
+    "DOI-less and DOI-bearing entries resolving to the same old paper merge before planning and retain both evidence payloads",
+    "real slot continuation proceeds after a durable head is fully recovered, with no duplicate head request or unbounded retry"
+  ],
+  "lateReview": {
+    "freshAliasTwoOrders": "passed; one paper/queue, both raw candidates retained",
+    "distinctNonemptyDoi": "passed; distinct identities remain separate; ambiguous DOI-less bridge stops before commit",
+    "clientGatewayCorrelation": "passed; gateway HTML, truncated/missing/invalid ID bodies keep sent UUID; valid mismatched response UUID retained separately with mismatch marker",
+    "clientCorrelationTests": "sites/research-client-outcomes.test.ts:49"
+  },
+  "p1TestLocations": {
+    "crossDayTuple": "sites/research-operation-checkpoints.test.ts:41",
+    "existingRowCollision": "sites/research-operation-checkpoints.test.ts:49",
+    "successfulRecoveryContinuation": "sites/research-operation-checkpoints.test.ts:55",
+    "freshAliasesBothOrders": "sites/research-operation-checkpoints.test.ts:70",
+    "distinctDoiAndAmbiguity": "sites/research-operation-checkpoints.test.ts:74"
+  }
+}
