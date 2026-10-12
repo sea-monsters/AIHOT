@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "baseline": "1b6d357a53e11a36361ac382bfe8234d8df0908b",
   "testedImplementation": "dd1895c1515a057f788a367414dc9109d97cd781",
+  "mainIntegration": {"pullRequest": "https://github.com/sea-monsters/AIHOT/pull/3", "reviewHead": "85ebfbccfd93a3549141bd72aed431e5f37aae15", "mergeCommit": "704678f10faa9abc5fc2f6fd01a95961e91499ee", "mergedAt": "2026-10-12T13:38:11Z", "conflicts": false, "forcePush": false, "sourceTreeMatchesReview": true, "maintenanceChanges": "Chinese changelog and audit metadata only", "deploymentExecutedLocally": false},
   "clientBoundaryFollowup": {
     "baseReview": "7f51322d5c32508f54f5f63d1aaadf059b3f4f34",
     "testedImplementation": "37ae7fd8a36192e285f1e4f20e75a9f96dd772b5",

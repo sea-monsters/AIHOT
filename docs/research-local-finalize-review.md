@@ -39,3 +39,9 @@ Actual Worker/D1 四类隔离验收均通过：旧 caller 137 既有候选一次
 父端已在具备正式 hosting 配置的官方 checkout 对上述 7f51322 完整 typecheck/build 通过；该结果不代替后续客户端补丁的相关验收或生产验证。
 
 边界闭合已验收补丁：[37ae7fd8a36192e285f1e4f20e75a9f96dd772b5](https://github.com/sea-monsters/AIHOT/commit/37ae7fd8a36192e285f1e4f20e75a9f96dd772b5)。相关四文件组合 39/39、完整 typecheck、中文日志 19/19 和 94 条记录校验通过。未重复主实现 599 项全集、原生 D1 或无关浏览器；本补丁仅改客户端状态分类，服务器持久化与预算不变。
+
+## 主分支合入
+
+独立复核后，以固定 HEAD `85ebfbccfd93a3549141bd72aed431e5f37aae15` 通过 PR3 合入。GitHub 确认合并时刻 `2026-10-12T13:38:11Z`，合并提交 [704678f10faa9abc5fc2f6fd01a95961e91499ee](https://github.com/sea-monsters/AIHOT/commit/704678f10faa9abc5fc2f6fd01a95961e91499ee)。先 fetch 核验 main 仍为原基线，使用正常 merge 并快进本地 main，无冲突、无 force；原 main 与固定 review HEAD 都保留为祖先，合并代码树与 review HEAD 一致。合入维护提交仅增加中文日志和此审计元数据。
+
+本地不重复未改变的全套测试；合入相关日志结构、历史记录不变和 diff 检查重新验证。发布由父端负责，未执行生产采集、恢复、模型调用或调度更改。

@@ -1,8 +1,34 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-12T13:28:26Z",
+  "latestVersion": "2026-10-12T13:38:11Z",
   "releases": [
+    {
+      "id": "research-local-finalize-main-integration-20261012",
+      "at": "2026-10-12T13:38:11Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "同轮纯本地收尾修复合入主分支",
+      "body": [
+        "将独立审查完成的同轮收尾恢复与两项客户端边界修复通过 PR3 合入 fork main；截止后仅处理本批已接收候选，清空持久工作并释放短租约后才结束批次。",
+        "保留未知、取消、在飞和过期未确认门控，以及原 540 秒、35 页与每源 2 页边界。只有真实 HTTP409 确认正向进度才可有限续片，未派发的预算不足明确 deferred/deadline。",
+        "固定 review 主实现 599/599、原生 D1 与生产 bundle 路由通过；客户端补丁相关 39/39 和完整 typecheck 通过。合并无冲突，保留日期 UI、0021/0022 迁移及全部历史日志；本记录不表示已发布或真实生产采集完成。"
+      ],
+      "sources": [
+        {
+          "label": "已核实 PR3 合并提交",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/704678f10faa9abc5fc2f6fd01a95961e91499ee"
+        },
+        {
+          "label": "固定独立审查 HEAD",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/85ebfbccfd93a3549141bd72aed431e5f37aae15"
+        },
+        {
+          "label": "同轮收尾审查与边界验收",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/85ebfbccfd93a3549141bd72aed431e5f37aae15/docs/research-local-finalize-review.md"
+        }
+      ]
+    },
     {
       "id": "research-finalize-client-boundaries-20261012",
       "at": "2026-10-12T13:28:26Z",
