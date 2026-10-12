@@ -2,7 +2,7 @@
   "version": "6",
   "dialect": "sqlite",
   "id": "3dc22e2b-0e12-49ee-a06d-7cf66358d02f",
-  "prevId": "19143534-2033-45c0-885c-8a337ad0c65c",
+  "prevId": "caceddbb-6843-4465-98a9-1717fcfb6cf6",
   "tables": {
     "ai_preferences": {
       "name": "ai_preferences",
@@ -2568,6 +2568,15 @@
             "lower(\"doi\")"
           ],
           "isUnique": false
+        },
+        "idx_research_papers_update_day_priority": {
+          "name": "idx_research_papers_update_day_priority",
+          "columns": [
+            "date(\"updated_at\", '+8 hours') DESC",
+            "\"priority\" DESC",
+            "id"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {},
@@ -3584,6 +3593,16 @@
       "research_papers_doi_lower_idx": {
         "columns": {
           "lower(\"doi\")": {
+            "isExpression": true
+          }
+        }
+      },
+      "idx_research_papers_update_day_priority": {
+        "columns": {
+          "date(\"updated_at\", '+8 hours') DESC": {
+            "isExpression": true
+          },
+          "\"priority\" DESC": {
             "isExpression": true
           }
         }

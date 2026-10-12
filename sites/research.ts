@@ -13,7 +13,7 @@ import {dailyCohortKey,collectionEntryPoint,type CollectionEntryPoint} from './r
 import {prepareCrossref,nextCrossrefPage,reserveCrossrefPage,markCrossrefAttempt,crossrefURL,commitCrossrefPage,crossrefSummary,collectionCycle} from './research-crossref.ts';
 import {startBatch,finishBatch,validateBatch,briefMissingness,briefTrackingSearchParams,briefTrackingView,type BriefTrackingOptions} from './research-batches.ts';
 import {dailyRead,dailyCalendarRead,dailyPaperRead,generateDaily} from './research-daily.ts';
-import {AIError} from './ai/security.ts';
+import {AIError,owner} from './ai/security.ts';
 import {processingStatus,processingConfig,processRecent,attachAnalyses,currentAnalysisKey} from './research-processing.ts';
 import {monthWindow,inUpdateWindow,PIPELINE_VERSION,ANALYSIS_SCHEMA,digest,metadataFields,analysisFields} from './research-pipeline.ts';
 import {validateScheduleMirror,researchSchedule} from './research-schedule.ts';
@@ -308,6 +308,8 @@ async function researchApiInner(request:Request,env:any){const db=env.DB;if(!db)
  }
  if(path==='/api/site/research/papers'){
   const binds:any[]=[];let where='1=1';const publisher=u.searchParams.get('publisher')||'',topic=u.searchParams.get('topic')||'',q=(u.searchParams.get('q')||'').slice(0,200),min=Math.min(100,Math.max(0,Number(u.searchParams.get('min')??45)||0));
+  const reader=['read','unread','favorite'].includes(u.searchParams.get('reader')||'')?u.searchParams.get('reader')!:'';
+  if(reader){let ownerId:string;try{ownerId=owner(request,env)}catch(e){if(e instanceof AIError)return json({code:e.code},e.status);throw e}where+=(reader==='unread'?' AND NOT EXISTS':' AND EXISTS')+'(SELECT 1 FROM paper_reader_state s WHERE s.owner_id=? AND s.paper_id=research_papers.id AND s.'+(reader==='favorite'?'favorite_at':'read_at')+' IS NOT NULL)';binds.push(ownerId);}
   const activeAnalysisKey=await currentAnalysisKey(db);
   const analysis=['completed','queued','insufficient','rules_only','unknown','failed'].includes(u.searchParams.get('analysis')||'')?u.searchParams.get('analysis')!:'';const aiTopic=TOPICS.some(t=>t.id===u.searchParams.get('aiTopic'))?u.searchParams.get('aiTopic')!:'';
   if(analysis){where+=' AND EXISTS(SELECT 1 FROM research_analyses a WHERE a.paper_id=research_papers.id AND a.content_hash=research_papers.content_hash AND a.config_hash=? AND a.schema_version=? AND a.status=? AND a.id=(SELECT b.id FROM research_analyses b WHERE b.paper_id=a.paper_id AND b.content_hash=a.content_hash AND b.config_hash=a.config_hash AND b.schema_version=a.schema_version ORDER BY b.updated_at DESC,b.id DESC LIMIT 1))';binds.push(activeAnalysisKey,ANALYSIS_SCHEMA,analysis);}
@@ -316,7 +318,13 @@ async function researchApiInner(request:Request,env:any){const db=env.DB;if(!db)
   const keyword=u.searchParams.get('keyword')||'',theme=u.searchParams.get('theme')||'';
   if(theme&&!resolveResearchTheme(theme))return json({error:'Unknown research theme'},400);
   if(keyword||theme||q){const candidates=(await db.prepare('SELECT * FROM research_papers WHERE '+where).bind(...binds).all()).results.map(decodePaperRow);const ids=(await attachAnalyses(db,candidates,activeAnalysisKey)).filter((p:any)=>(!q||matchesPaperQuery(p,q,p.categories))&&(!theme||matchesResearchTheme(p,theme,p.categories))&&(!keyword||p.categories.some((k:any)=>k.id===keyword||k.label.toLowerCase()===keyword.toLowerCase())||keyword==='unclassified'&&!p.categories.length)).map((p:any)=>p.id);where+=' AND id IN (SELECT value FROM json_each(?))';binds.push(JSON.stringify(ids));}
-  const page=Math.max(1,Math.min(10000,parseInt(u.searchParams.get('page')||'1')||1));const sort=u.searchParams.get('sort')==='latest'?'first_seen DESC,priority DESC':'priority DESC,coalesce(published_at,first_seen) DESC';const [countResult,pageResult]=await Promise.all([db.prepare('SELECT count(*) n FROM research_papers WHERE '+where).bind(...binds).first(),db.prepare('SELECT * FROM research_papers WHERE '+where+' ORDER BY '+sort+' LIMIT 25 OFFSET ?').bind(...binds,(page-1)*25).all()]);const total=countResult.n,papers=pageResult.results.map(rowPaper);return json({papers:await attachAnalyses(db,papers,activeAnalysisKey),total,page,pageCount:Math.max(1,Math.ceil(total/25)),filters:{publisher,topic,q,min,analysis,aiTopic,keyword,theme,sort:u.searchParams.get('sort')||'priority'}});
+  const page=Math.max(1,Math.min(10000,parseInt(u.searchParams.get('page')||'1')||1)),mode=['updated','latest'].includes(u.searchParams.get('sort')||'')?u.searchParams.get('sort')!:'priority';
+  const sort=mode==='updated'?"date(updated_at,'+8 hours') DESC,priority DESC,id ASC":mode==='latest'?'first_seen DESC,priority DESC,id ASC':'priority DESC,coalesce(published_at,first_seen) DESC,id ASC';
+  // One look-behind row labels a continued date group; only the final 25 rows are enriched.
+  const behind=mode==='updated'&&page>1?1:0,projection=mode==='updated'?"research_papers.*,date(updated_at,'+8 hours') AS update_day":'*';
+  const [countResult,pageResult]=await Promise.all([db.prepare('SELECT count(*) n FROM research_papers WHERE '+where).bind(...binds).first(),db.prepare('SELECT '+projection+' FROM research_papers WHERE '+where+' ORDER BY '+sort+' LIMIT ? OFFSET ?').bind(...binds,25+behind,(page-1)*25-behind).all()]);
+  const rows=pageResult.results,previous=behind?rows.shift():null,total=countResult.n,papers=rows.map((r:any)=>mode==='updated'?{...rowPaper(r),updateDay:r.update_day}:rowPaper(r));
+  return json({papers:await attachAnalyses(db,papers,activeAnalysisKey),total,page,pageCount:Math.max(1,Math.ceil(total/25)),...(mode==='updated'?{continuesFromPrevious:!!previous&&rows.length>0&&previous.update_day===rows[0].update_day}:{}),filters:{publisher,topic,q,min,analysis,aiTopic,keyword,theme,reader,sort:mode}});
  }
  if(path.startsWith('/api/site/research/papers/')){const id=path.split('/').pop();const p=await db.prepare('SELECT * FROM research_papers WHERE id=?').bind(id).first();if(!p)return json({error:'Not found'},404);const records=(await db.prepare('SELECT channel,record_url,retrieved_at FROM research_records WHERE paper_id=?').bind(id).all()).results;const changes=(await db.prepare('SELECT channel,fields_json,created_at FROM research_changes WHERE paper_id=? ORDER BY created_at DESC LIMIT 10').bind(id).all()).results;return json({...((await attachAnalyses(db,[rowPaper(p)]))[0]),records,changes});}
  return json({error:'Not found'},404);
