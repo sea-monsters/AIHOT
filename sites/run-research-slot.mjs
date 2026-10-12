@@ -2,7 +2,7 @@ import {runResearchSlot} from './research-slot.ts';
 import {pathToFileURL} from 'node:url';
 // Only exact service code/status pairs prove a rejected operation. Gateways
 // and unreadable bodies cannot tell us whether a POST already committed.
-const rejected={batch_in_flight:[409],batch_closed:[409],collection_canceled:[409],collection_lease_lost:[409],owner_required:[403],invalid_deadline:[400],invalid_batch:[400,404],daily_window:[409]};
+const rejected={ingestion_pending:[409],collection_unknown:[409],batch_in_flight:[409],batch_closed:[409],collection_canceled:[409],collection_lease_lost:[409],owner_required:[403],invalid_deadline:[400],invalid_batch:[400,404],daily_window:[409]};
 async function outcome(response){
  let value;try{value=await response.json()}catch{return {status:'unknown',reason:'response_unconfirmed'}}
  if(!response.ok)return typeof value?.code==='string'&&Object.hasOwn(rejected,value.code)&&rejected[value.code].includes(response.status)?{status:'deferred',code:value.code}:{status:'unknown',reason:'http_outcome_unknown'};

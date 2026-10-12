@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-11T13:20:50Z",
+  "latestVersion": "2026-10-12T03:49:01Z",
   "releases": [
+    {
+      "id": "research-operation-checkpoints-review-20261012",
+      "at": "2026-10-12T03:49:01Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "采集候选耐久分片，记录取消与持久化进度",
+      "body": [
+        "针对 RSS 持久化逐条往返和重复写入，先保存完整候选与原归属，再受预算约束分片原子提交；结果未知或取消保留真实缺口，避免再次抓取及越序评估。",
+        "采集操作记录请求、运行、批次、阶段时点、耗时、预算、进度和固定原因；保留 30 天与行数上限，不记录凭据、正文或论文内容。",
+        "本次为独立 review 检查点，未合入、部署或改真实调度；隔离合成成本与已通过测试已记录，原生 Worker 取消/硬终止等最终验收仍待完成。"
+      ],
+      "sources": [
+        {
+          "label": "持久化与操作证据审查",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-operation-checkpoints-review.md"
+        }
+      ]
+    },
     {
       "id": "research-client-outcome-review-20261011",
       "at": "2026-10-11T13:20:50Z",

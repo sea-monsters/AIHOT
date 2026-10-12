@@ -148,6 +148,13 @@
       "when": 1791648315446,
       "tag": "0020_daily_readiness",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1791771561202,
+      "tag": "0022_collection_work_logs",
+      "breakpoints": true
     }
   ]
 }

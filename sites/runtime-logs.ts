@@ -33,6 +33,9 @@ export async function writeLog(db:any,input:any){
  await db.prepare('INSERT INTO runtime_logs(created_at,severity,component,event,outcome,error_code,http_status,phase,correlation_id,task_id,request_id,source_id,duration_ms,metadata_json) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT count(*) FROM runtime_logs)<?').bind(new Date().toISOString(),r.severity,r.component,r.event,r.outcome,r.errorCode,r.httpStatus,r.phase,r.correlationId,r.taskId,r.requestId,r.sourceId,r.durationMs,JSON.stringify(r.metadata),LOG_ROW_CAP).run();
  }catch{/* Diagnostics must never replace the primary result or emit raw errors. */}
 }
+// Callers that already own a fenced transaction can include the safe record
+// without three additional database round trips. Cleanup is once per request.
+export async function runtimeLogStatement(db:any,input:any){const r=await safeLogEntry(input);return db.prepare('INSERT INTO runtime_logs(created_at,severity,component,event,outcome,error_code,http_status,phase,correlation_id,task_id,request_id,source_id,duration_ms,metadata_json) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT count(*) FROM runtime_logs)<?').bind(new Date().toISOString(),r.severity,r.component,r.event,r.outcome,r.errorCode,r.httpStatus,r.phase,r.correlationId,r.taskId,r.requestId,r.sourceId,r.durationMs,JSON.stringify(r.metadata),LOG_ROW_CAP);}
 export async function logsApi(request:Request,env:any){
  const headers={'Cache-Control':'private, no-store','Vary':'Cookie','X-Content-Type-Options':'nosniff'};
  try{owner(request,env);if(request.method!=='GET')throw new AIError('method_not_allowed',405,'仅支持读取日志');
