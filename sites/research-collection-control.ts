@@ -22,7 +22,7 @@ export async function collectionControl(db:any,batchKey:string|null,at=new Date(
  const byId=new Map<string,any>(states.map((r:any)=>[r.key.slice(9),parse(r.value,{})]));
  const pages=(id:string)=>{const s=byId.get(id);return s?.cycle?.key===cycle?s.cycle.pages:0};
  const runs=(await db.prepare('SELECT source_id,status,details_json,close_reason FROM research_runs WHERE batch_key=? ORDER BY started_at,id').bind(batchKey).all()).results;
- if(runs.some((r:any)=>r.close_reason==='client_canceled'||['unknown','interrupted'].includes(r.status)))return {stop:true,scope:'batch',reason:'collection_canceled',nextAction:'readback_reconcile',...batchLifecycle(batch,at)};
+ if(runs.some((r:any)=>r.close_reason==='client_canceled'||['unknown','interrupted'].includes(r.status)))return {stop:true,scope:'batch',reason:runs.some((r:any)=>r.close_reason==='client_canceled')?'collection_canceled':'collection_unknown',nextAction:'readback_reconcile',...batchLifecycle(batch,at)};
  const headSettled=new Set<string>(),deferredHeads=new Set<string>();
  for(const r of runs){const d=parse(r.details_json,{});if(d.headOutcome==='staged')headSettled.add(r.source_id);if(d.crossrefPages?.some((p:any)=>p.head&&['complete','pending'].includes(p.status)))headSettled.add(r.source_id);else if(d.headOutcome==='deferred'){headSettled.add(r.source_id);deferredHeads.add(r.source_id)}}
  const deferred=(await db.prepare("SELECT key FROM research_settings WHERE key LIKE ?").bind('head-deferred:'+batchKey+':%').all()).results;

@@ -1,4 +1,5 @@
 export const SLOT_LIMITS={totalMs:540000,collection8Ms:260000,collection20Ms:330000,longRequestReserveMs:110000};
+const safeOperationId=(v:any)=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)?v.toLowerCase():null;
 type Call=(path:string,body?:any,timeoutMs?:number)=>Promise<any>;
 const blocked=(value:any)=>!value||!!value.error||!!value.code||['busy','blocked','deferred','error','failed','interrupted','unknown'].includes(value.status);
 const preparationBlocked=(value:any)=>blocked(value)||value.status==='partial'||Number(value.deferred)>0||Number(value.scopePending)>0;
@@ -7,7 +8,7 @@ export async function runResearchSlot(call:Call,slot:8|20,now=Date.now,started=n
  const deadline=started+SLOT_LIMITS.totalMs,steps:any[]=[];
  const remaining=()=>Math.max(0,deadline-now());
  const invoke=async(phase:string,path:string,body:any,limit:number)=>{
-  const at=now();try{const value=await call(path,body,Math.max(1,Math.min(limit,remaining())));steps.push({phase,status:value.status||value.batchStatus||'ok',startedMs:at-started,endedMs:now()-started,runId:value.runId||null,reason:value.reason||value.deferredReason||value.collectionControl?.reason||value.code||null,pages:value.crossrefPages?.length||0,ready:value.ready??null,abstained:value.abstained??null,deferred:value.deferred??null,scopePending:value.scopePending??null});return value.status==='unknown'?null:value;}
+  const at=now();try{const value=await call(path,body,Math.max(1,Math.min(limit,remaining())));steps.push({phase,status:value.status||value.batchStatus||'ok',startedMs:at-started,endedMs:now()-started,runId:value.runId||null,requestId:safeOperationId(value.requestId),reason:value.reason||value.deferredReason||value.collectionControl?.reason||value.code||null,pages:value.crossrefPages?.length||0,ready:value.ready??null,abstained:value.abstained??null,deferred:value.deferred??null,scopePending:value.scopePending??null});return value.status==='unknown'?null:value;}
   catch{steps.push({phase,status:'unknown',startedMs:at-started,endedMs:now()-started});return null;}
  };
  // The previous day's journals have already been collected. Prepare that cohort

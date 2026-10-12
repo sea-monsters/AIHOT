@@ -88,6 +88,10 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace
   ingestionTrace.deadline=deadline;
   if(recovery.pending){result.status='partial';result.reason='ingestion_pending';result.deferred=1;result.ingestionProcessed=recovery.processed;await db.prepare('UPDATE research_runs SET status=?,closed_at=?,close_reason=?,details_json=? WHERE id=?').bind('persist_pending',stamp(),'work_pending',JSON.stringify(result),lease.id).run();return result;}
 
+  // Recovery can consume most of a D1 invocation's query budget. Keep provider
+  // maintenance in a later bounded call; do not stack it onto recovery writes.
+  if(recovery.hadWork){result.status='partial';result.reason='pending_metadata';result.ingestionProcessed=recovery.processed;result.remainingMetadata=(await db.prepare("SELECT count(*) n FROM research_enrichment_queue WHERE status IN ('pending','deferred','blocked','overflow') AND origin_run_id IS NOT NULL").first()).n;await db.prepare('UPDATE research_runs SET status=?,finished_at=?,details_json=? WHERE id=?').bind(result.status,stamp(),JSON.stringify(result),lease.id).run();return result;}
+
   await db.prepare("UPDATE research_enrichment_queue SET status='legacy_deferred',ready_reason='legacy_unattributed' WHERE origin_run_id IS NULL AND daily_cohort_key IS NULL AND status IN ('pending','deferred','blocked','overflow')").run();
   const expiryTiming=phaseTiming(started),expiryStart=Date.now(),window=monthWindow(new Date(started));
   const expired=await db.prepare(`UPDATE research_enrichment_queue SET status='abstain',ready_reason='expired_update_window',updated_at=? WHERE status IN ('pending','deferred','blocked','overflow','done') AND length(${queueDaySql})=10 AND date(${queueDaySql},'+0 days')=${queueDaySql} AND (${queueDaySql}<? OR ${queueDaySql}>?)`).bind(started,window.startDate,window.endDate).run();result.expired=Number(expired.meta?.changes||0);

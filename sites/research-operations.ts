@@ -7,7 +7,17 @@ const reasons=new Set(['client_canceled','request_deadline','network_timeout','n
 const sources=new Set(RESEARCH_SOURCES.map(s=>s.id));
 const clamp=(n:any,max=1e9)=>Number.isFinite(n)?Math.max(0,Math.min(max,Math.floor(n))):0;
 export function operationReason(value:any){return reasons.has(value)?value:'other';}
-export function operationFailure(e:any,signal?:AbortSignal){if(signal?.aborted)return 'client_canceled';if(e?.code==='collection_lease_lost')return e.code;if(e?.name==='TimeoutError')return 'network_timeout';if(e?.name==='AbortError')return 'request_deadline';if(e?.code==='record_conflict')return e.code;return 'database_unknown';}
+export function operationRequestId(value:any){return typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)?value.toLowerCase():null;}
+export function operationFailure(e:any,signal?:AbortSignal,phase?:string){
+ if(signal?.aborted)return 'client_canceled';if(e?.code==='collection_lease_lost'||e?.code==='record_conflict')return e.code;
+ // A D1 timeout/transport failure can follow a committed transaction. Do not
+ // relabel it as an HTTP failure that might be considered safe to replay.
+ if(phase&&/capture|preload|commit/.test(phase))return 'database_unknown';
+ if(e?.code==='parse_failed'||phase?.endsWith('_parse'))return 'parse_failed';
+ if(e?.httpStatus===429)return 'provider_cooldown';
+ if(phase&&/connect|read/.test(phase)){if(e?.name==='TimeoutError')return 'network_timeout';if(e?.name==='AbortError')return 'request_deadline';return 'network_failed';}
+ return 'database_unknown';
+}
 export async function cleanupOperations(db:any){const cutoff=new Date(Date.now()-OPERATION_DAYS*86400000).toISOString();await db.batch([
  db.prepare('DELETE FROM research_operations WHERE id IN (SELECT id FROM research_operations WHERE observed_at<? ORDER BY observed_at,id LIMIT ?)').bind(cutoff,OPERATION_CLEANUP),
  db.prepare('DELETE FROM research_operations WHERE id IN (SELECT id FROM research_operations ORDER BY observed_at DESC,id DESC LIMIT ? OFFSET ?)').bind(OPERATION_CLEANUP,OPERATION_CAP-64),
@@ -16,13 +26,19 @@ export async function cleanupOperations(db:any){const cutoff=new Date(Date.now()
 ]);}
 /** Fixed enums and numeric progress only. Work payload never enters this journal. */
 export class OperationTrace{
- requestId=crypto.randomUUID();runId:string|null=null;current:any=null;requestOperationId:string|null=null;cleaned=false;rows=0;workStatements=0;legacyCollection=false;legacyStarted=false;
+ requestId:string=crypto.randomUUID();runId:string|null=null;current:any=null;requestOperationId:string|null=null;cleaned=false;rows=0;workStatements=0;legacyCollection=false;legacyStarted=false;
  db:any;batchKey:string|null;sourceId:string|null;deadline:number;originRunId:string|null;
  constructor(db:any,batchKey:string|null,sourceId:string|null,deadline:number,originRunId:string|null=null){this.db=db;this.batchKey=batchKey;this.sourceId=sourceId;this.deadline=deadline;this.originRunId=originRunId;}
  remaining(){return clamp(this.deadline-Date.now(),540000)}
- endStatement(db:any,state='ok',reason:any=null,progress=0,total=0,statements=0){if(!this.current)return null;const ended=new Date().toISOString();return db.prepare('UPDATE research_operations SET state=?,severity=?,known=?,reason=?,ended_at=?,observed_at=?,duration_ms=?,remaining_ms=?,progress=?,total=?,statements=? WHERE id=? AND ended_at IS NULL').bind(state,state==='ok'?'info':state==='unknown'||state==='failed'?'error':'warning',state==='unknown'?0:1,reason?operationReason(reason):null,ended,ended,clamp(Date.now()-this.current.time,86400000),this.remaining(),clamp(progress),clamp(total),clamp(statements),this.current.id);}
+ endStatement(db:any,state='ok',reason:any=null,progress=0,total=0,statements=0){if(!this.current)return null;
+  // Bind state/progress now, but measure at D1 execution. A queued transaction
+  // must not report the pre-dispatch timestamp as its successful completion.
+  const clock="strftime('%Y-%m-%dT%H:%M:%fZ','now')";
+  return db.prepare(`UPDATE research_operations SET state=?,severity=?,known=?,reason=?,ended_at=${clock},observed_at=${clock},duration_ms=CAST(max(0,(julianday('now')-julianday(started_at))*86400000) AS INTEGER),remaining_ms=CAST(max(0,min(540000,?-(julianday('now')-2440587.5)*86400000)) AS INTEGER),progress=?,total=?,statements=? WHERE id=? AND ended_at IS NULL`).bind(state,state==='ok'?'info':state==='unknown'||state==='failed'?'error':'warning',state==='unknown'?0:1,reason?operationReason(reason):null,this.deadline,clamp(progress),clamp(total),clamp(statements),this.current.id);
+ }
  async end(state='ok',reason:any=null,progress=0,total=0){const s=this.endStatement(this.db,state,reason,progress,total);if(s)try{await s.run()}catch{}this.current=null;}
  async begin(phase:string,provider:string|null=null,total=0,progress=0,stage?:string){
+  if(this.rows>=64){await this.end('deferred','budget_exceeded');return;}
   if(!this.cleaned){try{await cleanupOperations(this.db)}catch{}this.cleaned=true;}
   const id=crypto.randomUUID(),at=new Date().toISOString(),writes:any[]=[],end=this.endStatement(this.db);if(end)writes.push(end);
   const safePhase=phases.has(phase)?phase:'sync',safeSource=this.sourceId&&sources.has(this.sourceId)?this.sourceId:null,safeProvider=['crossref','publisher_rss'].includes(provider||'')?provider:null;
@@ -33,10 +49,11 @@ export class OperationTrace{
  }
  async linkRun(id:string,db:any){this.runId=id;this.db=db;const operation=this.requestOperationId||this.current?.id;if(operation)await db.prepare('UPDATE research_operations SET run_id=? WHERE id=?').bind(id,operation).run();}
 }
-export async function operationsApi(request:Request,env:any){const headers={'Cache-Control':'private, no-store'};try{owner(request,env);if(request.method!=='GET')throw new AIError('method_not_allowed',405,'只支持读取操作日志');const u=new URL(request.url),where=['observed_at>=?'],args:any[]=[new Date(Date.now()-OPERATION_DAYS*86400000).toISOString()];for(const [param,column]of[['runId','run_id'],['requestId','request_id'],['batchKey','batch_key']] as const){const v=u.searchParams.get(param);if(v){if(param==='batchKey'?!/^\d{4}-\d{2}-\d{2}\/(08|20)$/.test(v):!/^[-a-zA-Z0-9:]{1,100}$/.test(v))throw new AIError('invalid_action',400,'操作日志关联字段无效');where.push(column+'=?');args.push(v);}}const rows=(await env.DB.prepare('SELECT * FROM research_operations WHERE '+where.join(' AND ')+' ORDER BY started_at DESC,id DESC LIMIT 100').bind(...args).all()).results;return Response.json({operations:rows,retentionDays:OPERATION_DAYS,rowCap:OPERATION_CAP},{headers});}catch(e){return Response.json({code:e instanceof AIError?e.code:'logs_unavailable',error:e instanceof AIError?e.message:'操作日志暂不可用'},{status:e instanceof AIError?e.status:503,headers});}}
+export async function operationsApi(request:Request,env:any){const headers={'Cache-Control':'private, no-store','Vary':'Cookie','X-Content-Type-Options':'nosniff'};try{owner(request,env);if(request.method!=='GET')throw new AIError('method_not_allowed',405,'只支持读取操作日志');const u=new URL(request.url),where=['observed_at>=?'],args:any[]=[new Date(Date.now()-OPERATION_DAYS*86400000).toISOString()];for(const [param,column]of[['runId','run_id'],['requestId','request_id'],['batchKey','batch_key']] as const){const v=u.searchParams.get(param);if(v){if(param==='batchKey'?!/^\d{4}-\d{2}-\d{2}\/(08|20)$/.test(v):!/^[-a-zA-Z0-9:]{1,100}$/.test(v))throw new AIError('invalid_action',400,'操作日志关联字段无效');where.push(column+'=?');args.push(v);}}const rows=(await env.DB.prepare('SELECT * FROM research_operations WHERE '+where.join(' AND ')+' ORDER BY started_at DESC,id DESC LIMIT 100').bind(...args).all()).results;return Response.json({operations:rows,retentionDays:OPERATION_DAYS,rowCap:OPERATION_CAP},{headers});}catch(e){return Response.json({code:e instanceof AIError?e.code:'logs_unavailable',error:e instanceof AIError?e.message:'操作日志暂不可用'},{status:e instanceof AIError?e.status:503,headers});}}
 
-export async function operationCall(db:any,phase:string,body:any,action:(trace:OperationTrace)=>Promise<any>){
+export async function operationCall(db:any,phase:string,body:any,action:(trace:OperationTrace)=>Promise<any>,httpRequest?:Request){
  const budget=phase==='sync'?20000:phase==='metadata'?75000:phase==='scoring'?240000:phase==='daily'?190000:15000,trace=new OperationTrace(db,body?.batchKey||null,body?.sourceId||null,Date.now()+Math.min(budget,Number(body?.maxMs)||budget));
+ trace.requestId=operationRequestId(httpRequest?.headers.get('x-hkis-operation-id'))||trace.requestId;
  try{await trace.begin(phase);}catch{}const request=trace.current;trace.requestOperationId=request?.id||null;trace.current=null;
  const finish=async(state:string,reason:any,result?:any)=>{const child=trace.current;trace.current=request;trace.db=db;if(request&&result?.runId)try{await db.prepare('UPDATE research_operations SET run_id=? WHERE id=?').bind(result.runId,request.id).run()}catch{}await trace.end(state,reason,Number(result?.attempted)||0,Number(result?.scanned)||0);trace.current=child;};
  try{const result=await action(trace),reason=result?.reason||result?.deferredReason||result?.blocked||result?.collectionControl?.reason;await finish(result?.status==='unknown'?'unknown':['deferred','partial','busy','blocked','persist_pending','interrupted'].includes(result?.status)?'deferred':result?.status==='error'?'failed':'ok',reason,result);return {...result,requestId:trace.requestId};}

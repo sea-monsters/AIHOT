@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-12T03:49:01Z",
+  "latestVersion": "2026-10-12T04:34:36Z",
   "releases": [
+    {
+      "id": "research-operation-review-closed-20261012",
+      "at": "2026-10-12T04:34:36Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "恢复沿用原归属，同块身份合并并保留操作关联",
+      "body": [
+        "修复跨日候选确认相关后归属混用、同块不同候选映射同一论文导致旧快照写入，以及完整恢复后误判延期阻断第二页；保留原证据与预算。",
+        "请求、成功及错误响应、运行时固定记录、耐久日志和脚本步骤共用安全操作 UUID；准确区分解析、网络与未知持久化确认。补全恢复与后续 provider 维护分开受预算约束。",
+        "独立 review 检查点，专项 55/55 与完整 typecheck 通过；真实断连信号传播、硬终止重启及最终全套验收仍有明确待验证项，未合入、部署或改生产调度。"
+      ],
+      "sources": [
+        {
+          "label": "采集操作审查与验收范围",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-operation-checkpoints-review.md"
+        }
+      ]
+    },
     {
       "id": "research-operation-checkpoints-review-20261012",
       "at": "2026-10-12T03:49:01Z",
@@ -17,7 +35,7 @@
       "sources": [
         {
           "label": "持久化与操作证据审查",
-          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-operation-checkpoints-review.md"
+          "url": "https://github.com/sea-monsters/AIHOT/blob/bce2064acba452afc120e978bd7e3c4605f758c3/docs/research-operation-checkpoints-review.md"
         }
       ]
     },

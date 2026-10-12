@@ -28,3 +28,27 @@
 新迁移为 `0022_collection_work_logs.sql`，仅增三张表、索引与 CAS/容量触发器。当前基线只有 0020；journal 明确保留编号 21 的空位，snapshot 22 直接继承 20。未合入尚未批准的日期索引 UI 分支。若以后授权合并 0021 索引，部署顺序 20→21→22，并重新生成含 21 索引的 22 snapshot/prevId 链，不改已应用 SQL。两个隔离迁移组合验收仍待执行。
 
 Cloudflare 官方：[D1 平台限制](https://developers.cloudflare.com/d1/platform/limits/)（查询/批处理 30 秒、付费单次调用 1000 查询、免费 50；绑定/SQL/行大小亦有限）、[D1 batch 原子事务](https://developers.cloudflare.com/d1/worker-api/d1-database/)、[请求取消 compatibility flag](https://developers.cloudflare.com/workers/configuration/compatibility-flags/)。生产 enable_request_signal 是否生效仍需父端核实；硬终止不能依赖 finally。
+
+
+## 独立审查闭合检查点
+
+父端独立审查的三个 P1 均已有真实反例并通过：跨日 scope→store 优先使用既有可靠 queue 的完整 firstSeen/run/batch/cohort，不混用新工作片时间；DOI-less 与带 DOI 的不同 capture key 映射同一 paper 时先按最终身份合并再规划，保留两份工作片原证据，不静默提交第二份 0-change CAS；完整恢复 work 后返回正常/backfill_pending，真实 slot 能继续公平第二页，仍有 35 次及每源 2 页上限。不同非空 DOI 冲突明确停止并保留工作，不猜身份。
+
+恢复、身份、日志、客户端和补全集合 55/55，完整 typecheck 通过。5 个完整 Sites 初跑失败的恢复/诊断契约已逐项修正，恢复/取消/RSS 专项 40/40；完整全套复跑仍待完成。未知读取/持久化不再回显原始错误，不写 finished_at；失去 lease 的迟到结果保持 interrupted 且不伪造关闭时间。暂缓结果保留阶段时间、内部关联 ID 和累计计数。
+
+P2 日志桥：新 helper 的每个 POST 生成一个仅 UUID 格式的 x-hkis-operation-id；服务端成功/错误 JSON、响应头、D1 operation、固定 HKIS_OPERATION 运行时记录与 slot steps 保留同一 ID。错误输入、其他 header/正文不进运行时日志。该 ID **不是官方 Worker request ID**；需由附着于同次官方 Worker trace 的受控 console 记录建立关联。解析、网络、网络超时按实际 phase 分类，capture/preload/commit 的未知确认仍单独 database_unknown，不能视为安全重放。
+
+补全恢复可能用尽一次 D1 调用预算，因此完成持久工作片后单独返回 partial/pending_metadata，provider 维护留给下一次有界调用，避免把原先 LIMIT 100 的工作堆叠到最多 800 条持久化写入上。没有增加 provider/model 配额或自动循环。
+
+原生 Worker/D1 的 HTTP、解析以及 30 秒持久化**显式 Worker 信号注入**已通过：解析前不保存未解析候选，已提交原子片可保留，取消运行无 finished_at、finish409、剩余候选耐久、后续隔离补全保持原归属且没有再抓供应商。**真实客户端断连传播尚未验证通过**：本机 Miniflare v5 ready 和 direct listener 最小实验均未将 HTTP 断连传播为 Request.signal.aborted；保留这一失败/限制，信号注入不替代生产 runtime flag 核验。硬终止重启的测试夹具正在按本机 v5 resourcePersistencePath 修正，尚未通过，不据此宣布可发布。
+
+新边界验收：完整 200 候选队列、150 paper 上限、预算暂缓后的无 HTTP 恢复、512 容量原子回滚、超大候选明确暂缓、未完成组的根 checkpoint 不被清理、日志 64/请求与 1 万行/30 天、所有者只读与输入隐私，以及 20→22 / 20→21→22 两种隔离 SQL 迁移均已通过。
+
+
+### 原生中断验收补充
+
+在保留所有候选/归属、解析前 0 条入库和 finish409 断言的条件下，最新原生 Worker/D1 信号注入与硬终止重启均通过。30 秒持久化暂停中允许已派发原子事务提交，取消后整轮保持 interrupted / finished_at NULL；其他工作片耐久保留。操作结束时间与耗时改在 D1 真正执行 SQL 时计算，不把等待前时点记作提交结束，30 秒暂停反例验证 commit duration 至少 29 秒且剩余预算归零。
+
+硬终止只针对本次测试创建的子进程与 runtime，持久 D1 重启后 run 仍 running、closed_at/finished_at NULL、last operation started/ended_at NULL。显式未来时点 reconciliation 仅在全部 lease 过期后记 interrupted/unknown，不伪造结束；恢复约束下第一调用最多提交 140/150 篇并明确 partial/ingestion_pending、剩余 1 片，第二次隔离有界调用才提交余片。最终 150 篇/队列、原 firstSeen/run/cohort、已消费页预算均保持，无网络重抓或模型回执。测试的显式多调用不改真实调度或自动化。
+
+最新取消/P1/补全集合 44/44，之前 review/客户端集合 55/55；完整 typecheck 已通过。原生成本比较、竞争 CAS/丢确认、最后全 Sites 和编译路由烟测继续，仍为 draft。真实 ready/direct 断连的 Request.signal 传播限制维持，不以显式注入掩盖它。恢复跨前一 slot 的工作片也不冒充当前批次已检查 head。
