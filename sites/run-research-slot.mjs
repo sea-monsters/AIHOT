@@ -7,7 +7,7 @@ const rejected={ingestion_pending:[409],collection_unknown:[409],batch_in_flight
 export async function slotOutcome(response){
  let value;try{value=await response.json()}catch{return {status:'unknown',reason:'response_unconfirmed'}}
  if(!response.ok)return typeof value?.code==='string'&&Object.hasOwn(rejected,value.code)&&rejected[value.code].includes(response.status)?{status:'deferred',code:value.code,requestId:safeOperationId(value.requestId),...(value.code==='ingestion_pending'&&value.recovery?.known===true?{recovery:{known:true,confirmed:true,processedItems:Number.isInteger(value.recovery.processedItems)&&value.recovery.processedItems>=0?value.recovery.processedItems:0,remainingItems:Number.isInteger(value.recovery.remainingItems)&&value.recovery.remainingItems>=0?value.recovery.remainingItems:0}}:{})}:{status:'unknown',reason:'http_outcome_unknown',requestId:safeOperationId(value?.requestId)};
- return value&&typeof value==='object'&&!Array.isArray(value)?value:{status:'unknown',reason:'response_unconfirmed'};
+ return value&&typeof value==='object'&&!Array.isArray(value)?{...value,...(value.recovery&&typeof value.recovery==='object'?{recovery:{...value.recovery,confirmed:false}}:{})}:{status:'unknown',reason:'response_unconfirmed'};
 }
 export async function privateSlotMain(){
  const processStarted=Date.now();

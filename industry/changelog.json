@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-12T13:08:40Z",
+  "latestVersion": "2026-10-12T13:28:26Z",
   "releases": [
+    {
+      "id": "research-finalize-client-boundaries-20261012",
+      "at": "2026-10-12T13:28:26Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "收尾未派发与响应确认分别记录",
+      "body": [
+        "修正整轮余量不足而完全未发收尾请求时误记 unknown：明确返回 deferred/deadline；已发请求的未知结果继续停止派发。",
+        "成功响应体中的恢复 confirmed 不再作为重试证明，只有真实 HTTP409 与 ingestion_pending 精确匹配才由客户端生成确认。新增反例验证伪确认不会触发第二次收尾或维护。",
+        "本次为独立 review 的客户端边界闭合，未合 main、部署、修改真实调度或生产数据库。"
+      ],
+      "sources": [
+        {
+          "label": "同轮收尾客户端边界复核",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-local-finalize-review.md"
+        }
+      ]
+    },
     {
       "id": "research-local-finalize-review-20261012",
       "at": "2026-10-12T13:08:40Z",

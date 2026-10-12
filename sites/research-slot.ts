@@ -41,7 +41,7 @@ export async function runResearchSlot(call:Call,slot:8|20,now=Date.now,started=n
    if(blocked(result))deferredSources.add(result.sourceId||control.nextSourceId);
    control=result.collectionControl;if(!control)break;
   }
-  let finish:any=null;for(let slices=0;slices<4;slices++){if(remaining()<15000){steps.push({phase:'finish',status:'deferred',reason:'deadline'});break;}finish=await invoke('finish','/api/site/research/batch/finish',{batchKey:batch.batchKey,maxMs:Math.min(6000,remaining()-3000),deadlineAt:new Date(deadline-2000).toISOString()},15000);if(!finish)break;const p=finish.recovery;if(finish.code!=='ingestion_pending'||p?.known!==true||p?.confirmed!==true||!Number.isInteger(p.processedItems)||p.processedItems<=0||!Number.isInteger(p.remainingItems)||p.remainingItems<=0)break;}
+  let finish:any=null;for(let slices=0;slices<4;slices++){if(remaining()<15000){steps.push({phase:'finish',status:'deferred',reason:'deadline'});return {status:'deferred',batchKey:batch.batchKey,reason:'deadline',steps};}finish=await invoke('finish','/api/site/research/batch/finish',{batchKey:batch.batchKey,maxMs:Math.min(6000,remaining()-3000),deadlineAt:new Date(deadline-2000).toISOString()},15000);if(!finish)break;const p=finish.recovery;if(finish.code!=='ingestion_pending'||p?.known!==true||p?.confirmed!==true||!Number.isInteger(p.processedItems)||p.processedItems<=0||!Number.isInteger(p.remainingItems)||p.remainingItems<=0)break;}
   if(!finish||blocked(finish)||!['finished','interrupted'].includes(finish.batchStatus))return {status:finish?'deferred':'unknown',batchKey:batch.batchKey,reason:'finish_unconfirmed_do_not_start_maintenance',steps};
   collectionStoppedForCooldown=/rate_limit|cooldown|429/.test(control?.reason||'');
  }

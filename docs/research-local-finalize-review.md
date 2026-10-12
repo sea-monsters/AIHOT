@@ -31,3 +31,9 @@ Actual Worker/D1 四类隔离验收均通过：旧 caller 137 既有候选一次
 ## 仍不能覆盖的真实旧调度
 
 只调用一次 finish 的旧 caller 若短片不足仍会收到诚实 409，不会无界续片；若旧正文始终跳过 enrich，清空持久工作后仍可能被 pending_metadata 阻挡，不能为补偿调度而在 finish/process 偷调 provider。真实正文和是否使用新版 helper仍不可验证。生产 RTT、实际取消传播和下一自然轮是否完整完成不由合成测试证明。方案提供合法执行通路与可观察进度，不宣称所有供应商在每轮都全覆盖。
+
+## 客户端边界复核
+
+在固定 review HEAD `7f51322d5c32508f54f5f63d1aaadf059b3f4f34` 上补充两个反例，均先复现失败：finish 完全未发时被误记 unknown；HTTP200 响应体伪造 confirmed 则误续到四片。余量不足分支现直接返回 deferred/deadline（已提交正向进度后余量不足也如此）；已发送但未确认仍 unknown。slotOutcome 覆盖成功响应体的 recovery.confirmed=false，只有匹配的真实 HTTP409 ingestion_pending 分支生成 true。组合测试同时验证无第二次伪确认派发、无维护、真实409仍可确认。
+
+父端已在具备正式 hosting 配置的官方 checkout 对上述 7f51322 完整 typecheck/build 通过；该结果不代替后续客户端补丁的相关验收或生产验证。
