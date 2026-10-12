@@ -62,10 +62,11 @@ function collapseEntries(papers:any[],entries:any[]){
 }
 /** All paper, queue, membership, record and work versions are checked inside
  * one original run-fenced transaction. Only explicit CAS conflicts retry. */
-export async function drainIngestion(db:any,runId:string,trace:OperationTrace,deadline:number,sourceId?:string,signal?:AbortSignal){
- const rows=(await db.prepare("SELECT * FROM research_ingestion_work WHERE status='pending'"+(sourceId?' AND source_id=?':'')+' ORDER BY observed_at,group_id,ordinal LIMIT 32').bind(...(sourceId?[sourceId]:[])).all()).results;
+export async function drainIngestion(db:any,runId:string,trace:OperationTrace,deadline:number,sourceId?:string,signal?:AbortSignal,limits:{batchKey?:string;statementLimit?:number;reserveMs?:number}={}){
+ const where=(sourceId?' AND source_id=?':'')+(limits.batchKey?' AND origin_batch_key=?':''),args=[...(sourceId?[sourceId]:[]),...(limits.batchKey?[limits.batchKey]:[])],reserve=limits.reserveMs??INGEST_LIMITS.finishReserveMs,statementLimit=Math.min(INGEST_LIMITS.statements,limits.statementLimit??INGEST_LIMITS.statements);
+ const rows=(await db.prepare("SELECT * FROM research_ingestion_work WHERE status='pending'"+where+' ORDER BY observed_at,group_id,ordinal LIMIT 32').bind(...args).all()).results;
  let used=trace.workStatements,added=0,updated=0,processed=0,identityAmbiguous=0;const completed:any[]=[];
- for(const work of rows){checkCollectionCancellation(signal);if(Date.now()+INGEST_LIMITS.finishReserveMs>=deadline||trace.rows+3>64)break;
+ for(const work of rows){checkCollectionCancellation(signal);if(Date.now()+reserve>=deadline||trace.rows+3>64)break;
   for(let attempt=0;attempt<3;attempt++){
    trace.sourceId=work.source_id;trace.originRunId=work.origin_run_id;trace.batchKey=work.origin_batch_key;
    await trace.begin(work.channel+'_preload',work.channel==='rss'?'publisher_rss':'crossref',work.records,0,work.channel==='rss'?'rss_persist':'crossref_persist');
@@ -83,18 +84,18 @@ export async function drainIngestion(db:any,runId:string,trace:OperationTrace,de
    }
    if(paperTouch.length)writes.push(db.prepare("UPDATE research_papers SET last_seen=max(last_seen,?),metadata_checked_at=CASE WHEN ?='crossref' THEN max(coalesce(metadata_checked_at,''),?) ELSE metadata_checked_at END WHERE id IN (SELECT value FROM json_each(?))").bind(work.observed_at,work.channel,work.observed_at,JSON.stringify(paperTouch)));
    if(recordTouch.length)writes.push(db.prepare('UPDATE research_records SET retrieved_at=max(retrieved_at,?) WHERE id IN (SELECT value FROM json_each(?))').bind(work.observed_at,JSON.stringify(recordTouch)));
-   if(last&&checkpoint.stateKey){const current=await db.prepare('SELECT * FROM research_settings WHERE key=?').bind(checkpoint.stateKey).first();expected.settings.push(expectation(current,{key:checkpoint.stateKey}));if(current?.value!==checkpoint.before)throw Object.assign(Error('source checkpoint changed'),{code:'record_conflict'});writes.push(db.prepare('UPDATE research_settings SET value=? WHERE key=?').bind(checkpoint.after,checkpoint.stateKey),db.prepare('UPDATE research_sources SET last_success=?,error=NULL WHERE id=?').bind(work.observed_at,work.source_id));}
-   if(last&&work.channel==='rss')writes.push(db.prepare("UPDATE research_sources SET rss_status='ok',rss_error=NULL WHERE id=?").bind(work.source_id));
+   if(last&&checkpoint.stateKey){const current=await db.prepare('SELECT * FROM research_settings WHERE key=?').bind(checkpoint.stateKey).first();expected.settings.push(expectation(current,{key:checkpoint.stateKey}));if(current?.value!==checkpoint.before)throw Object.assign(Error('source checkpoint changed'),{code:'record_conflict'});writes.push(db.prepare('UPDATE research_settings SET value=? WHERE key=?').bind(checkpoint.after,checkpoint.stateKey),db.prepare('UPDATE research_sources SET last_success=?,error=NULL,count=(SELECT count(*) FROM research_papers WHERE source_id=? AND priority>=0) WHERE id=?').bind(work.observed_at,work.source_id,work.source_id));}
+   if(last&&work.channel==='rss')writes.push(db.prepare("UPDATE research_sources SET rss_status='ok',rss_error=NULL,count=(SELECT count(*) FROM research_papers WHERE source_id=? AND priority>=0) WHERE id=?").bind(work.source_id,work.source_id));
    const guard=crypto.randomUUID(),expectedJson=JSON.stringify(expected);if(bytes(expectedJson)>1500000)throw Object.assign(Error('work guard too large'),{ingestionDeferred:'capture_too_large'});
    await trace.begin(work.channel+'_commit',work.channel==='rss'?'publisher_rss':'crossref',work.records,0,work.channel==='rss'?'rss_persist':'crossref_persist');
    const finished=stamp(),end=trace.endStatement(db,'ok',null,work.records,work.records,writes.length+6),transaction=[db.prepare('INSERT INTO research_ingestion_guards(id,expected_json) VALUES(?,?)').bind(guard,expectedJson),...writes,
     db.prepare("UPDATE research_ingestion_work SET status='done',added=?,updated=?,finished_at=? WHERE id=? AND status='pending'").bind(a,u,finished,work.id),
     db.prepare("UPDATE research_runs SET added=added+?,updated=updated+?,details_json=json_set(details_json,'$.identityAmbiguous',coalesce(json_extract(details_json,'$.identityAmbiguous'),0)+?) WHERE id=?").bind(a,u,ambiguous,runId),
     ...(end?[end]:[]),db.prepare('DELETE FROM research_ingestion_guards WHERE id=?').bind(guard)];
-   if(used+transaction.length+2>INGEST_LIMITS.statements||Date.now()+INGEST_LIMITS.finishReserveMs>=deadline){await trace.end('deferred','work_pending');return {pending:true,added,updated,processed,identityAmbiguous,completed,hadWork:rows.length>0};}
+   if(used+transaction.length+2>statementLimit||Date.now()+reserve>=deadline){await trace.end('deferred','work_pending');return {pending:true,added,updated,processed,identityAmbiguous,completed,hadWork:rows.length>0};}
    try{used+=transaction.length+2;trace.workStatements=used;await db.batch(transaction);trace.current=null;added+=a;updated+=u;identityAmbiguous+=ambiguous;processed+=work.records;if(last)completed.push({groupId:work.group_id,channel:work.channel,checkpoint,originRunId:work.origin_run_id,originBatchKey:work.origin_batch_key});break;}
    catch(e){if(!String(e).includes('research_ingestion_conflict'))throw e;await trace.end('deferred','record_conflict');if(attempt===2)throw Object.assign(Error('work version conflict'),{code:'record_conflict'});}
   }
  }
- const pending=(await db.prepare("SELECT count(*) n FROM research_ingestion_work WHERE status='pending'"+(sourceId?' AND source_id=?':'')).bind(...(sourceId?[sourceId]:[])).first()).n>0;return {pending,added,updated,processed,identityAmbiguous,completed,hadWork:rows.length>0};
+ const pending=(await db.prepare("SELECT count(*) n FROM research_ingestion_work WHERE status='pending'"+where).bind(...args).first()).n>0;return {pending,added,updated,processed,identityAmbiguous,completed,hadWork:rows.length>0};
 }

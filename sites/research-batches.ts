@@ -1,3 +1,4 @@
+import {finalizeBatchWork,assertFinalizeSafe,finalizingKey} from './research-finalize.ts';
 import {collectionControl} from './research-collection-control.ts';
 import {intervalPlan} from './research-intervals.ts';
 import {prepareBrief} from './research-briefs.ts';
@@ -191,9 +192,9 @@ export async function validateBatch(db:any,key:any,at=new Date()){
  if(typeof key!=='string'||!/^\d{4}-\d{2}-\d{2}\/(08|20)$/.test(key))throw new AIError('invalid_batch',400,'无效采集批次');
  const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();if(!row||row.date!==collectedDay(at.toISOString())||row.status!=='running'||key!==collectionCycle(at.toISOString(),null))throw new AIError('batch_closed',409,'采集批次不存在、已结束或已过期');return key;
 }
-export async function finishBatch(db:any,key:any,at=new Date()){
+export async function finishBatch(db:any,key:any,at=new Date(),options:any={}){
  if(typeof key!=='string')throw new AIError('invalid_batch',400,'无效采集批次');const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();if(!row)throw new AIError('invalid_batch',404,'采集批次不存在');
- const unfinished=await db.prepare("SELECT count(*) n FROM research_ingestion_work WHERE origin_batch_key=? AND status='pending'").bind(key).first();if(unfinished.n&&row.status==='running')throw new AIError('ingestion_pending',409,'本批已接收候选仍有持久工作片待处理，不记为完成；回读后在原预算内续处理');
+ let recovery:any=null;if(row.status==='running'){recovery=await finalizeBatchWork(db,row,options);await assertFinalizeSafe(db,key);}
  // The SELECT above may wait behind the last collector. Capture completion in
  // the terminal CAS, bounded below by all evidence already committed then.
  const finishedAtSql=`max(${databaseNowSql},started_at,coalesce((SELECT max(first_seen) FROM research_batch_members m WHERE m.batch_key=research_batches.key),started_at),coalesce((SELECT max(finished_at) FROM research_runs r WHERE r.batch_key=research_batches.key),started_at))`;
@@ -206,8 +207,9 @@ export async function finishBatch(db:any,key:any,at=new Date()){
   if(unknown)throw new AIError('collection_unknown',409,'本批有结果未知或中断的运行；回读已提交工作片后显式 reconcile，不记为完成');
   throw new AIError('batch_in_flight',409,'采集请求或来源租约仍在运行，请稍后回读');
  }
+ if(current.status!=='running')await db.prepare('DELETE FROM research_settings WHERE key=?').bind(finalizingKey(key)).run();
  const cutoff=new Date(Date.parse(current.finished_at||current.closed_at||at.toISOString())+1).toISOString();
- return {batchKey:key,...await batchCoverage(db,key,cutoff),brief:current.status==='finished'?await prepareBrief(db,key):null};
+ return {batchKey:key,...(recovery?{recovery}:{}),...await batchCoverage(db,key,cutoff),brief:current.status==='finished'?await prepareBrief(db,key):null};
 }
 export async function batchCoverage(db:any,key:string,cutoff:string){
  const batch=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();const expected=parse(batch?.sources_json,RESEARCH_SOURCES.map(s=>s.id));

@@ -16,6 +16,7 @@ export async function collectionControl(db:any,batchKey:string|null,at=new Date(
  if(!batchKey)return {stop:false};
  const batch=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(batchKey).first();
  if(!batch||batch.status!=='running')return {stop:true,scope:'batch',reason:'batch_closed',retryAt:null,nextAction:'finish_batch'};
+ const closing=await db.prepare('SELECT key FROM research_settings WHERE key=?').bind('batch-finalizing:'+batchKey).first();if(closing)return {stop:true,scope:'batch',reason:'batch_finalizing',nextAction:'finish_batch',...batchLifecycle(batch,at)};
  const maxMs=batchBudgetMs(batch);
  if(at.getTime()-Date.parse(batch.started_at)>=maxMs)return {stop:true,scope:'batch',reason:'time_budget',retryAt:null,nextAction:'finish_batch',...batchLifecycle(batch,at)};
  const expected:string[]=parse(batch.sources_json,[]),states=(await db.prepare("SELECT key,value FROM research_settings WHERE key LIKE 'crossref:%'").all()).results;
