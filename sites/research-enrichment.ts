@@ -1,3 +1,5 @@
+import {drainIngestion,INGEST_LIMITS} from './research-ingestion.ts';
+import {OperationTrace} from './research-operations.ts';
 import {AIError} from './ai/security.ts';
 import {admitRun,fencedRunDatabase} from './research-lifecycle.ts';
 import {dailyCohortKey} from './research-attribution.ts';
@@ -24,9 +26,7 @@ const queueDaySql="coalesce(nullif(json_extract(paper_json,'$.provenance.publica
 export const adequateMetadata=(p:any)=>String(p.abstract||'').trim().length>=180&&p.authors?.length>0&&p.datePrecision==='day';
 
 /** Every candidate is retained. Read/transport limits never become deletion limits. */
-export async function queueMetadata(db:any,papers:Paper[],scopePending=false,run?:{runId:string;batchKey:string|null}){
- const now=stamp();
- for(const incoming of papers){
+export async function planMetadataQueue(db:any,incoming:Paper,scopePending=false,run?:{runId:string;batchKey:string|null;firstSeen?:string},now=stamp()){
   const lookupKey=normalizeDoi(incoming.doi)||'id:'+await digest({source:incoming.sourceId,url:incoming.url,title:normalizedTitle(incoming.title)});
   const previous=await db.prepare('SELECT * FROM research_enrichment_queue WHERE doi=? AND source_id=?').bind(lookupKey,incoming.sourceId).first();
   const priorPaper=previous?parse(previous.paper_json,null):null;const p=priorPaper?mergeCandidate(incoming,priorPaper):incoming;
@@ -34,18 +34,20 @@ export async function queueMetadata(db:any,papers:Paper[],scopePending=false,run
   const key=normalizeDoi(p.doi)||'id:'+await digest({source:p.sourceId,url:p.url,title:normalizedTitle(p.title)}),hash=await digest(metadataFields(p));
   const stored=p.doi?await db.prepare('SELECT * FROM research_papers WHERE doi=?').bind(p.doi).first():null;
   const member=stored?await db.prepare('SELECT run_id,batch_key,daily_cohort_key,first_seen FROM research_batch_members WHERE paper_id=?').bind(stored.id).first():null;
-  const firstSeen=member?.first_seen||stored?.first_seen||now,cohort=member?.daily_cohort_key||dailyCohortKey(firstSeen);
+  const firstSeen=member?.first_seen||stored?.first_seen||run?.firstSeen||now,cohort=member?.daily_cohort_key||dailyCohortKey(firstSeen);
   const freshCrossref=p.discovery==='crossref'||stored?.metadata_checked_at&&Date.parse(stored.metadata_checked_at)>Date.now()-6*3600000;
   const providers=freshCrossref?{crossref:{status:'done',at:now,reason:'fresh_discovery'}}:{};
-  await db.prepare(`INSERT INTO research_enrichment_queue(doi,source_id,paper_json,input_hash,scope_pending,status,next_attempt_at,updated_at,first_seen,origin_run_id,origin_batch_key,daily_cohort_key,provider_json)
+  const statement=db.prepare(`INSERT INTO research_enrichment_queue(doi,source_id,paper_json,input_hash,scope_pending,status,next_attempt_at,updated_at,first_seen,origin_run_id,origin_batch_key,daily_cohort_key,provider_json)
    VALUES(?,?,?,?,?,CASE WHEN (SELECT count(*) FROM research_enrichment_queue WHERE status IN ('pending','deferred','blocked') AND NOT(origin_run_id IS NULL AND daily_cohort_key IS NULL))<2000 THEN 'pending' ELSE 'overflow' END,?,?,?,?,?,?,?) ON CONFLICT(doi,source_id) DO UPDATE SET
    paper_json=excluded.paper_json,scope_pending=min(research_enrichment_queue.scope_pending,excluded.scope_pending),
    status=CASE WHEN ? THEN research_enrichment_queue.status WHEN research_enrichment_queue.status IN ('pending','deferred','blocked') THEN 'pending' ELSE excluded.status END,
    next_attempt_at=CASE WHEN ? THEN research_enrichment_queue.next_attempt_at ELSE excluded.next_attempt_at END,
    provider_json=CASE WHEN ? THEN research_enrichment_queue.provider_json ELSE excluded.provider_json END,
-   updated_at=excluded.updated_at,input_hash=excluded.input_hash`).bind(key,p.sourceId,JSON.stringify(p),hash,scopePending?1:0,now,now,firstSeen,member?.run_id||run?.runId||null,member?member.batch_key:run?.batchKey||null,cohort,JSON.stringify(providers),unchanged?1:0,unchanged?1:0,unchanged?1:0).run();
- }
- return 0;
+   updated_at=excluded.updated_at,input_hash=excluded.input_hash`).bind(key,p.sourceId,JSON.stringify(p),hash,scopePending?1:0,now,now,firstSeen,member?.run_id||run?.runId||null,member?member.batch_key:run?.batchKey||null,cohort,JSON.stringify(providers),unchanged?1:0,unchanged?1:0,unchanged?1:0);
+ return {statement,key,paper:p,previous,unchanged,noop:unchanged&&previous.input_hash===hash&&previous.scope_pending<=(scopePending?1:0)};
+}
+export async function queueMetadata(db:any,papers:Paper[],scopePending=false,run?:{runId:string;batchKey:string|null;firstSeen?:string}){
+ const now=stamp();for(const incoming of papers)await (await planMetadataQueue(db,incoming,scopePending,run,now)).statement.run();return 0;
 }
 
 export function metadataChunks(service:string,keys:string[]){
@@ -69,7 +71,7 @@ export function metadataRequest(service:string,keys:string[]):{url:string;body?:
 }
 
 /** Separate run/lease; never carries a finished batch's fence or updates a frozen snapshot. */
-export async function enrichMetadata(rawDb:any,env:any,body:any={}){
+export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace?:OperationTrace){
  if(body.batchKey!=null&&(typeof body.batchKey!=='string'||!/^\d{4}-\d{2}-\d{2}\/(08|20)$/.test(body.batchKey)))throw new AIError('invalid_batch',400,'补全批次无效');
  if(body.cohort!=null&&!['previous_day','current','pending'].includes(body.cohort))throw new AIError('invalid_cohort',400,'补全归属无效');
  if(body.maxMs!=null&&(!Number.isInteger(body.maxMs)||body.maxMs<1||body.maxMs>75000))throw new AIError('invalid_deadline',400,'补全时限应在 1–75000 毫秒');
@@ -81,6 +83,15 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={}){
  const db=fencedRunDatabase(rawDb,lease.id),result:any={status:'ok',runId:lease.id,batchKey:body.batchKey||null,attempted:0,ready:0,scopePending:0,deferred:0,providers:{}};
  try{
   await db.prepare("UPDATE research_runs SET phase='metadata' WHERE id=?").bind(lease.id).run();
+  const ingestionTrace=existingTrace||new OperationTrace(db,body.batchKey||null,null,deadline);ingestionTrace.deadline=Math.min(deadline,Date.now()+INGEST_LIMITS.requestMs);await ingestionTrace.linkRun(lease.id,db);
+  const recovery=await drainIngestion(db,lease.id,ingestionTrace,ingestionTrace.deadline);await ingestionTrace.end(recovery.pending?'deferred':'ok',recovery.pending?'ingestion_pending':null,recovery.processed,recovery.processed);
+  ingestionTrace.deadline=deadline;
+  if(recovery.pending){result.status='partial';result.reason='ingestion_pending';result.deferred=1;result.ingestionProcessed=recovery.processed;await db.prepare('UPDATE research_runs SET status=?,closed_at=?,close_reason=?,details_json=? WHERE id=?').bind('persist_pending',stamp(),'work_pending',JSON.stringify(result),lease.id).run();return result;}
+
+  // Recovery can consume most of a D1 invocation's query budget. Keep provider
+  // maintenance in a later bounded call; do not stack it onto recovery writes.
+  if(recovery.hadWork){result.status='partial';result.reason='pending_metadata';result.ingestionProcessed=recovery.processed;result.remainingMetadata=(await db.prepare("SELECT count(*) n FROM research_enrichment_queue WHERE status IN ('pending','deferred','blocked','overflow') AND origin_run_id IS NOT NULL").first()).n;await db.prepare('UPDATE research_runs SET status=?,finished_at=?,details_json=? WHERE id=?').bind(result.status,stamp(),JSON.stringify(result),lease.id).run();return result;}
+
   await db.prepare("UPDATE research_enrichment_queue SET status='legacy_deferred',ready_reason='legacy_unattributed' WHERE origin_run_id IS NULL AND daily_cohort_key IS NULL AND status IN ('pending','deferred','blocked','overflow')").run();
   const expiryTiming=phaseTiming(started),expiryStart=Date.now(),window=monthWindow(new Date(started));
   const expired=await db.prepare(`UPDATE research_enrichment_queue SET status='abstain',ready_reason='expired_update_window',updated_at=? WHERE status IN ('pending','deferred','blocked','overflow','done') AND length(${queueDaySql})=10 AND date(${queueDaySql},'+0 days')=${queueDaySql} AND (${queueDaySql}<? OR ${queueDaySql}>?)`).bind(started,window.startDate,window.endDate).run();result.expired=Number(expired.meta?.changes||0);
@@ -183,6 +194,8 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={}){
    const retry=new Date(Math.max(Date.now()+60000,...SERVICES.map(s=>Date.parse(row.providers[s]?.retryAt||'')||0))).toISOString();
    await db.prepare('UPDATE research_enrichment_queue SET paper_json=?,input_hash=?,provider_json=?,status=?,ready_reason=?,next_attempt_at=?,updated_at=? WHERE doi=? AND source_id=?').bind(JSON.stringify(row.p),row.input_hash,JSON.stringify(row.providers),status,reason,retry,stamp(),row.doi,row.source_id).run();
   }
+  result.remainingMetadata=(await db.prepare(`SELECT count(*) n FROM research_enrichment_queue WHERE status IN ('pending','deferred','blocked','overflow') ${day?'AND daily_cohort_key IN (?,?)':body.batchKey?'AND origin_batch_key=?':body.cohort==='pending'?pendingGate:''}`).bind(...(day?[day+'/08',day+'/20']:body.batchKey?[body.batchKey]:body.cohort==='pending'?[today+'/08',today+'/20']:[])).first()).n;
+  if(result.remainingMetadata&&!result.reason)result.reason='pending_metadata';
   if(result.reason||result.deferred||result.scopePending)result.status='partial';
   commitTiming.persistMs=Date.now()-commitStarted;
   await phaseEvent(db,{batchKey:body.batchKey,runId:lease.id,phase:'metadata:commit'},commitTiming,result.status,0,{candidates:candidates.length,ready:result.ready,abstained:result.abstained||0,deferred:result.deferred,remainingMs:Math.max(0,deadline-Date.now())});

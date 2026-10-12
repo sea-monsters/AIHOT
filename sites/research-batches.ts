@@ -193,14 +193,17 @@ export async function validateBatch(db:any,key:any,at=new Date()){
 }
 export async function finishBatch(db:any,key:any,at=new Date()){
  if(typeof key!=='string')throw new AIError('invalid_batch',400,'无效采集批次');const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();if(!row)throw new AIError('invalid_batch',404,'采集批次不存在');
+ const unfinished=await db.prepare("SELECT count(*) n FROM research_ingestion_work WHERE origin_batch_key=? AND status='pending'").bind(key).first();if(unfinished.n&&row.status==='running')throw new AIError('ingestion_pending',409,'本批已接收候选仍有持久工作片待处理，不记为完成；回读后在原预算内续处理');
  // The SELECT above may wait behind the last collector. Capture completion in
  // the terminal CAS, bounded below by all evidence already committed then.
  const finishedAtSql=`max(${databaseNowSql},started_at,coalesce((SELECT max(first_seen) FROM research_batch_members m WHERE m.batch_key=research_batches.key),started_at),coalesce((SELECT max(finished_at) FROM research_runs r WHERE r.batch_key=research_batches.key),started_at))`;
- await db.prepare(`UPDATE research_batches SET status='finished',finished_at=${finishedAtSql} WHERE key=? AND status='running' AND ${noActiveBatchWorkAt(databaseNowSql)} AND NOT EXISTS(SELECT 1 FROM research_runs r WHERE r.batch_key=research_batches.key AND r.close_reason='client_canceled')`).bind(key).run();
+ await db.prepare(`UPDATE research_batches SET status='finished',finished_at=${finishedAtSql} WHERE key=? AND status='running' AND ${noActiveBatchWorkAt(databaseNowSql)} AND NOT EXISTS(SELECT 1 FROM research_runs r WHERE r.batch_key=research_batches.key AND (r.close_reason='client_canceled' OR (r.finished_at IS NULL AND r.status IN ('unknown','interrupted')))) AND NOT EXISTS(SELECT 1 FROM research_ingestion_work w WHERE w.origin_batch_key=research_batches.key AND w.status='pending')`).bind(key).run();
  const current=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();
  if(current.status==='running'){
   const canceled=await db.prepare("SELECT id FROM research_runs WHERE batch_key=? AND close_reason='client_canceled' LIMIT 1").bind(key).first();
   if(canceled)throw new AIError('collection_canceled',409,'本批采集曾取消；停止后续阶段，回读租约后显式 reconcile，不记为完成');
+  const unknown=await db.prepare("SELECT id FROM research_runs WHERE batch_key=? AND finished_at IS NULL AND status IN ('unknown','interrupted') LIMIT 1").bind(key).first();
+  if(unknown)throw new AIError('collection_unknown',409,'本批有结果未知或中断的运行；回读已提交工作片后显式 reconcile，不记为完成');
   throw new AIError('batch_in_flight',409,'采集请求或来源租约仍在运行，请稍后回读');
  }
  const cutoff=new Date(Date.parse(current.finished_at||current.closed_at||at.toISOString())+1).toISOString();

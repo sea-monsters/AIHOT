@@ -1,8 +1,84 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-11T13:20:50Z",
+  "latestVersion": "2026-10-12T06:22:14Z",
   "releases": [
+    {
+      "id": "research-operation-main-integration-20261012",
+      "at": "2026-10-12T06:22:14Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "采集耐久分片与操作日志修复合入主分支",
+      "body": [
+        "将双重独立审查通过的采集修复合入 fork main：完整候选耐久分片、原归属恢复、身份合并和安全操作关联保留，未知结果不伪装完成或自动重放。",
+        "精确审查版本的 Sites 579/579、typecheck 与原生回归通过；父端在官方 checkout 的完整构建退出 0，先前本地缺 hosting 配置的包装限制已核对关闭。合入记录不表示站点已经发布。",
+        "本次仅合采集修复，不包含独立日期排序候选；未发布 Sites、生产写入、补采或修改真实调度。真实断连传播、生产时延及实际 collector 采用情况仍待核验。"
+      ],
+      "sources": [
+        {
+          "label": "固定采集修复审查版本",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/995afa0afa09ef11d127d63ab065404deafdc987"
+        },
+        {
+          "label": "主分支合入记录与范围",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-operation-main-integration.md"
+        }
+      ]
+    },
+    {
+      "id": "research-operation-budget-validation-20261012",
+      "at": "2026-10-12T05:23:13Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "采集 SQL 预算留足日志与冲突余量，冻结隔离验收证据",
+      "body": [
+        "原生 CAS 反例将日志、预读和失败事务纳入总成本，持久工作写入预算从 800 收紧为 600；完整候选保留，分次恢复明确显示 partial，未扩大平台或供应商配额。",
+        "实际 Worker/D1 合成 RSS 成本从 1691 次数据库调用/2788 条 SQL 降为 125/354；原生取消、硬终止、竞争版本与丢确认通过。空库同论文两种条目顺序合并且隔离不同 DOI；未知网关也保留安全操作关联，未知结果不重放。",
+        "独立 review 的完整 Sites 579/579 与 typecheck 退出 0；本地发布包装因缺私有 hosting 配置退出 1，真实断连传播、正式构建、collector 正文、main 合入与部署仍由父端核对，未改生产或真实调度。"
+      ],
+      "sources": [
+        {
+          "label": "操作预算与隔离验收记录",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/80f57a755134c762544317878d689a238b4ecc4a/docs/research-operation-checkpoints-review.md"
+        }
+      ]
+    },
+    {
+      "id": "research-operation-review-closed-20261012",
+      "at": "2026-10-12T04:34:36Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "恢复沿用原归属，同块身份合并并保留操作关联",
+      "body": [
+        "修复跨日候选确认相关后归属混用、同块不同候选映射同一论文导致旧快照写入，以及完整恢复后误判延期阻断第二页；保留原证据与预算。",
+        "请求、成功及错误响应、运行时固定记录、耐久日志和脚本步骤共用安全操作 UUID；准确区分解析、网络与未知持久化确认。补全恢复与后续 provider 维护分开受预算约束。",
+        "独立 review 检查点，专项 55/55 与完整 typecheck 通过；真实断连信号传播、硬终止重启及最终全套验收仍有明确待验证项，未合入、部署或改生产调度。"
+      ],
+      "sources": [
+        {
+          "label": "采集操作审查与验收范围",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/9693d13a143e7a2cd09d94d80f16431edede7fc0/docs/research-operation-checkpoints-review.md"
+        }
+      ]
+    },
+    {
+      "id": "research-operation-checkpoints-review-20261012",
+      "at": "2026-10-12T03:49:01Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "采集候选耐久分片，记录取消与持久化进度",
+      "body": [
+        "针对 RSS 持久化逐条往返和重复写入，先保存完整候选与原归属，再受预算约束分片原子提交；结果未知或取消保留真实缺口，避免再次抓取及越序评估。",
+        "采集操作记录请求、运行、批次、阶段时点、耗时、预算、进度和固定原因；保留 30 天与行数上限，不记录凭据、正文或论文内容。",
+        "本次为独立 review 检查点，未合入、部署或改真实调度；隔离合成成本与已通过测试已记录，原生 Worker 取消/硬终止等最终验收仍待完成。"
+      ],
+      "sources": [
+        {
+          "label": "持久化与操作证据审查",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/bce2064acba452afc120e978bd7e3c4605f758c3/docs/research-operation-checkpoints-review.md"
+        }
+      ]
+    },
     {
       "id": "research-client-outcome-review-20261011",
       "at": "2026-10-11T13:20:50Z",

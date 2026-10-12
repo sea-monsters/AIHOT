@@ -9,11 +9,11 @@ import {privateSlotMain} from './run-research-slot.mjs';
 const token='SYNTHETIC_CLIENT_OUTCOME_SENTINEL',origin='https://fixture.chatgpt.site';
 const phases:[8|20,string][]=[[8,'enrich'],[8,'process'],[8,'daily/generate'],[20,'batch/start'],[20,'sync'],[20,'batch/finish'],[20,'enrich'],[20,'process']];
 async function slot(slot:8|20,failure:string,response:()=>Response){
- const paths:string[]=[],logs:string[]=[],oldFetch=globalThis.fetch,oldNow=Date.now,oldWrite=process.stdout.write,oldExit=process.exitCode;
+ const paths:string[]=[],sentIds:string[]=[],logs:string[]=[],oldFetch=globalThis.fetch,oldNow=Date.now,oldWrite=process.stdout.write,oldExit=process.exitCode;
  Date.now=()=>Date.parse(slot===8?'2026-10-12T00:00:00Z':'2026-10-12T12:00:00Z');
  process.stdout.write=((chunk:any)=>{logs.push(String(chunk));return true}) as any;
- globalThis.fetch=async(input,options:any)=>{assert.equal(options.method,'POST');assert.equal(options.headers['OAI-Sites-Authorization'],'Bearer '+token);const path=new URL(String(input)).pathname;paths.push(path);if(path.endsWith('/'+failure))return response();if(path.endsWith('/start'))return Response.json({status:'running',batchKey:'fixture',collectionControl:{nextSourceId:'source'}});if(path.endsWith('/sync'))return Response.json({status:'ok',collectionControl:{stop:true}});return Response.json(path.endsWith('/finish')?{status:'ok',batchStatus:'finished'}:{status:'ok'});};
- try{const pending=privateSlotMain();process.stdin.emit('data',JSON.stringify({baseUrl:origin,allowedOrigins:[origin],token,slot})+'\n');await pending;const result=JSON.parse(logs.find(s=>s.startsWith('{'))!);assert.ok(!logs.join('').includes(token));return {result,paths,exitCode:process.exitCode};}
+ globalThis.fetch=async(input,options:any)=>{assert.equal(options.method,'POST');assert.equal(options.headers['OAI-Sites-Authorization'],'Bearer '+token);const path=new URL(String(input)).pathname;paths.push(path);const id=options.headers['x-hkis-operation-id'];assert.match(id,/^[0-9a-f-]{36}$/);sentIds.push(id);if(path.endsWith('/'+failure))return response();if(path.endsWith('/start'))return Response.json({status:'running',batchKey:'fixture',collectionControl:{nextSourceId:'source'}});if(path.endsWith('/sync'))return Response.json({status:'ok',collectionControl:{stop:true}});return Response.json(path.endsWith('/finish')?{status:'ok',batchStatus:'finished'}:{status:'ok'});};
+ try{const pending=privateSlotMain();process.stdin.emit('data',JSON.stringify({baseUrl:origin,allowedOrigins:[origin],token,slot})+'\n');await pending;const result=JSON.parse(logs.find(s=>s.startsWith('{'))!);assert.ok(!logs.join('').includes(token));return {result,paths,sentIds,exitCode:process.exitCode};}
  finally{globalThis.fetch=oldFetch;Date.now=oldNow;process.stdout.write=oldWrite;process.exitCode=oldExit;}
 }
 function stopped(paths:string[],phase:string){assert.ok(paths.at(-1)!.endsWith('/'+phase),JSON.stringify(paths));assert.equal(paths.filter(p=>p.endsWith('/'+phase)).length,1);}
@@ -44,4 +44,11 @@ for(const outcome of ['unknown','interrupted'])test('actual legacy helper '+outc
 });
 test('legacy final readback failure does not replay unknown POST or expose credentials',()=>{
  const r=spawnSync(process.execPath,['--import',pathToFileURL(preload).href,'sites/refresh-research.mjs'],{input:JSON.stringify({baseUrl:origin,token})+'\n',encoding:'utf8',timeout:5000,env:{...process.env,FIXTURE_OUTCOME:'unknown',FIXTURE_READBACK:'fail'}});assert.equal(r.status,2);const trace=r.stdout.trim().split('\n').filter(s=>s.startsWith('{')).map(s=>JSON.parse(s)).find(s=>s.fixtureCalls);assert.equal(trace.posts,1);assert.equal(trace.fixtureCalls.at(-1).authorized,true);assert.ok(!(r.stdout+r.stderr).includes(token));
+});
+
+test('actual HTTP client keeps the sent opaque ID for gateway/truncated/missing-ID bodies and records a mismatched safe response ID separately',async()=>{
+ const different='aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+ for(const response of [()=>new Response('<html>synthetic gateway</html>',{status:502}),()=>new Response('{broken',{status:200}),()=>Response.json({code:'unexpected'},{status:400}),()=>Response.json({status:'unknown',requestId:'invalid-private-input'})]){const r=await slot(8,'enrich',response),step=r.result.steps.at(-1);assert.equal(r.result.status,'unknown');assert.equal(step.sentRequestId,r.sentIds.at(-1));assert.equal(step.requestId,r.sentIds.at(-1));assert.equal(step.operationIdMismatch,false);stopped(r.paths,'enrich');}
+ const mismatch=await slot(8,'enrich',()=>Response.json({status:'unknown',requestId:different})),step=mismatch.result.steps.at(-1);assert.equal(mismatch.result.status,'unknown');assert.equal(step.sentRequestId,mismatch.sentIds.at(-1));assert.equal(step.requestId,different);assert.equal(step.operationIdMismatch,true);assert.notEqual(step.requestId,step.sentRequestId);stopped(mismatch.paths,'enrich');
+ const rejected=await slot(20,'batch/finish',()=>Response.json({code:'batch_in_flight'},{status:409}));assert.equal(rejected.result.status,'deferred');assert.equal(rejected.result.steps.at(-1).requestId,rejected.sentIds.at(-1));stopped(rejected.paths,'batch/finish');
 });

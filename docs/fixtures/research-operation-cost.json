@@ -1,0 +1,47 @@
+{
+  "scope": "Actual workerd/D1, synthetic 150 existing RSS papers and queues, same HTTP entry and migrations; localMs is not production timing; diagnostics classification counts whole statements touching journal tables; final 600 work-statement budget",
+  "baseline": "7eb0976dc013a7bcca83fef71c4d86a5c8ae8c15",
+  "records": [
+    {
+      "version": "baseline-7eb",
+      "node": "v24.21.0",
+      "metrics": {
+        "rpc": 1691,
+        "sql": 2788,
+        "byKind": {
+          "control": 979,
+          "diagnostic": 7,
+          "paper_metadata": 1802
+        }
+      },
+      "localMs": 2066,
+      "mockedReadResponses": 2,
+      "externalNetwork": 0,
+      "providerModelCalls": 0
+    },
+    {
+      "version": "review",
+      "node": "v24.21.0",
+      "metrics": {
+        "rpc": 125,
+        "sql": 354,
+        "byKind": {
+          "control": 183,
+          "diagnostic": 70,
+          "work_evidence": 52,
+          "paper_metadata": 49
+        }
+      },
+      "localMs": 414,
+      "mockedReadResponses": 2,
+      "externalNetwork": 0,
+      "providerModelCalls": 0
+    }
+  ],
+  "nativeConflictCeiling": {
+    "cas": 805,
+    "unknownAcknowledgment": 286,
+    "paidD1Ceiling": 1000,
+    "freeTierNotGuaranteed": 50
+  }
+}
