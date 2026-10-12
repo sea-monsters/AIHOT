@@ -76,5 +76,7 @@
     "successfulRecoveryContinuation": "sites/research-operation-checkpoints.test.ts:55",
     "freshAliasesBothOrders": "sites/research-operation-checkpoints.test.ts:70",
     "distinctDoiAndAmbiguity": "sites/research-operation-checkpoints.test.ts:74"
-  }
+  },
+  "testedCodeSha": "80f57a755134c762544317878d689a238b4ecc4a",
+  "metadataOnlyAfterCode": "source links and this validation pointer; no implementation changes"
 }
