@@ -37,3 +37,5 @@ Actual Worker/D1 四类隔离验收均通过：旧 caller 137 既有候选一次
 在固定 review HEAD `7f51322d5c32508f54f5f63d1aaadf059b3f4f34` 上补充两个反例，均先复现失败：finish 完全未发时被误记 unknown；HTTP200 响应体伪造 confirmed 则误续到四片。余量不足分支现直接返回 deferred/deadline（已提交正向进度后余量不足也如此）；已发送但未确认仍 unknown。slotOutcome 覆盖成功响应体的 recovery.confirmed=false，只有匹配的真实 HTTP409 ingestion_pending 分支生成 true。组合测试同时验证无第二次伪确认派发、无维护、真实409仍可确认。
 
 父端已在具备正式 hosting 配置的官方 checkout 对上述 7f51322 完整 typecheck/build 通过；该结果不代替后续客户端补丁的相关验收或生产验证。
+
+边界闭合已验收补丁：[37ae7fd8a36192e285f1e4f20e75a9f96dd772b5](https://github.com/sea-monsters/AIHOT/commit/37ae7fd8a36192e285f1e4f20e75a9f96dd772b5)。相关四文件组合 39/39、完整 typecheck、中文日志 19/19 和 94 条记录校验通过。未重复主实现 599 项全集、原生 D1 或无关浏览器；本补丁仅改客户端状态分类，服务器持久化与预算不变。

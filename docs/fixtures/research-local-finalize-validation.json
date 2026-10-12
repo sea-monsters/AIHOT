@@ -4,6 +4,7 @@
   "testedImplementation": "dd1895c1515a057f788a367414dc9109d97cd781",
   "clientBoundaryFollowup": {
     "baseReview": "7f51322d5c32508f54f5f63d1aaadf059b3f4f34",
+    "testedImplementation": "37ae7fd8a36192e285f1e4f20e75a9f96dd772b5",
     "negativeTests": 2,
     "failedAsExpected": 2,
     "relatedCommand": "node --test --test-concurrency=1 --test-timeout=120000 sites/research-local-finalize.test.ts sites/research-slot.test.ts sites/research-client-outcomes.test.ts sites/research-cancellation.test.ts",
@@ -11,6 +12,9 @@
     "passed": 39,
     "failed": 0,
     "typecheckExitCode": 0,
+    "changelogTests": 19,
+    "changelogTestsPassed": 19,
+    "changelogReleases": 94,
     "cases": ["finish not dispatched because of deadline is deferred, including after confirmed progress", "sent but unconfirmed finish remains unknown", "HTTP200 forged confirmed cannot cause another finish or maintenance", "only exact HTTP409 ingestion_pending generates recovery confirmation"],
     "serverPersistenceChanged": false,
     "full599SuiteRepeated": false,

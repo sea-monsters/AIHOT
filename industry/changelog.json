@@ -17,7 +17,7 @@
       "sources": [
         {
           "label": "同轮收尾客户端边界复核",
-          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-local-finalize-review.md"
+          "url": "https://github.com/sea-monsters/AIHOT/blob/37ae7fd8a36192e285f1e4f20e75a9f96dd772b5/docs/research-local-finalize-review.md"
         }
       ]
     },
