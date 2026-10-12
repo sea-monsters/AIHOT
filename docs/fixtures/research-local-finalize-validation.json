@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "baseline": "1b6d357a53e11a36361ac382bfe8234d8df0908b",
+  "testedImplementation": "dd1895c1515a057f788a367414dc9109d97cd781",
   "branch": "review/research-local-finalize-20261012",
   "environment": "HK_LPT local Windows, SQLite and Miniflare workerd/D1",
   "fixtures": "Synthetic candidates only; no private production identifiers or logs",

@@ -2,6 +2,8 @@
 
 基线：`1b6d357a53e11a36361ac382bfe8234d8df0908b`。保留已合日期排序与 0021/0022 迁移，未新增迁移。此文档仅记录源码机制和合成验收，不包含私有运行标识、生产日志或用户保存的规则正文。真实生产、调度、供应商和模型请求均未操作。
 
+固定已验收实现：[dd1895c1515a057f788a367414dc9109d97cd781](https://github.com/sea-monsters/AIHOT/commit/dd1895c1515a057f788a367414dc9109d97cd781)。后续来源固定提交仅修改审计元数据。
+
 ## 确定根因
 
 采集发现窗口和本地持久化恢复共用 sync 入口。collectionControl 在 260/330 秒或 35 页先返回 stop，之后才读取 pending work；sync 因此到不了已接收工作片的 drain。finish 明确拒 pending，enrich 又拒任何 running batch。即使整轮尚有余量，同轮也没有合法的本地恢复入口。started+540 秒且合法 lease 都不活跃后可显式 reconcile interrupted，再由独立维护恢复；这属于后续处理，不能解决同轮收尾。
