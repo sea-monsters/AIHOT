@@ -1,6 +1,8 @@
 import {captureIngestion,drainIngestion,INGEST_LIMITS} from './research-ingestion.ts';
 import {assertStoredRecoveryEligible,recoverIngestion,pendingWorkDiagnostics} from './research-recovery.ts';
 import {scoringDebt} from './research-scoring-debt.ts';
+import {prepareMaintenance} from './research-maintenance.ts';
+import {metadataDiagnostics} from './research-metadata-diagnostics.ts';
 import {OperationTrace,operationFailure,operationCall,operationRequestId,operationReason} from './research-operations.ts';
 import {METADATA_READ_LIMIT,queueMetadata,enrichMetadata} from './research-enrichment.ts';
 import {phaseTiming,phaseEvent,type PhaseTiming} from './research-telemetry.ts';
@@ -262,7 +264,7 @@ export async function researchStatus(db:any,initialized=false,trackingOptions:Br
 }
 // This opaque ID bridges client results, D1 operations and the controlled
 // console record attached to the official Worker trace. It is not its platform ID.
-const operationPaths:Record<string,string>={'/api/site/research/sync':'sync','/api/site/research/batch/start':'batch_start','/api/site/research/batch/finish':'batch_finish','/api/site/research/ingestion/recover':'local_recovery','/api/site/research/enrich':'metadata','/api/site/research/process':'scoring','/api/site/research/daily/generate':'daily'};
+const operationPaths:Record<string,string>={'/api/site/research/sync':'sync','/api/site/research/batch/start':'batch_start','/api/site/research/batch/finish':'batch_finish','/api/site/research/maintenance/prepare':'maintenance_prepare','/api/site/research/ingestion/recover':'local_recovery','/api/site/research/enrich':'metadata','/api/site/research/process':'scoring','/api/site/research/daily/generate':'daily'};
 export async function researchApi(request:Request,env:any){
  const phase=request.method==='POST'?operationPaths[new URL(request.url).pathname]:null;if(!phase)return researchApiInner(request,env);
  const id=operationRequestId(request.headers.get('x-hkis-operation-id'))||crypto.randomUUID(),headers=new Headers(request.headers);headers.set('x-hkis-operation-id',id);const tracked=new Request(request,{headers}),started=Date.now();
@@ -273,7 +275,15 @@ export async function researchApi(request:Request,env:any){
  console.info('HKIS_OPERATION',JSON.stringify({operationRequestId:id,phase,state:unknown?'unknown':response.ok?'returned':'rejected',known:unknown?0:1,httpStatus:response.status,reason:reason?operationReason(reason):null,durationMs:Math.max(0,Date.now()-started)}));
  const output=new Headers(response.headers);output.set('x-hkis-operation-id',id);return new Response(JSON.stringify(data),{status:response.status,headers:output});
 }
-async function researchApiInner(request:Request,env:any){const db=env.DB;if(!db)return json({error:'Database unavailable'},503);const requestStarted=Date.now(),u=new URL(request.url),path=u.pathname,operation=(phase:string,body:any,action:(trace:OperationTrace)=>Promise<any>)=>operationCall(db,phase,body,action,request);await initResearch(db);
+async function researchApiInner(request:Request,env:any){const db=env.DB;if(!db)return json({error:'Database unavailable'},503);const requestStarted=Date.now(),u=new URL(request.url),path=u.pathname,operation=(phase:string,body:any,action:(trace:OperationTrace)=>Promise<any>)=>operationCall(db,phase,body,action,request);
+ // These previews are query-only even when old initialization repairs remain.
+ if(path==='/api/site/research/metadata/status'&&request.method==='GET'){try{await processingConfig(db,env,request);if([...u.searchParams.keys()].some(k=>!['limit','after','status','paperIds'].includes(k)))throw new AIError('invalid_diagnostics',400,'元数据诊断参数无效');return json(await metadataDiagnostics(db,{limit:u.searchParams.get('limit')||undefined,after:u.searchParams.get('after')||undefined,status:u.searchParams.get('status')||undefined,paperIds:u.searchParams.has('paperIds')?u.searchParams.get('paperIds')!.split(','):undefined}));}catch(e){return json({code:e instanceof AIError?e.code:'metadata_status_unavailable'},e instanceof AIError?e.status:503)}}
+ if(path==='/api/site/research/maintenance/prepare'){
+  try{await processingConfig(db,env,request);let body:any;if(request.method==='GET'){if([...u.searchParams.keys()].some(k=>k!=='paperIds'))throw new AIError('invalid_selection',400,'预览只支持paperIds');body={paperIds:(u.searchParams.get('paperIds')||'').split(',')};}else if(request.method==='POST'){if(request.headers.has('origin')&&(request.headers.get('origin')!==u.origin||request.headers.get('x-hkis-request')!=='1'))throw new AIError('owner_required',403,'请求来源验证失败');if(Number(request.headers.get('content-length'))>24000)throw new AIError('invalid_selection',413,'输入过长');try{body=await request.json()}catch{throw new AIError('invalid_selection',400,'输入JSON无效，未派发维护')}if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!['paperIds','apply','maxMs','deadlineAt'].includes(k)))throw new AIError('invalid_selection',400,'维护准备参数无效');}else return json({code:'method_not_allowed'},405);
+   const action=()=>prepareMaintenance(db,body,{startedMs:requestStarted,signal:request.signal});return json(body.apply===true?await operation('maintenance_prepare',body,action):await action());
+  }catch(e){return json({code:e instanceof AIError?e.code:'maintenance_prepare_unconfirmed'},e instanceof AIError?e.status:503)}
+ }
+ await initResearch(db);
  if(path==='/api/site/research/processing'&&request.method==='GET'){try{return json(await processingStatus(db,env,{limit:u.searchParams.get('limit')||undefined,after:u.searchParams.get('after')||undefined,state:u.searchParams.get('state')||undefined,paperIds:u.searchParams.has('paperIds')?u.searchParams.get('paperIds')!.split(','):undefined}))}catch(e){return json({code:e instanceof AIError?e.code:'status_unavailable'},e instanceof AIError?e.status:503)}}
  if(request.method==='POST'){const origin=request.headers.get('origin');if(origin&&origin!==u.origin)return json({error:'Forbidden'},403);let body:any;if(Number(request.headers.get('content-length'))>24000)return json({error:'Request too large'},413);try{body=await request.json()}catch{return json({error:'Invalid JSON'},400)};
   if(['/api/site/research/ingestion/recover','/api/site/research/enrich','/api/site/research/process','/api/site/research/daily/generate','/api/site/research/batch/start','/api/site/research/batch/finish','/api/site/research/batch/reconcile','/api/site/research/sync'].includes(path)){if(origin&&request.headers.get('x-hkis-request')!=='1')return json({error:'Forbidden'},403);}

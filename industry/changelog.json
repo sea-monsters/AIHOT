@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-13T04:05:24Z",
+  "latestVersion": "2026-10-13T06:20:48Z",
   "releases": [
+    {
+      "id": "research-maintenance-ready-review-20261013",
+      "at": "2026-10-13T06:20:48Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "明确选择已存论文准备当前评分证据",
+      "body": [
+        "增加默认只读、显式1–3个ID的维护准备入口。身份与证据确认且在原月窗口内时先规范规则分，再保存独立当前维护ready证明；优先复用原ready、当前分析及真实归属引用，不补造历史batch或cohort。",
+        "保留firstSeen、原队列/成员、冻结报告及所有分析回执；提交核对实体、来源记录、归属与租约，未知或失败付费历史仍阻挡，不自动派发模型。缺证据继续通过已有学术补缺入口和共享节流处理，不新建全库付费任务。",
+        "增加只读队列阻塞与供应商冷却诊断。本次仅独立审查候选，原生D1及受影响回归已记录；未推main、部署或操作生产，不宣称全库补评分完成。"
+      ],
+      "sources": [
+        {
+          "label": "显式维护准备与冷却诊断审查",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-maintenance-ready-review.md"
+        }
+      ]
+    },
     {
       "id": "research-scoring-recovery-main-integration-20261013",
       "at": "2026-10-13T04:05:24Z",

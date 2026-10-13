@@ -162,6 +162,13 @@
       "when": 1791771561202,
       "tag": "0022_collection_work_logs",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1791867137395,
+      "tag": "0023_maintenance_ready",
+      "breakpoints": true
     }
   ]
 }
