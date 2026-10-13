@@ -1,0 +1,103 @@
+{
+  "base": "7911f633355a6bf81af40258a4ba8979b59c3f3a",
+  "branch": "review/research-debt-terminal-diagnostics-20261013",
+  "recordedAt": "2026-10-13T12:17:32.481Z",
+  "scope": "read_only_scoring_debt_diagnostics",
+  "checks": {
+    "affected": {
+      "exitCode": 0,
+      "finishedAt": "2026-10-13T12:10:39Z",
+      "fileCount": 24,
+      "tests": 324,
+      "passed": 324,
+      "failed": 0
+    },
+    "focused": {
+      "tests": 26,
+      "passed": 26,
+      "failed": 0,
+      "terminalTests": 8
+    },
+    "baselineReproduction": {
+      "tests": 1,
+      "failed": 1,
+      "expectedFailure": true,
+      "actual": "awaiting_metadata",
+      "expected": "evidence_insufficient"
+    },
+    "typecheck": {
+      "finishedAt": "2026-10-13T12:10:00Z",
+      "exitCode": 0
+    },
+    "webBuild": {
+      "exitCode": 0,
+      "finishedAt": "2026-10-13T12:13:29Z"
+    },
+    "changelog": {
+      "exitCode": 0,
+      "finishedAt": "2026-10-13T12:16:03Z",
+      "tests": 19,
+      "passed": 19,
+      "failed": 0,
+      "historyPreserved": 101,
+      "totalEntries": 102
+    },
+    "nativeD1": {
+      "passed": true,
+      "syntheticPapers": 3,
+      "externalRequests": 0,
+      "receipts": 0,
+      "readOnly": true
+    },
+    "productionBundle": {
+      "exitCode": 0,
+      "finishedAt": "2026-10-13T12:15:04Z",
+      "syntheticPapers": 3,
+      "externalRequests": 0,
+      "receipts": 0,
+      "readOnly": true
+    },
+    "workerSmoke": {
+      "exitCode": 0,
+      "finishedAt": "2026-10-13T12:14:52Z",
+      "realWorkerD1SSR": true,
+      "transport": "isolated_mock_only"
+    },
+    "webExtended": {
+      "finishedAt": "2026-10-13T12:13:25Z",
+      "exitCode": 1,
+      "tests": 67,
+      "passed": 53,
+      "failed": 14
+    },
+    "webCacheConfirmation": {
+      "finishedAt": "2026-10-13T12:16:01Z",
+      "exitCode": 1,
+      "tests": 14,
+      "passed": 0,
+      "failed": 14,
+      "reason": "ERR_UNSUPPORTED_ESM_URL_SCHEME: Windows absolute path import / c:",
+      "serverLine": 38,
+      "unchangedBaselineBlobs": {
+        "apps/web/server.ts": "cb9afef89fd5d77edb7fe2ce0205ecc49e8b536d",
+        "apps/web/tests/cache.test.ts": "03c4e6a886d313e526707a88b09f3b30a1de4c8d"
+      }
+    },
+    "finalSourcePinnedBundle": {
+      "buildExit": 0,
+      "testExit": 0,
+      "finishedAt": "2026-10-13T12:19:42Z",
+      "changelogTestsPassed": 19,
+      "externalRequests": 0,
+      "receipts": 0,
+      "readOnly": true
+    }
+  },
+  "notExecuted": [
+    "Node/PostgreSQL full suite: separate empty test database not configured",
+    "root npm run build wrapper: would read/copy private hosting configuration; Web and actual Worker bundle built separately",
+    "production diagnostics, database writes, deployment, schedules, real providers/models"
+  ],
+  "remainingValidationLimit": "14 existing Windows Node Web server cache tests fail before assertions; no independent full baseline checkout run claimed",
+  "implementationSha": "a87a40520562949c0243b95c7e2645bbd28fad55"
+}

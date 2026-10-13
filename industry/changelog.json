@@ -1,8 +1,48 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-13T09:59:39Z",
+  "latestVersion": "2026-10-13T12:28:17Z",
   "releases": [
+    {
+      "id": "research-debt-terminal-main-integration-20261013",
+      "at": "2026-10-13T12:28:17Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "已复核的队列终态诊断正常合入主分支",
+      "body": [
+        "在核对main未前进后，以正常merge保留两个已验证候选提交的历史。独立静态复核未发现合并阻断项；严格来源、身份、firstSeen、hash与字段匹配，有效ready优先，别名保守处理，计数、筛选和分页保持一致。",
+        "实现端324项相关回归、19项日志测试、类型检查、Web和实际Worker构建、原生D1及production bundle诊断路由通过，102条既有日志完整保留。扩展Web测试53项通过、14项因未修改的Windows动态导入路径失败；PostgreSQL全套与生产验证未执行。",
+        "本次只合入源码和中文记录，未发布生产站、写生产库、采集或调用真实付费模型，也未修改任务调度。论文存储状态、元数据与历史归属及原收费门保持原状，不把诊断修正称为补全或补评分完成。"
+      ],
+      "sources": [
+        {
+          "label": "已独立复核的固定候选",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/8153e5b626329b8ac05c5af843071fa8d5ed2b0b"
+        },
+        {
+          "label": "实现端验证及失败边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/8153e5b626329b8ac05c5af843071fa8d5ed2b0b/docs/research-debt-terminal-review.md"
+        }
+      ]
+    },
+    {
+      "id": "research-debt-terminal-diagnostics-review-20261013",
+      "at": "2026-10-13T12:12:38Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "严格对应队列终态的只读评分债务诊断",
+      "body": [
+        "修正同来源、同身份及当前元数据版本的scope终态仍显示等待补全的问题。保留论文原始状态并附队列对应证据；有效ready优先，跨来源共用DOI、版本或归属漂移、多个别名均不继承终态。",
+        "计数、状态筛选与分页使用相同分类SQL；尚未入库的候选继续由元数据诊断展示，不虚增论文。未写回元数据或历史归属，也未改变收费门、供应商预算、日报与采集流程。",
+        "本次为独立review候选，324项相关回归、类型检查及原生D1诊断已通过；构建与组合证据见审查说明。未合入main、发布、修改调度或操作生产，不把终态诊断修正称为补全或补评分完成。"
+      ],
+      "sources": [
+        {
+          "label": "队列终态对应规则与隔离验证",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/a87a40520562949c0243b95c7e2645bbd28fad55/docs/research-debt-terminal-review.md"
+        }
+      ]
+    },
     {
       "id": "research-maintenance-origin-main-integration-20261013",
       "at": "2026-10-13T09:59:39Z",
