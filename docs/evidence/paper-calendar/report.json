@@ -31,12 +31,20 @@
     "calendar surfaces have no shadow",
     "touch panning scrolls naturally without selecting dates",
     "illegal date URL displays explicit error and zero matches",
+    "invalid URL status never claims all update dates",
+    "Escape cancels pending two-click anchor from month navigation",
+    "Escape cancels pending two-click anchor from month selector",
+    "Escape cancels pending two-click anchor from year input",
+    "Escape cancels pending two-click anchor from start date input",
+    "Escape cancels pending two-click anchor from end date input",
+    "Escape in unrelated filter is not consumed and preserves pending anchor",
+    "invalid unsubmitted draft does not replace valid applied range status",
     "no outbound services or paid receipts",
     "browser runtime exceptions absent"
   ],
   "errors": [],
   "outbound": 0,
-  "documentId": 1791903382794.2039,
+  "documentId": 1791907843495.1326,
   "requests": [
     {
       "method": "GET",
@@ -127,6 +135,21 @@
       "method": "GET",
       "path": "/api/site/research/papers",
       "url": "/api/site/research/papers?min=0&updateStart=2026-10-31&updateEnd=2026-11-03&sort=updated"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&updateStart=2026-10-05&updateEnd=2026-10-05&sort=updated"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&updateStart=2026-10-07&updateEnd=2026-10-07&sort=updated"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&updateStart=2026-10-05&updateEnd=2026-10-07&sort=updated"
     }
   ],
   "production": false

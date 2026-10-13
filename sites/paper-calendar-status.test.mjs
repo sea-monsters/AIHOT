@@ -1,0 +1,10 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {build} from 'esbuild';import {mkdir,writeFile} from 'node:fs/promises';
+await mkdir('.sites-runtime',{recursive:true});
+await writeFile('.sites-runtime/paper-calendar-status-fixture.tsx',`import React from 'react';import {renderToStaticMarkup} from 'react-dom/server';import {PaperCalendar} from '../apps/web/app/components/PaperCalendar';export const render=(range:any)=>renderToStaticMarkup(<PaperCalendar range={range} today="2026-10-13" onApply={()=>{}}/>);`);
+await build({entryPoints:['.sites-runtime/paper-calendar-status-fixture.tsx'],outfile:'.sites-runtime/paper-calendar-status-fixture.mjs',bundle:true,platform:'node',format:'esm',packages:'external',jsx:'automatic',logLevel:'silent'});
+const {render}=await import('../.sites-runtime/paper-calendar-status-fixture.mjs');
+const status=html=>/<p class="paper-calendar-status"[^>]*>(.*?)<\/p>/.exec(html)?.[1];
+test('empty applied range explicitly reports all update dates',()=>assert.equal(status(render({updateStart:'',updateEnd:''})),'全部更新日期'));
+test('valid applied single day and inclusive range report their actual endpoints',()=>{for(const [a,b] of [['2026-10-11','2026-10-11'],['2026-10-31','2026-11-03']])assert.equal(status(render({updateStart:a,updateEnd:b})),`${a} 至 ${b}`)});
+test('malformed, incomplete and reversed applied ranges report invalid status alongside the error',()=>{for(const [a,b] of [['2026-02-30','2026-10-11'],['2026-10-11',''],['','2026-10-11'],['2026-10-12','2026-10-11']]){const html=render({updateStart:a,updateEnd:b});assert.equal(status(html),'无效日期范围');assert.ok(html.includes('role="alert"'))}});

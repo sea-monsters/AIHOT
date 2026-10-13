@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-13T14:52:48Z",
+  "latestVersion": "2026-10-13T16:09:05Z",
   "releases": [
+    {
+      "id": "paper-calendar-review-fixes-20261013",
+      "at": "2026-10-13T16:09:05Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "月历无效日期状态与跨控件Esc取消收尾",
+      "body": [
+        "修正非法日期URL仍显示全部更新日期的问题，明确显示无效日期范围；未提交的非法草稿继续保留已应用范围状态。",
+        "连续两次选择的Esc取消覆盖月历内日期输入、年份输入、月份下拉及月份按钮；只取消当前拖选或待选起点，不拦截旁边筛选控件。保留既有日期查询、手势、排序与返回导航。",
+        "本次为父任务独立复核原候选后提出的局部修复维护记录，保留已有日志及修前、修后合成证据；源码合入与生产发布分别核实，生产仍由父任务执行。"
+      ],
+      "sources": [
+        {
+          "label": "月历复核收尾维护记录",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/industry/changelog.json"
+        }
+      ]
+    },
     {
       "id": "paper-update-calendar-review-20261013",
       "at": "2026-10-13T14:52:48Z",

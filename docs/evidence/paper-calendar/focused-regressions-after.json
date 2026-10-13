@@ -1,0 +1,106 @@
+{
+  "componentSha256": "8d5ccc173e4e61b6526dd7e9e3faefa25176caebe7f3cd3f6b7fefa046586c9b",
+  "checks": [
+    {
+      "name": "invalid URL status never claims all update dates",
+      "pass": true,
+      "observed": "无效日期范围"
+    },
+    {
+      "name": "Escape cancels pending two-click anchor from month navigation",
+      "pass": true,
+      "observed": {
+        "start": "2026-10-07",
+        "end": "2026-10-07",
+        "escapes": [
+          {
+            "name": "",
+            "tag": "BUTTON",
+            "prevented": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "Escape cancels pending two-click anchor from month selector",
+      "pass": true,
+      "observed": {
+        "start": "2026-10-07",
+        "end": "2026-10-07",
+        "escapes": [
+          {
+            "name": "",
+            "tag": "SELECT",
+            "prevented": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "Escape cancels pending two-click anchor from year input",
+      "pass": true,
+      "observed": {
+        "start": "2026-10-07",
+        "end": "2026-10-07",
+        "escapes": [
+          {
+            "name": "",
+            "tag": "INPUT",
+            "prevented": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "Escape cancels pending two-click anchor from start date input",
+      "pass": true,
+      "observed": {
+        "start": "2026-10-07",
+        "end": "2026-10-07",
+        "escapes": [
+          {
+            "name": "",
+            "tag": "INPUT",
+            "prevented": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "Escape cancels pending two-click anchor from end date input",
+      "pass": true,
+      "observed": {
+        "start": "2026-10-07",
+        "end": "2026-10-07",
+        "escapes": [
+          {
+            "name": "",
+            "tag": "INPUT",
+            "prevented": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "Escape in unrelated filter is not consumed and preserves pending anchor",
+      "pass": true,
+      "observed": {
+        "start": "2026-10-05",
+        "end": "2026-10-07",
+        "escapes": [
+          {
+            "name": "q",
+            "tag": "INPUT",
+            "prevented": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "invalid unsubmitted draft does not replace valid applied range status",
+      "pass": true,
+      "observed": "2026-10-05 至 2026-10-07"
+    }
+  ],
+  "production": false
+}

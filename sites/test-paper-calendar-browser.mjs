@@ -1,5 +1,6 @@
 /** Real local Chrome, built Worker, disposable D1 and synthetic identity; zero production state. */
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {createServer} from 'node:http';
 import {mkdir,mkdtemp,readFile,readdir,writeFile} from 'node:fs/promises';
@@ -109,6 +110,29 @@ try{
  record('calendar surfaces have no shadow',await evaluate("getComputedStyle(document.querySelector('.paper-calendar')).boxShadow==='none'"));
  await evaluate('document.querySelector(".paper-calendar-grid").scrollIntoView({block:"center",behavior:"instant"})');const scrollBefore=await evaluate('scrollY'),scrollURL=await evaluate('location.href'),touchPoint=await point(dayCell('2026-11-12'));await cdp('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...touchPoint,id:1}]});await cdp('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:touchPoint.x,y:touchPoint.y-60,id:1}]});await pause(80);await cdp('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:touchPoint.x,y:touchPoint.y-140,id:1}]});await cdp('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await pause(250);record('touch panning scrolls naturally without selecting dates',(await evaluate('location.href'))===scrollURL&&Math.abs((await evaluate('scrollY'))-scrollBefore)>5);
  await navigate('/research?min=0&updateStart=2026-02-30&updateEnd=2026-10-11');await click('.reading-control-toggle');await until("document.querySelector('.paper-calendar-error')?.textContent.includes('日期无效')",'invalid URL message');record('illegal date URL displays explicit error and zero matches',await evaluate("document.querySelector('.research-result-note').textContent.startsWith('0 篇')"));await screenshot('mobile-invalid-url');
+ // Parent review contract: the applied URL status is distinct from draft errors;
+ // Escape belongs to the whole calendar, with a negative control in the sibling form.
+ const focused=[],witness=(name,pass,observed)=>focused.push({name,pass,observed});
+ const invalidStatus=await evaluate("document.querySelector('.paper-calendar-status').textContent");
+ witness('invalid URL status never claims all update dates',invalidStatus.includes('无效日期范围')&&!invalidStatus.includes('全部更新日期'),invalidStatus);
+ await evaluate('document.querySelector(".paper-calendar-status").scrollIntoView({block:"center",behavior:"instant"})');await screenshot('mobile-invalid-status');
+ await cdp('Emulation.setTouchEmulationEnabled',{enabled:false});await cdp('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});await navigate('/research?min=0');
+ await evaluate("window.__calendarEscapes=[];document.addEventListener('keydown',e=>{if(e.key==='Escape')window.__calendarEscapes.push({name:e.target.name,tag:e.target.tagName,prevented:e.defaultPrevented})})");
+ const resetRangeMode=async()=>{if(await evaluate("document.querySelector('.paper-range-toggle').getAttribute('aria-pressed')==='true'"))await click('.paper-range-toggle');await click('.paper-range-toggle')};
+ const escapeAt=async selector=>{await evaluate(`window.__calendarEscapes=[];document.querySelector(${JSON.stringify(selector)}).focus({preventScroll:true})`);await cdp('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});await cdp('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27})};
+ const pickedEnd=()=>until("new URLSearchParams(location.search).get('updateEnd')==='2026-10-07'&&!document.querySelector('.paper-calendar-status').textContent.includes('正在')",'focused end selection completed');
+ for(const [label,selector] of [['month navigation','.paper-calendar .calendar-controls>button:last-child'],['month selector','.paper-calendar .calendar-controls select'],['year input','.paper-calendar .calendar-controls input'],['start date input',startInput],['end date input',endInput]]){
+  await resetRangeMode();await click(dayCell('2026-10-05'));await settledRange('2026-10-05','2026-10-05');await escapeAt(selector);await click(dayCell('2026-10-07'));await pickedEnd();
+  const observed=await evaluate("({start:new URLSearchParams(location.search).get('updateStart'),end:new URLSearchParams(location.search).get('updateEnd'),escapes:window.__calendarEscapes})");
+  witness('Escape cancels pending two-click anchor from '+label,observed.start==='2026-10-07'&&observed.end==='2026-10-07'&&observed.escapes.every(e=>e.prevented),observed);
+ }
+ await resetRangeMode();await click(dayCell('2026-10-05'));await settledRange('2026-10-05','2026-10-05');await escapeAt('.reading-filter-card input[name=q]');await click(dayCell('2026-10-07'));await pickedEnd();
+ const unrelated=await evaluate("({start:new URLSearchParams(location.search).get('updateStart'),end:new URLSearchParams(location.search).get('updateEnd'),escapes:window.__calendarEscapes})");
+ witness('Escape in unrelated filter is not consumed and preserves pending anchor',unrelated.start==='2026-10-05'&&unrelated.end==='2026-10-07'&&unrelated.escapes.length===1&&!unrelated.escapes[0].prevented,unrelated);
+ await setInput(startInput,'2026-10-12');await setInput(endInput,'2026-10-11');await click(calendarApply);await until("document.querySelector('.paper-calendar-error')?.textContent.includes('早于')",'draft error with valid applied range');
+ const draftStatus=await evaluate("document.querySelector('.paper-calendar-status').textContent");witness('invalid unsubmitted draft does not replace valid applied range status',draftStatus==='2026-10-05 至 2026-10-07',draftStatus);
+ const componentSha256=createHash('sha256').update(await readFile('apps/web/app/components/PaperCalendar.tsx')).digest('hex'),phase=process.env.CALENDAR_PROBE_PHASE==='before'?'before':'after';
+ await writeFile(join(output,'focused-regressions-'+phase+'.json'),JSON.stringify({componentSha256,checks:focused,production:false},null,2));console.log('CALENDAR FOCUSED WITNESSES',JSON.stringify(focused));for(const w of focused)record(w.name,w.pass);
  record('no outbound services or paid receipts',outbound===0&&(await db.prepare('SELECT count(*) n FROM ai_receipts').first()).n===0);
  record('browser runtime exceptions absent',errors.length===0);
  await writeFile(join(output,'report.json'),JSON.stringify({browser:'Chrome installed on the user Windows computer, headless CDP with native input; mobile uses touch emulation',checks,errors,outbound,documentId,requests:requests.filter(r=>r.path==='/api/site/research/papers'),production:false},null,2));
