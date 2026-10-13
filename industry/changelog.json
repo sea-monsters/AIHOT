@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-13T09:59:39Z",
+  "latestVersion": "2026-10-13T12:12:38Z",
   "releases": [
+    {
+      "id": "research-debt-terminal-diagnostics-review-20261013",
+      "at": "2026-10-13T12:12:38Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "严格对应队列终态的只读评分债务诊断",
+      "body": [
+        "修正同来源、同身份及当前元数据版本的scope终态仍显示等待补全的问题。保留论文原始状态并附队列对应证据；有效ready优先，跨来源共用DOI、版本或归属漂移、多个别名均不继承终态。",
+        "计数、状态筛选与分页使用相同分类SQL；尚未入库的候选继续由元数据诊断展示，不虚增论文。未写回元数据或历史归属，也未改变收费门、供应商预算、日报与采集流程。",
+        "本次为独立review候选，324项相关回归、类型检查及原生D1诊断已通过；构建与组合证据见审查说明。未合入main、发布、修改调度或操作生产，不把终态诊断修正称为补全或补评分完成。"
+      ],
+      "sources": [
+        {
+          "label": "队列终态对应规则与隔离验证",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-debt-terminal-review.md"
+        }
+      ]
+    },
     {
       "id": "research-maintenance-origin-main-integration-20261013",
       "at": "2026-10-13T09:59:39Z",
