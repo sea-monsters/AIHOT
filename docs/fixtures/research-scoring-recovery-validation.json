@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "baseline": "f1beb562acd7fc4031e372165885cb06dcf4c6fc",
   "branch": "review/research-scoring-recovery-20261013",
-  "candidateCommit": "7e952a5d1fd1aac08592546b320a28e00b7dfc2f",
+  "candidateCommit": "693f5de828e946a141d51838d0faf1e1526919e4",
   "initialEvidenceCommit": "7e952a5d1fd1aac08592546b320a28e00b7dfc2f",
   "assurance": "Protocol records; no skill machine ledger or host interception claim",
   "fixtures": "Synthetic SQLite and Miniflare workerd/D1 only",
@@ -37,7 +37,7 @@
   "remaining": ["independent candidate review", "official hosting package in parent checkout", "real pending attribution and collector adoption inspection", "production publication and authorized selected scoring execution by parent", "PostgreSQL integration requiring separate test database"],
   "reviewHardening": {
     "baseline": "1f93c51d8ddf19523e8f3c4340d8d61b1941ec71",
-    "implementationCommit": null,
+    "implementationCommit": "693f5de828e946a141d51838d0faf1e1526919e4",
     "negativeBaseline": {"tests": 5, "failedAsExpected": 5, "serverCases": 3, "clientDiagnosticCases": 2},
     "fixes": ["post-receipt acknowledgment dispatch ownership and 110s coverage", "selected-only analysis maintenance; no unrelated paper/queue expiry", "common proven-origin gate for recovery and legacy sync", "safe sent/response operation IDs on all CLI outcomes", "stored debt classification with bounded separate semantic verification"],
     "passed": [

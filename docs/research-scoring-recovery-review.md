@@ -46,7 +46,7 @@ helper 串行执行 local recovery → metadata → ready-only scoring。恢复�
 
 ## 五项独立复核修正
 
-复核基线为 `1f93c51d8ddf19523e8f3c4340d8d61b1941ec71`。三个服务端反例和两个客户端/诊断反例在该基线全部按预期失败，随后只修正对应边界。
+复核基线为 `1f93c51d8ddf19523e8f3c4340d8d61b1941ec71`，本轮固定实现为 [693f5de828e946a141d51838d0faf1e1526919e4](https://github.com/sea-monsters/AIHOT/commit/693f5de828e946a141d51838d0faf1e1526919e4)。三个服务端反例和两个客户端/诊断反例在该基线全部按预期失败，随后只修正对应边界；后续来源固定提交仅更新审计元数据。
 
 1. 回执事务已提交而确认返回过迟时，原评分 actor 可能已失去租约，仍继续模型 fetch。现于回执确认后重新读取全库屏障、评分锁/actor、就绪版本及模型配置，并在读取返回后再次用当前时间要求 lease 与请求 deadline 均至少余 110 秒（90 秒供应商超时与 20 秒提交余量）。不满足或读取未知时返回 `dispatch_not_sent`，保留真实 pending 回执及额度预占，记录 `reservedUnsent`，未发送不计 attempted；不删除、退回额度或自动重试。延迟回执、整轮截止、短 lease、状态读取本身延迟四种反例均验证模型为 0。原生 D1 反例在回执实际提交后使旧 lease 过期，并成功接纳新 collector，再确认旧评分者不会派发。
 2. 显式 `paperIds` 不再执行全库 paper/metadata queue 到期维护；running/unknown analyses 的维护 UPDATE 也仅处理选定 ID。未选论文、队列与分析逐行保持原值。独立 ingestion recovery 仍是全局安全阶段，不以选择范围缩小全库 pending 屏障。
