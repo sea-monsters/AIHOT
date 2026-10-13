@@ -1,4 +1,5 @@
 import {captureIngestion,drainIngestion,INGEST_LIMITS} from './research-ingestion.ts';
+import {paperDateError} from './paper-date-range.ts';
 import {assertStoredRecoveryEligible,recoverIngestion,pendingWorkDiagnostics} from './research-recovery.ts';
 import {scoringDebt} from './research-scoring-debt.ts';
 import {prepareMaintenance} from './research-maintenance.ts';
@@ -322,6 +323,10 @@ async function researchApiInner(request:Request,env:any){const db=env.DB;if(!db)
  }
  if(path==='/api/site/research/papers'){
   const binds:any[]=[];let where='1=1';const publisher=u.searchParams.get('publisher')||'',topic=u.searchParams.get('topic')||'',q=(u.searchParams.get('q')||'').slice(0,200),min=Math.min(100,Math.max(0,Number(u.searchParams.get('min')??45)||0));
+  const updateStart=(u.searchParams.get('updateStart')||'').slice(0,32),updateEnd=(u.searchParams.get('updateEnd')||'').slice(0,32),invalidDateRange=paperDateError({updateStart,updateEnd});
+  // The same predicate scopes candidates, count, pagination and every sort mode.
+  if(invalidDateRange)where+=' AND 0';
+  else if(updateStart){where+=" AND date(updated_at,'+8 hours')>=? AND date(updated_at,'+8 hours')<=?";binds.push(updateStart,updateEnd);}
   const reader=['read','unread','favorite'].includes(u.searchParams.get('reader')||'')?u.searchParams.get('reader')!:'';
   if(reader){let ownerId:string;try{ownerId=owner(request,env)}catch(e){if(e instanceof AIError)return json({code:e.code},e.status);throw e}where+=(reader==='unread'?' AND NOT EXISTS':' AND EXISTS')+'(SELECT 1 FROM paper_reader_state s WHERE s.owner_id=? AND s.paper_id=research_papers.id AND s.'+(reader==='favorite'?'favorite_at':'read_at')+' IS NOT NULL)';binds.push(ownerId);}
   const activeAnalysisKey=await currentAnalysisKey(db);
@@ -338,7 +343,7 @@ async function researchApiInner(request:Request,env:any){const db=env.DB;if(!db)
   const behind=mode==='updated'&&page>1?1:0,projection=mode==='updated'?"research_papers.*,date(updated_at,'+8 hours') AS update_day":'*';
   const [countResult,pageResult]=await Promise.all([db.prepare('SELECT count(*) n FROM research_papers WHERE '+where).bind(...binds).first(),db.prepare('SELECT '+projection+' FROM research_papers WHERE '+where+' ORDER BY '+sort+' LIMIT ? OFFSET ?').bind(...binds,25+behind,(page-1)*25-behind).all()]);
   const rows=pageResult.results,previous=behind?rows.shift():null,total=countResult.n,papers=rows.map((r:any)=>mode==='updated'?{...rowPaper(r),updateDay:r.update_day}:rowPaper(r));
-  return json({papers:await attachAnalyses(db,papers,activeAnalysisKey),total,page,pageCount:Math.max(1,Math.ceil(total/25)),...(mode==='updated'?{continuesFromPrevious:!!previous&&rows.length>0&&previous.update_day===rows[0].update_day}:{}),filters:{publisher,topic,q,min,analysis,aiTopic,keyword,theme,reader,sort:mode}});
+  return json({papers:await attachAnalyses(db,papers,activeAnalysisKey),total,page,pageCount:Math.max(1,Math.ceil(total/25)),invalidDateRange,today:new Date(Date.now()+8*3600000).toISOString().slice(0,10),...(mode==='updated'?{continuesFromPrevious:!!previous&&rows.length>0&&previous.update_day===rows[0].update_day}:{}),filters:{publisher,topic,q,min,analysis,aiTopic,keyword,theme,reader,sort:mode,updateStart,updateEnd}});
  }
  if(path.startsWith('/api/site/research/papers/')){const id=path.split('/').pop();const p=await db.prepare('SELECT * FROM research_papers WHERE id=?').bind(id).first();if(!p)return json({error:'Not found'},404);const records=(await db.prepare('SELECT channel,record_url,retrieved_at FROM research_records WHERE paper_id=?').bind(id).all()).results;const changes=(await db.prepare('SELECT channel,fields_json,created_at FROM research_changes WHERE paper_id=? ORDER BY created_at DESC LIMIT 10').bind(id).all()).results;return json({...((await attachAnalyses(db,[rowPaper(p)]))[0]),records,changes});}
  return json({error:'Not found'},404);

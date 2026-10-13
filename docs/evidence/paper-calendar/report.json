@@ -1,0 +1,133 @@
+{
+  "browser": "Chrome installed on the user Windows computer, headless CDP with native input; mobile uses touch emulation",
+  "checks": [
+    "native mouse single day updates results without document reload",
+    "calendar preserves applied keyword/search/theme",
+    "pagination keeps inclusive range and continues group",
+    "date selection resets page",
+    "calendar never submits unrelated FormData or wipes its draft",
+    "manual draft edits, Enter and blur do not apply",
+    "loader and existing Form remount preserve independent draft",
+    "explicit manual apply retains current sort",
+    "reversed manual range displays error without request",
+    "incomplete draft stays unapplied",
+    "clear restores all days and preserves other filters",
+    "reverse native captured drag normalizes range and submits once",
+    "release outside calendar cancels without applying",
+    "Escape cancels an active drag",
+    "pointer cancellation clears active preview without applying",
+    "adjacent month cells support continuous native cross-month drag",
+    "month navigation does not filter",
+    "two-click alternative spans months and normalizes reverse endpoints",
+    "native keyboard Enter activates a day",
+    "native Shift click extends the anchor immediately",
+    "ordinary filter submit retains applied date fields",
+    "rapid selections discard delayed older response",
+    "native history back/forward restores applied range and list",
+    "all interactions retained the original document",
+    "in-flight response preserves newly edited draft",
+    "real emulated touch two-tap selection crosses months",
+    "mobile no horizontal overflow or nested rail scroll",
+    "calendar surfaces have no shadow",
+    "touch panning scrolls naturally without selecting dates",
+    "illegal date URL displays explicit error and zero matches",
+    "no outbound services or paid receipts",
+    "browser runtime exceptions absent"
+  ],
+  "errors": [],
+  "outbound": 0,
+  "documentId": 1791903382794.2039,
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&q=TCAD&keyword=tcad&theme=tcad&updateStart=2026-10-11&updateEnd=2026-10-11&sort=updated"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&q=TCAD&keyword=tcad&theme=tcad&updateStart=2026-10-11&updateEnd=2026-10-11&sort=updated&page=2"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&q=TCAD&keyword=tcad&theme=tcad&updateStart=2026-10-12&updateEnd=2026-10-12&sort=updated"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&q=TCAD&keyword=tcad&theme=tcad&updateStart=2026-10-12&updateEnd=2026-10-12&sort=priority"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&q=TCAD&keyword=tcad&theme=tcad&updateStart=2026-10-01&updateEnd=2026-10-11&sort=priority"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&q=TCAD&keyword=tcad&theme=tcad&sort=priority"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&q=TCAD&keyword=tcad&theme=tcad&sort=priority&updateStart=2026-10-10&updateEnd=2026-10-12"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&q=TCAD&keyword=tcad&theme=tcad&sort=priority&updateStart=2026-10-31&updateEnd=2026-11-01"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&q=TCAD&keyword=tcad&theme=tcad&sort=priority&updateStart=2026-11-02&updateEnd=2026-11-02"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&q=TCAD&keyword=tcad&theme=tcad&sort=priority&updateStart=2026-10-29&updateEnd=2026-11-02"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&q=TCAD&keyword=tcad&theme=tcad&sort=priority&updateStart=2026-10-11&updateEnd=2026-10-11"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&q=TCAD&keyword=tcad&theme=tcad&sort=priority&updateStart=2026-10-11&updateEnd=2026-10-12"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?updateStart=2026-10-11&updateEnd=2026-10-11&q=TCAD&theme=tcad&keyword=tcad&topic=&publisher=&min=0&analysis=&aiTopic=&reader=&sort=priority"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&q=TCAD&keyword=tcad&theme=tcad&sort=priority&updateStart=2026-10-10&updateEnd=2026-10-10"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&q=TCAD&keyword=tcad&theme=tcad&sort=priority&updateStart=2026-10-12&updateEnd=2026-10-12"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&q=TCAD&keyword=tcad&theme=tcad&sort=priority&updateStart=2026-10-09&updateEnd=2026-10-09"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&updateStart=2026-10-31&updateEnd=2026-10-31&sort=updated"
+    },
+    {
+      "method": "GET",
+      "path": "/api/site/research/papers",
+      "url": "/api/site/research/papers?min=0&updateStart=2026-10-31&updateEnd=2026-11-03&sort=updated"
+    }
+  ],
+  "production": false
+}

@@ -13,7 +13,7 @@ export function MonthControls({month,onMonth,yearLabel,monthLabel,yearHint,numer
     <button type="button" aria-label="下个月" disabled={month==='9999-12'} onClick={()=>onMonth(shiftMonth(month,1))}>›</button>
   </div>;
 }
-export function CalendarTable({month,caption,renderDay}:{month:string;caption:ReactNode;renderDay:(date:string)=>ReactNode}) {
-  const cells=monthGrid(month);
+export function CalendarTable({month,caption,renderDay,adjacentDays=false}:{month:string;caption:ReactNode;renderDay:(date:string)=>ReactNode;adjacentDays?:boolean}) {
+  const cells=monthGrid(month,adjacentDays);
   return <table><caption className="sr-only">{caption}</caption><thead><tr>{['一','二','三','四','五','六','日'].map(day=><th scope="col" key={day}>周{day}</th>)}</tr></thead><tbody>{Array.from({length:cells.length/7},(_,row)=><tr key={row}>{cells.slice(row*7,row*7+7).map((date,col)=><td key={col}>{date&&renderDay(date)}</td>)}</tr>)}</tbody></table>;
 }

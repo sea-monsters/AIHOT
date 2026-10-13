@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-13T12:28:17Z",
+  "latestVersion": "2026-10-13T14:52:48Z",
   "releases": [
+    {
+      "id": "paper-update-calendar-review-20261013",
+      "at": "2026-10-13T14:52:48Z",
+      "kind": "feature",
+      "basis": "record",
+      "title": "论文情报增加更新日期月历与连续范围筛选",
+      "body": [
+        "在右侧论文筛选上方增加共用月历；单选或鼠标拖选立即更新正文，手机和键盘可跨月依次选择起止日期，清除恢复全部更新日期。保持纸张浅色、暖橙、无阴影与单一页面滚动。",
+        "按论文元数据更新时间的UTC+8日期筛选，包含首尾；计数、排序和分页使用相同日期条件，并兼容关键词、主题及已有筛选。手动日期为草稿，点击筛选才应用；非法、不完整和倒序输入明确提示。",
+        "保留URL返回导航和取消/旧响应防护。本条记录为独立review候选的维护时间，不表示已经合入主分支或发布生产；实现与验证边界见审查说明。"
+      ],
+      "sources": [
+        {
+          "label": "论文月历实现与隔离验证",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/industry/changelog.json"
+        }
+      ]
+    },
     {
       "id": "research-debt-terminal-main-integration-20261013",
       "at": "2026-10-13T12:28:17Z",

@@ -12,9 +12,9 @@ export function shiftMonth(month:string,delta:number){
  if(!Number.isInteger(delta)||y<1900||y>9999)return month;
  return `${y}-${String(index%12+1).padStart(2,'0')}`;
 }
-export function monthGrid(month:string){
+export function monthGrid(month:string,adjacentDays=false){
  const [year,m]=monthParts(month),first=new Date(Date.UTC(year,m-1,1)),offset=(first.getUTCDay()+6)%7,count=new Date(Date.UTC(year,m,0)).getUTCDate();
- return Array.from({length:Math.ceil((offset+count)/7)*7},(_,i)=>{const day=i-offset+1;return day>0&&day<=count?`${month}-${String(day).padStart(2,'0')}`:null});
+ return Array.from({length:Math.ceil((offset+count)/7)*7},(_,i)=>{const day=i-offset+1;if(day>0&&day<=count)return `${month}-${String(day).padStart(2,'0')}`;if(!adjacentDays)return null;const date=new Date(Date.UTC(year,m-1,day)).toISOString().slice(0,10);return date>='1900-01-01'&&date<='9999-12-31'?date:null});
 }
 export function updateDays(releases:Pick<ChangeRelease,'at'|'kind'>[]){
  const days:Record<string,{total:number;feature:number;fix:number;upstream:number}>={};
