@@ -16,8 +16,8 @@
       ],
       "sources": [
         {
-          "label": "月历复核收尾维护记录",
-          "url": "https://github.com/sea-monsters/AIHOT/blob/main/industry/changelog.json"
+          "label": "月历复核收尾与前后证据",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/982bf2025a4ca4ad70115a681b9a094a95fd67ad/docs/paper-calendar-fix-review.md"
         }
       ]
     },
