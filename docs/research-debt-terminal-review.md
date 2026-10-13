@@ -1,5 +1,7 @@
 # 队列 scope 终态的评分债务诊断修正
 
+实现提交：`a87a40520562949c0243b95c7e2645bbd28fad55`。
+
 维护基线：`7911f633355a6bf81af40258a4ba8979b59c3f3a`。候选分支：`review/research-debt-terminal-diagnostics-20261013`。本轮仅制作独立 review 候选，未合入 main、部署、写生产数据库、补采集、调用真实供应商或模型、修改调度。
 
 ## 根因与证据
