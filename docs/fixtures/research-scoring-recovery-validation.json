@@ -34,7 +34,7 @@
   "productionWrites": false,
   "scheduleChanges": false,
   "deployment": false,
-  "remaining": ["independent candidate review", "official hosting package in parent checkout", "real pending attribution and collector adoption inspection", "production publication and authorized selected scoring execution by parent", "PostgreSQL integration requiring separate test database"],
+  "remaining": ["official hosting package in parent checkout", "real pending attribution and collector adoption inspection", "production publication and authorized selected scoring execution by parent", "PostgreSQL integration requiring separate test database"],
   "reviewHardening": {
     "baseline": "1f93c51d8ddf19523e8f3c4340d8d61b1941ec71",
     "implementationCommit": "693f5de828e946a141d51838d0faf1e1526919e4",
@@ -70,6 +70,32 @@
     "deployment": false,
     "unrelatedFullSuiteRepeated": false,
     "initialFullSuiteEvidenceOnly": "614/614 belongs to initialEvidenceCommit, not this later hardened snapshot"
+  },
+  "mainIntegration": {
+    "at": "2026-10-13T04:05:24Z",
+    "reviewCommit": "8df8be4df7c9b0697ae26c2b9717d9fca0d64644",
+    "mainBefore": "f1beb562acd7fc4031e372165885cb06dcf4c6fc",
+    "mergeCommit": "43e7f55ff53b52dc615d2e59c713293ca7e1416c",
+    "review": {"independentReviewers": 2, "mode": "static", "mergeableConfirmedByParent": true, "independentlyReran294Tests": false, "testExecutionEvidence": "implementation-side validation recorded above"},
+    "sources": ["https://github.com/sea-monsters/AIHOT/commit/43e7f55ff53b52dc615d2e59c713293ca7e1416c", "https://github.com/sea-monsters/AIHOT/commit/8df8be4df7c9b0697ae26c2b9717d9fca0d64644"],
+    "conflicts": false,
+    "mergeTreeEqualsFixedReview": true,
+    "substantiveSourceChangesAfterMerge": false,
+    "all97PriorReleasesUnchanged": true,
+    "postMergeChecks": [
+      {"command": "node --test --test-concurrency=1 --test-timeout=120000 sites/research-scoring-recovery.test.ts sites/research-client-outcomes.test.ts sites/research-pipeline.test.ts", "tests": 49, "passed": 49, "failed": 0, "cancelled": 0, "skipped": 0, "exitCode": 0},
+      {"command": "npm run check:changelog", "releases": 98, "exitCode": 0},
+      {"command": "node --test sites/changelog.test.ts", "tests": 19, "passed": 19, "failed": 0, "exitCode": 0},
+      {"command": "npm run typecheck", "exitCode": 0},
+      {"command": "npm run build -w @aihot/web", "exitCode": 0},
+      {"command": "node sites/test-scoring-recovery-worker.mjs --production", "scenarios": 1, "passed": 1, "exitCode": 0, "formalPackaging": false, "realExternalRequests": 0}
+    ],
+    "fullAffectedSuiteRerunAfterMerge": false,
+    "reason": "Reviewed source tree unchanged; focused post-merge checks are separate from the earlier implementation-side 294/294.",
+    "productionWrites": false,
+    "scheduleChanges": false,
+    "deployment": false,
+    "finalRemoteHeadEvidence": "Reported after the final normal main push; no force push."
   },
   "blocker": null
 }

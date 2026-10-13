@@ -1,8 +1,30 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-13T03:52:54Z",
+  "latestVersion": "2026-10-13T04:05:24Z",
   "releases": [
+    {
+      "id": "research-scoring-recovery-main-integration-20261013",
+      "at": "2026-10-13T04:05:24Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "评分恢复与五项边界修正合入主分支",
+      "body": [
+        "将固定审查候选8df8be4合入fork main：增加独立持久积压恢复、就绪论文评分和少量ID补评分路径，并闭合派发租约、选择范围、旧同步入口、请求标识与欠账口径五项边界。",
+        "两位独立审查对固定候选完成静态复核并给出可合并；294项受影响测试与隔离Worker验收由实现端执行，不把静态复核写成审查者独立重跑测试。合并无冲突、合并树与固定候选一致；合入后49项边界回归、19项日志测试、类型检查、Web构建与production bundle隔离路由通过，原97条历史记录保留。",
+        "保留全库积压屏障、未知付费不重放及原预算；本记录只确认源码合入，不表示Sites已发布、真实采集或补评分完成。正式包装、生产核对和获授权的补评分由后续发布流程处理。"
+      ],
+      "sources": [
+        {
+          "label": "评分恢复候选合并提交",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/43e7f55ff53b52dc615d2e59c713293ca7e1416c"
+        },
+        {
+          "label": "固定审查候选与验证边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/8df8be4df7c9b0697ae26c2b9717d9fca0d64644/docs/research-scoring-recovery-review.md"
+        }
+      ]
+    },
     {
       "id": "research-scoring-recovery-review-hardening-20261013",
       "at": "2026-10-13T03:52:54Z",
