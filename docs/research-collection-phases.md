@@ -1,5 +1,7 @@
 # HKIS 采集第一阶段：串行派发与统一补全
 
+持久积压与明确缺失评分候选见 [恢复审查](research-scoring-recovery-review.md)。该候选增加独立纯本地 recovery、原子全库 pending 屏障与每片 32 项 metadata；未知提交先回读，ready 子集可独立评分，日报完整屏障不变。候选尚未合入/发布；本文以下固定旧 SHA 的自动化建议不是当前实际调度正文，也不能据候选声明真实 collector 已采用。
+
 本合同替代 `paper-daily.md` 中旧版逐源 sync 后立即补全和 08 点直接生成日报的执行步骤。源码、测试和运行说明已经改变；真实 Site 自动化文本、调度、凭据和部署由维护者审查后另行更新。本改动不代表生产已经运行。
 
 取消与服务器阶段门控见 [恢复审查](research-cancellation-recovery.md)：旧 process 省略 cohort 仅处理当天原归属的匹配 ready 版本；采集、补全和评分在服务端原子互斥。sync 未知/取消或 finish 409 后停止依赖阶段，合作取消保留已提交证据并等待显式 reconcile。旧 refresh 手动采集不再隐式评分。

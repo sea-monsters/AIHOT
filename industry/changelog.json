@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-12T13:38:11Z",
+  "latestVersion": "2026-10-13T02:27:32Z",
   "releases": [
+    {
+      "id": "research-scoring-recovery-review-20261013",
+      "at": "2026-10-13T02:27:32Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "持久积压恢复与明确缺失评分候选",
+      "body": [
+        "保留全库持久工作安全屏障，增加独立短租约的纯本地恢复与只读归属/评分欠账诊断；评分入锁、写入和模型回执预占均核对租约、已入库与就绪版本。",
+        "元数据每片降至32项，以确认进度有限续进；已就绪论文可独立评分，未就绪者等待。补评分工具默认只读，显式选择少量ID后先本地分类，再仅处理无回执的待评估项；未知提交先回读，失败/未知付费请求不重放。",
+        "本次为独立审查候选，最终快照614/614、类型检查及隔离Worker验收通过；尚未合入或部署，也未执行真实补评分、抓取或修改调度，不把合成测试写成生产完成。"
+      ],
+      "sources": [
+        {
+          "label": "持久积压与评分恢复候选审查",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-scoring-recovery-review.md"
+        }
+      ]
+    },
     {
       "id": "research-local-finalize-main-integration-20261012",
       "at": "2026-10-12T13:38:11Z",

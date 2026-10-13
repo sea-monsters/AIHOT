@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "baseline": "f1beb562acd7fc4031e372165885cb06dcf4c6fc",
+  "branch": "review/research-scoring-recovery-20261013",
+  "candidateCommit": null,
+  "assurance": "Protocol records; no skill machine ledger or host interception claim",
+  "fixtures": "Synthetic SQLite and Miniflare workerd/D1 only",
+  "negativeBaseline": {"tests": 3, "failedAsExpected": 3, "cases": ["direct scoring with historical pending DOI update", "API precheck to processing lock race", "metadata partial blocks independent ready scoring"]},
+  "passed": [
+    {"command": "node --test --test-concurrency=1 --test-timeout=120000 sites/research-scoring-recovery.test.ts sites/research-enrichment.test.ts sites/research-pipeline.test.ts sites/research-slot.test.ts sites/research-client-outcomes.test.ts sites/research-local-finalize.test.ts sites/research-cancellation.test.ts", "tests": 98, "passed": 98, "failed": 0, "exitCode": 0, "snapshot": "final code including read-only scriptScore.available"},
+    {"command": "npm run typecheck", "exitCode": 0, "snapshot": "final code including metadata32 and scriptScore.available"},
+    {"command": "npm run build -w @aihot/web", "exitCode": 0},
+    {"command": "node sites/test-scoring-recovery-worker.mjs", "scenarios": 4, "passed": 4, "exitCode": 0, "snapshot": "after metadata32; before final read-only availability field"},
+    {"command": "node sites/test-scoring-recovery-worker.mjs --production", "scenarios": 1, "passed": 1, "exitCode": 0, "formalPackaging": false, "snapshot": "final code including metadata32 and scriptScore.available"},
+    {"command": "npm run check:changelog", "releases": 96, "exitCode": 0},
+    {"command": "node --test sites/changelog.test.ts", "tests": 19, "passed": 19, "failed": 0, "exitCode": 0},
+    {"check": "all 95 prior releases unchanged", "passed": true}
+  ],
+  "earlierRegression": {"topLevelTs": 428, "additionalNestedTsAndMjs": 186, "passed": 614, "failed": 0, "snapshot": "before metadata read cap changed from100 to32"},
+  "previousFullAttempt": {"status": "interrupted", "finalSummaryPresent": false, "processOutcomeConfirmed": false, "reason": "exec-server transport disconnected during poll; subsequent read showed incomplete log"},
+  "currentFullRegression": {"status": "passed", "command": "node --test --test-concurrency=1 --test-timeout=120000 recursive test paths from rg --files sites -g '*.test.ts' -g '*.test.mjs'", "files": 66, "tests": 614, "passed": 614, "failed": 0, "cancelled": 0, "skipped": 0, "exitCode": 0, "completedAt": "2026-10-13T02:46:55Z", "finalSummaryPresent": true, "processOutcomeConfirmed": true, "includesAffectedTests": 98, "additionalRegressionTests": 516, "snapshot": "final code including metadata32 and scriptScore.available"},
+  "nativeCosts": [
+    {"scenario": "normal recovery 83 candidates", "firstRpc": 38, "firstSql": 287, "slices": 2},
+    {"scenario": "paused recovery plus concurrent diagnostics", "firstRpc": 55, "firstSql": 315, "slices": 2},
+    {"scenario": "commit acknowledgment lost", "firstRpc": 21, "firstSql": 150, "retryBlocked": true},
+    {"scenario": "bounded metadata32", "rpc": 181, "sql": 490, "remainingCandidates": 51},
+    {"scenario": "previous metadata83", "rpc": 436, "sql": 1204, "engineering1000Assertion": "failed; cap then reduced"}
+  ],
+  "limits": {"totalMs": 540000, "actualStartRequired": true, "recoveryMs": 6000, "recoveryReserveMs": 1500, "recoveryWorkSql": 250, "recoveryLeaseMs": 15000, "recoverySlices": 4, "metadataRowsPerSlice": 32, "metadataSlices": 2, "longRequestReserveMs": 110000, "sourcePages": 2, "syncAttempts": 35, "pageAttempts": 35, "selectionIds": 3, "defaultSelectedModelPapers": 1, "modelOutputCap": 8192, "existingProviderAndDailyBudgetsRaised": false},
+  "coverage": ["cross-batch and cross-source same DOI", "DOI-less URL and long-title alias in both orders", "ambiguous identities retained", "ready/hash/revision stale", "atomic processing admission race", "collection/metadata/scoring isolation", "expired recovery and scoring lease", "local and model commit acknowledgment loss", "original firstSeen/cohort and frozen brief", "GET-only preview", "explicit selection rules/insufficient/queued distinction", "same receipt no repeated model attempt", "unknown POST only readback", "synthetic stdin credential not echoed"],
+  "realExternalRequests": 0,
+  "nativeSimulatedModelRequests": 1,
+  "productionWrites": false,
+  "scheduleChanges": false,
+  "deployment": false,
+  "remaining": ["independent candidate review", "official hosting package in parent checkout", "real pending attribution and collector adoption inspection", "production publication and authorized selected scoring execution by parent", "PostgreSQL integration requiring separate test database"],
+  "blocker": null
+}

@@ -10,7 +10,8 @@ import {processRecent} from './research-processing.ts';
 import {RESEARCH_SOURCES} from './research-config.ts';
 import {monthWindow} from './research-pipeline.ts';
 import {fromCrossref} from './research-domain.ts';
-import {runResearchSlot} from './research-slot.ts';
+import {runResearchSlot as actualSlot} from './research-slot.ts';
+const runResearchSlot=(call:any,...args:any[])=>actualSlot(async(path,body,timeout)=>{const value=await call(path,body,timeout);return path.endsWith('/ingestion/recover')&&value?.status==='ok'?{...value,recovery:{known:true,confirmed:true,remainingItems:0,processedItems:0}}:value;},...args as [8|20,()=>number,number]);
 import {collectResearch,collectResearchBatch} from './research-refresh-plan.ts';
 
 function fixture(){
@@ -43,15 +44,15 @@ test('sync cooperative cancellation at HTTP, parsing, before persistence and aft
 assert.equal(sql.prepare('SELECT count(*) n FROM research_papers').get()!.n,stage==='persist_after'?1:0);const queue=sql.prepare('SELECT * FROM research_enrichment_queue').all();assert.equal(queue.length,stage==='persist_after'?1:0);if(queue.length){assert.equal(queue[0]!.origin_run_id,run.id);assert.equal(queue[0]!.origin_batch_key,key);}assert.equal(sql.prepare('SELECT status FROM research_batches').get()!.status,'running');await assert.rejects(finishBatch(db,key));assert.equal(sql.prepare('SELECT finished_at FROM research_batches').get()!.finished_at,null);assert.equal((await reconcileBatches(db,new Date(Date.now()+700000))).closed,1);assert.equal(sql.prepare('SELECT status FROM research_batches').get()!.status,'interrupted');}finally{JSON.parse=oldParse;globalThis.fetch=oldFetch;sql.close();}}
 });
 
-test('new pipeline stops after interrupted sync, finish 409/unknown, and partial metadata deferral',async()=>{
- for(const failure of ['sync_interrupted','finish_409','finish_unknown','metadata_partial']){const paths:string[]=[];const r=await runResearchSlot(async(path)=>{paths.push(path);if(path.endsWith('/start'))return {status:'running',batchKey:'fixture',collectionControl:{nextSourceId:'source'}};if(path.endsWith('/sync'))return {status:failure==='sync_interrupted'?'interrupted':'ok',collectionControl:{stop:true}};if(path.endsWith('/finish')){if(failure==='finish_unknown')throw Error('unknown');if(failure==='finish_409')return {code:'batch_in_flight',error:'still running'};return {batchStatus:'finished'};}if(path.endsWith('/enrich'))return {status:'partial',deferred:1,reason:'provider_deferred'};return {status:'ok'};},20,()=>0);assert.ok(!paths.some(p=>p.endsWith('/process')));if(failure==='sync_interrupted')assert.ok(!paths.some(p=>p.endsWith('/finish')));if(failure.startsWith('finish'))assert.ok(!paths.some(p=>p.endsWith('/enrich')));assert.ok(['unknown','deferred','partial'].includes(r.status));}
+test('new pipeline stops after interrupted sync and finish 409/unknown; returned provider partial may score only ready evidence',async()=>{
+ for(const failure of ['sync_interrupted','finish_409','finish_unknown','metadata_partial']){const paths:string[]=[];const r=await runResearchSlot(async(path)=>{paths.push(path);if(path.endsWith('/start'))return {status:'running',batchKey:'fixture',collectionControl:{nextSourceId:'source'}};if(path.endsWith('/sync'))return {status:failure==='sync_interrupted'?'interrupted':'ok',collectionControl:{stop:true}};if(path.endsWith('/finish')){if(failure==='finish_unknown')throw Error('unknown');if(failure==='finish_409')return {code:'batch_in_flight',error:'still running'};return {batchStatus:'finished'};}if(path.endsWith('/enrich'))return {status:'partial',deferred:1,reason:'provider_deferred'};return {status:'ok'};},20,()=>0);assert.equal(paths.some(p=>p.endsWith('/process')),failure==='metadata_partial');if(failure==='sync_interrupted')assert.ok(!paths.some(p=>p.endsWith('/finish')));if(failure.startsWith('finish'))assert.ok(!paths.some(p=>p.endsWith('/enrich')));assert.ok(['unknown','deferred','partial'].includes(r.status));}
 });
 
 test('legacy source and batch orchestration stop on unknown transport without dispatching another source',async()=>{
  for(const mode of ['sources','batch']){let calls=0;const call=async()=>{calls++;throw Error('transport unknown')};const options={maxPagesPerSource:2,maxMs:330000};const r=mode==='sources'?await collectResearch([{id:'a'},{id:'b'}],call,options):await collectResearchBatch(call,options);assert.equal(calls,1);assert.equal(r[0].status,'unknown');}
 });
 
-test('confirmed terminal finish with partial coverage still allows ready maintenance, while metadata partial blocks scoring',async()=>{
+test('confirmed terminal finish with partial coverage still allows ready maintenance after explicit local recovery',async()=>{
  const paths:string[]=[];const r=await runResearchSlot(async(path)=>{paths.push(path);if(path.endsWith('/start'))return {status:'running',batchKey:'fixture',collectionControl:{stop:true}};if(path.endsWith('/finish'))return {batchStatus:'finished',status:'partial'};return {status:'ok'};},20,()=>0);assert.deepEqual(paths.slice(-2),['/api/site/research/enrich','/api/site/research/process']);assert.equal(r.status,'partial');
 });
 
