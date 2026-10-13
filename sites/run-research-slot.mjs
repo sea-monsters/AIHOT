@@ -13,6 +13,12 @@ export async function slotOutcome(response,path=''){
  return {...value,...(value.recovery&&typeof value.recovery==='object'?{recovery:{...value.recovery,confirmed:recoveryConfirmed}}:{}),...(metadataConfirmed?{metadataProgress:{confirmed:true,processedItems:value.ready+(Number.isInteger(value.abstained)&&value.abstained>0?value.abstained:0)}}:{})};
 }
 export function createResearchClient(origin,token){return async(path,body,timeoutMs)=>{const id=crypto.randomUUID();try{const result=await slotOutcome(await fetch(origin+path,{method:body===undefined?'GET':'POST',redirect:'error',headers:{'OAI-Sites-Authorization':'Bearer '+token,'Content-Type':'application/json','x-hkis-operation-id':id},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(timeoutMs)}),path.split('?')[0]);const responseId=safeOperationId(result.requestId);return {...result,requestId:responseId||id,sentRequestId:id,operationIdMismatch:!!responseId&&responseId!==id};}catch{return {status:'unknown',reason:'response_unconfirmed',requestId:id,sentRequestId:id,operationIdMismatch:false};}};}
+/** Exact verified origin only; URL normalization must not erase userinfo,
+ * paths, explicit ports or encoded input before the allowlist comparison. */
+export function verifiedSiteOrigin(baseUrl,allowedOrigins){
+ try{if(typeof baseUrl!=='string')throw Error();const url=new URL(baseUrl),origin=url.origin;if(!/^https:\/\/(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+chatgpt\.site$/.test(origin)||url.hostname.length>253||url.username||url.password||url.port||(baseUrl!==origin&&baseUrl!==origin+'/')||!Array.isArray(allowedOrigins)||!allowedOrigins.includes(origin))throw Error();return origin;}
+ catch{throw Object.assign(Error('本地Site原点校验失败；未派发请求，请核对原get_site结果与精确allowedOrigins'),{code:'invalid_site_origin'});}
+}
 export async function privateSlotMain(){
  const processStarted=Date.now();
  process.stdout.write('等待 stdin 输入私有 service JSON（终端输入不回显）。\n');
@@ -25,12 +31,12 @@ export async function privateSlotMain(){
   const data=chunk=>{if(raw&&chunk.includes('\u0003')){error();return;}text+=chunk;if(text.length>16384){error();return;}if(/[\n\r]/.test(text))end();};
   process.stdin.on('data',data);process.stdin.on('end',end);process.stdin.on('error',error);
  });
- const origin=new URL(input.baseUrl).origin;
- if(!/^https:\/\/[a-z0-9-]+\.chatgpt\.site$/.test(origin)||typeof input.token!=='string'||!input.token||!Array.isArray(input.allowedOrigins)||!input.allowedOrigins.includes(origin))throw Error('需要已核实 Site origin 及既有 service access');
+ const origin=verifiedSiteOrigin(input.baseUrl,input.allowedOrigins);
+ if(typeof input.token!=='string'||!input.token)throw Error('需要已核实 Site origin 及既有 service access');
  const hour=new Date(Date.now()+8*3600000).getUTCHours(),slot=input.slot??hour;if(![8,20].includes(slot)||slot!==hour)throw Error('只支持当前实际 UTC+08 08/20 窗口');
  const started=input.automationStartedAt==null?processStarted:Date.parse(input.automationStartedAt);
  if(!Number.isFinite(started)||started>processStarted)throw Error('Invalid automation start');
  const call=createResearchClient(origin,input.token);
  try{const result=await runResearchSlot(call,slot,Date.now,started);process.stdout.write(JSON.stringify(result).replaceAll(input.token,'[redacted]')+'\n');if(result.status==='unknown')process.exitCode=2;}finally{input.token='';}
 }
-if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)privateSlotMain().catch(()=>{process.stderr.write('执行未确认；停止派发，不重试未知请求。请回读持久状态。\n');process.exitCode=2;});
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)privateSlotMain().catch(e=>{process.stderr.write(e?.code==='invalid_site_origin'?'本地Site原点校验失败；未派发请求，请核对原get_site结果与精确allowedOrigins。\n':'执行未确认；停止派发，不重试未知请求。请回读持久状态。\n');process.exitCode=2;});

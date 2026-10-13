@@ -22,6 +22,24 @@
       ]
     },
     {
+      "id": "sites-cli-origin-review-20261013",
+      "at": "2026-10-13T04:38:12Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "采集与补评分工具支持Sites多级原点",
+      "body": [
+        "修复两个工具只接受单级chatgpt.site子域而在本地输入校验提前失败的问题，统一支持官方多级合法子域；仍要求精确匹配由get_site核实的allowedOrigins。",
+        "只接受规范HTTPS原点及可选根斜杠，拒绝userinfo、额外路径、查询、片段、显式端口和恶意后缀；原重定向禁止、请求标识、门控与预算保持。校验失败明确为本地未派发，不误报供应商失败。",
+        "本次仅独立候选审查，合成测试覆盖真实多级站点形态与攻击反例；未推main、部署或操作生产，不据本地修复宣称真实采集或全库补评分完成。"
+      ],
+      "sources": [
+        {
+          "label": "Sites工具原点校验候选审查",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/f56b38dae906e254231e86c5fec9334bb538a058/docs/sites-cli-origin-review.md"
+        }
+      ]
+    },
+    {
       "id": "research-scoring-recovery-main-integration-20261013",
       "at": "2026-10-13T04:05:24Z",
       "kind": "fix",
