@@ -2,6 +2,8 @@
 
 基线 `f1beb562acd7fc4031e372165885cb06dcf4c6fc`，独立分支 `review/research-scoring-recovery-20261013`。本次仅本地候选与合成验收；没有生产数据库写入、实际供应商/模型请求、调度修改或部署。保留日期 UI、0021/0022 迁移、既有归档与简报。本文不保存生产标识、原始运行日志或聊天内容。
 
+固定已推实现：[7e952a5d1fd1aac08592546b320a28e00b7dfc2f](https://github.com/sea-monsters/AIHOT/commit/7e952a5d1fd1aac08592546b320a28e00b7dfc2f)。该源码包含最终 614 项全套验证的代码；随后的来源固定提交仅修改审计元数据。
+
 ## 已复现根因与安全边界
 
 本批 finish 只考虑该批的 pending work，而 process 的预检检查全库。历史片段因此可在本批正常结束后继续阻挡评分；enrich 的恢复分支即使清空工作，也立即返回 partial/pending_metadata，原 helper 把所有 partial 当作不能评分。另有直接 processRecent 未检查全库 pending 的入口，以及 API 预检至 processing_lock 获取之间的竞态。精确基线上三个反例均失败。

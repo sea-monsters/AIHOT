@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "baseline": "f1beb562acd7fc4031e372165885cb06dcf4c6fc",
   "branch": "review/research-scoring-recovery-20261013",
-  "candidateCommit": null,
+  "candidateCommit": "7e952a5d1fd1aac08592546b320a28e00b7dfc2f",
   "assurance": "Protocol records; no skill machine ledger or host interception claim",
   "fixtures": "Synthetic SQLite and Miniflare workerd/D1 only",
   "negativeBaseline": {"tests": 3, "failedAsExpected": 3, "cases": ["direct scoring with historical pending DOI update", "API precheck to processing lock race", "metadata partial blocks independent ready scoring"]},
