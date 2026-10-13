@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "mainBefore": "a43272ad9c8669360fae58ad1f3ccc5751950c0d",
+  "maintenanceCandidate": "b09ad9bb23e198bd4ef9130a883938e953b70f25",
+  "cliCandidate": "7fd55a3c9664eb69c191fafa5b1160eb1b292f2d",
+  "maintenanceMerge": "b160f83ea87e47fc332df998f7928a082516c8b1",
+  "combinedMerge": "8eb38f50fbad0a42368e5b862eb1b87d2f674b7b",
+  "mergeMethod": "Normal two-parent merges; no force or candidate-file replacement",
+  "review": {
+    "mode": "independent static",
+    "maintenanceReviews": 2,
+    "cliPassed": true,
+    "testExecution": "implementation-side; no claim of independent reviewer test reruns"
+  },
+  "conflicts": [
+    "changelog top entries, resolved preserving both complete candidates and all98 prior records"
+  ],
+  "sourceIntegrity": {
+    "candidateFilesExactExceptAddedCombinationTestAndIntegrationMetadata": true,
+    "all98PriorReleasesUnchanged": true,
+    "bothCandidateReleasesUnchanged": true,
+    "allOldSqlAndSnapshotsUnchanged": true,
+    "migration23Appended": true
+  },
+  "checks": [
+    {
+      "command": "node --test sites/research-maintenance.test.ts sites/research-site-origin.test.ts",
+      "tests": 22,
+      "passed": 22,
+      "failed": 0,
+      "exitCode": 0
+    },
+    {
+      "command": "node --test --test-concurrency=1 --test-timeout=120000 research/pipeline-blocking and AI paths from rg",
+      "files": 23,
+      "tests": 316,
+      "passed": 316,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "completedAt": "2026-10-13T10:04:10Z"
+    },
+    {
+      "command": "npm run typecheck",
+      "exitCode": 0,
+      "completedAt": "2026-10-13T10:02:53Z"
+    },
+    {
+      "command": "npm run check:changelog",
+      "releases": 101,
+      "exitCode": 0
+    },
+    {
+      "command": "node --test sites/changelog.test.ts",
+      "tests": 19,
+      "passed": 19,
+      "failed": 0,
+      "exitCode": 0
+    },
+    {
+      "command": "npm run build -w @aihot/web",
+      "exitCode": 0
+    },
+    {
+      "command": "node sites/test-research-maintenance-worker.mjs",
+      "scenarios": 5,
+      "passed": 5,
+      "exitCode": 0
+    },
+    {
+      "command": "node sites/test-research-maintenance-worker.mjs --production",
+      "scenarios": 1,
+      "passed": 1,
+      "exitCode": 0,
+      "formalPackaging": false,
+      "completedAt": "2026-10-13T10:03:22Z"
+    }
+  ],
+  "combinationCase": "Actual selectedScoringMain stdin/exact multilevel origin client calls synthetic researchApi; current maintenance proof readback, one simulated model completion, second call reuses one receipt, no credential echo",
+  "nativeCounterScope": "Preview and first apply; pause/deadline include extra gated process; excludes later model SQL and raw fixture-side writes",
+  "nativeCosts": [
+    {
+      "mode": "normal",
+      "rpc": 69,
+      "sql": 81
+    },
+    {
+      "mode": "ack",
+      "rpc": 73,
+      "sql": 85
+    },
+    {
+      "mode": "pause",
+      "rpc": 82,
+      "sql": 101
+    },
+    {
+      "mode": "deadline",
+      "rpc": 82,
+      "sql": 101
+    },
+    {
+      "mode": "model",
+      "rpc": 69,
+      "sql": 81
+    }
+  ],
+  "maxNativeBoundParameters": 65,
+  "realExternalRequests": 0,
+  "productionWrites": false,
+  "deployment": false,
+  "scheduleChanged": false,
+  "migrationOrder": "Apply0023 and verify maintenance table before dependent Worker; preview1-3 IDs, apply preparation, read back readyVersionMatches/current analysis/receipt, then explicit scoring; unknown only readback, no automatic retry",
+  "notExecuted": [
+    "unrelated full suite",
+    "PostgreSQL integration",
+    "official private hosting package",
+    "production migration/publication/scoring"
+  ],
+  "remotePushEvidence": "Final exact main SHA and ls-remote consistency reported after normal push"
+}

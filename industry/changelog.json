@@ -1,8 +1,30 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-13T06:20:48Z",
+  "latestVersion": "2026-10-13T09:59:39Z",
   "releases": [
+    {
+      "id": "research-maintenance-origin-main-integration-20261013",
+      "at": "2026-10-13T09:59:39Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "维护准备与多级原点修复组合合入",
+      "body": [
+        "以正常合并整合独立静态审查通过的维护准备与CLI原点候选，保留所有原变更；仅中文日志顶部有冲突，按真实时间保留两条候选及98条历史记录，没有用候选文件整体替换主分支。",
+        "独立审查为静态复核，组合验证由实现端执行：316项受影响回归、19项日志、类型检查、Web构建、原生D1五场景及production bundle路由通过。保留原预算、月窗口、冻结报告、有效分析与未知收费门；先预览明确ID，准备后回读readyVersionMatches再选定评分，未知不自动重试。",
+        "维护证明依赖增量0023表，发布须先应用迁移，再部署依赖该表的Worker。此记录只说明源码合入与组合验收，不表示已经发布站点、修改调度或完成真实补评分。"
+      ],
+      "sources": [
+        {
+          "label": "维护准备正常合并",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/b160f83ea87e47fc332df998f7928a082516c8b1"
+        },
+        {
+          "label": "CLI原点组合合并",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/8eb38f50fbad0a42368e5b862eb1b87d2f674b7b"
+        }
+      ]
+    },
     {
       "id": "research-maintenance-ready-review-20261013",
       "at": "2026-10-13T06:20:48Z",
