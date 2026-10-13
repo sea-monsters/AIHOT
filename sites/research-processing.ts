@@ -8,6 +8,7 @@ import {preparationCohort} from './research-cohorts.ts';
 import {collectionIdle,metadataIdle,ingestionIdle,databaseNowSql,fencedRunDatabase} from './research-lifecycle.ts';
 import {pendingWorkDiagnostics} from './research-recovery.ts';
 import {scoringDebt} from './research-scoring-debt.ts';
+import {selectedReadySql,receiptSafeSql} from './research-ready.ts';
 import {PIPELINE_VERSION,ANALYSIS_SCHEMA,MAX_ASSESSMENT_INPUT_BYTES,monthWindow,inUpdateWindow,digest,analysisFields,analysisGate,configurationFields,ASSESSMENT_SYSTEM,assessmentInput,parseAssessment} from './research-pipeline.ts';
 const stamp=()=>new Date().toISOString();
 const parse=(s:any,fallback:any={})=>{try{return JSON.parse(s)}catch{return fallback}};
@@ -60,7 +61,7 @@ export async function processRecent(rawDb:any,env:any,body:any={},request?:Reque
  const maxMs=Math.min(PROCESSING_LIMITS.requestMs,Math.max(1,Math.min(Number(body.maxMs??PROCESSING_LIMITS.requestMs),body.deadlineAt===undefined?Infinity:Date.parse(body.deadlineAt)-requestStarted)));
  // Old callers omit cohort: retain the body shape, but never spend on an
  // unbounded legacy/month backlog. Only this cohort's current ready version.
- const today=new Date(Date.now()+8*3600000).toISOString().slice(0,10),day=body.cohort==='previous_day'?await preparationCohort(db,today):today;const cohortGate=selected?" AND p.id IN (SELECT value FROM json_each(?)) AND EXISTS(SELECT 1 FROM research_ready_evidence e WHERE e.paper_id=p.id AND e.content_hash=p.content_hash) AND NOT EXISTS(SELECT 1 FROM research_analyses prior JOIN ai_receipts receipt ON receipt.id=prior.request_id||':0' WHERE prior.paper_id=p.id AND prior.status IN ('failed','unknown','running'))":" AND EXISTS(SELECT 1 FROM research_ready_evidence e WHERE e.paper_id=p.id AND e.content_hash=p.content_hash AND e.daily_cohort_key IN (?,?))";const cohortArgs=selected?[JSON.stringify([...new Set(selected)])]:[day+'/08',day+'/20'];
+ const today=new Date(Date.now()+8*3600000).toISOString().slice(0,10),day=body.cohort==='previous_day'?await preparationCohort(db,today):today;const cohortGate=selected?" AND p.id IN (SELECT value FROM json_each(?)) AND "+selectedReadySql()+" AND NOT EXISTS(SELECT 1 FROM research_analyses prior JOIN ai_receipts receipt ON receipt.id=prior.request_id||':0' WHERE prior.paper_id=p.id AND (prior.status IN ('failed','unknown','running') OR receipt.status IN ('pending','unknown')))":" AND EXISTS(SELECT 1 FROM research_ready_evidence e WHERE e.paper_id=p.id AND e.content_hash=p.content_hash AND e.daily_cohort_key IN (?,?))";const cohortArgs=selected?[JSON.stringify([...new Set(selected)])]:[day+'/08',day+'/20'];
  const started=new Date(requestStarted).toISOString(),runId=crypto.randomUUID(),until=new Date(Date.now()+6*60000).toISOString(),expires=until+'|'+runId;
  // The global work barrier belongs to the atomic lock claim, not a preflight.
  const lock=await rawDb.batch([
@@ -96,7 +97,7 @@ export async function processRecent(rawDb:any,env:any,body:any={},request?:Reque
    const p=rowPaper(row);if(!inUpdateWindow(p,window))continue;
    // Read enable/revision again before each attempt; providerCall repeats this check at receipt creation.
    const current=await processingConfig(db,env,request);if(current.revision!==config.revision||eligibility(current,env)){result.blocked='configuration_changed';result.status='blocked';break;}
-   const versionGuard={sql:`EXISTS(SELECT 1 FROM research_papers p JOIN research_ready_evidence e ON e.paper_id=p.id AND e.content_hash=p.content_hash WHERE p.id=? AND p.content_hash=? AND p.metadata_status IN ('ready','legacy_ready') AND p.metadata_revision IS ? AND p.updated_at=? AND p.provenance_json=?)`,args:[row.id,row.assessment_hash,row.metadata_revision,row.updated_at,row.provenance_json]};
+   const versionGuard={sql:`EXISTS(SELECT 1 FROM research_papers p WHERE ${selected?selectedReadySql():"EXISTS(SELECT 1 FROM research_ready_evidence e WHERE e.paper_id=p.id AND e.content_hash=p.content_hash)"} AND p.id=? AND p.content_hash=? AND p.metadata_status IN ('ready','legacy_ready') AND p.metadata_revision IS ? AND p.updated_at=? AND p.provenance_json=? ${selected?" AND "+receiptSafeSql("p",true):""})`,args:[row.id,row.assessment_hash,row.metadata_revision,row.updated_at,row.provenance_json,...(selected?[row.analysis_id]:[])]};
    const fresh=await db.prepare(`SELECT (${leaseGuard.sql} AND ${versionGuard.sql}) valid`).bind(...leaseGuard.args,...versionGuard.args).first();if(!fresh.valid||await digest(analysisFields(p))!==row.assessment_hash){result.deferred++;result.blocked='scoring_state_changed';break;}
    const requestId='paper:'+row.analysis_id;
    const claimed=await db.prepare(`UPDATE research_analyses SET status='running',request_id=?,updated_at=? WHERE id=? AND status='queued' AND ${versionGuard.sql}`).bind(requestId,stamp(),row.analysis_id,...versionGuard.args).run();if(!claimed.meta?.changes){result.deferred++;continue;}
