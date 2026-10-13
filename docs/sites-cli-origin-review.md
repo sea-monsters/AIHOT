@@ -2,6 +2,8 @@
 
 基线 `a43272ad9c8669360fae58ad1f3ccc5751950c0d`，独立分支 `review/sites-cli-origin-20261013`。本轮只修正两个CLI的本地原点校验，不修改生产、供应商、模型、批次归属、评分规则或预算。本说明不保存真实站点主机名、运行统计、论文标识或凭证。
 
+固定实现为 [f56b38dae906e254231e86c5fec9334bb538a058](https://github.com/sea-monsters/AIHOT/commit/f56b38dae906e254231e86c5fec9334bb538a058)；后续来源固定提交只补审计元数据。
+
 两个CLI原先先取 `new URL(baseUrl).origin`，再用仅允许一个标签的正则校验。因此官方Sites的双标签主机形态会在fetch之前失败；两个真实CLI函数反例在基线上均失败，测试总数2、通过0、失败2。该失败是本地输入校验，不能据此判定供应商失败、模型未知或已生成回执。先取origin也会抹去userinfo、路径等输入，故仅扩大正则不足以满足原点约束。
 
 `run-research-slot.mjs` 新增两CLI共用的 `verifiedSiteOrigin`：接受一层或多层合法ASCII DNS标签，单标签最多63字符、主机最多253字符、必须精确以 `.chatgpt.site` 结尾且使用HTTPS。输入必须等于解析后的规范origin或该origin加根斜杠；userinfo、额外路径/查询/片段、显式端口（包括显式443）、转义及会被URL解析器改写的输入均拒绝。`allowedOrigins` 继续以严格字符串成员比较，不能用通配、前缀、后缀或相似主机代替官方get_site新返回的准确原点。工具不自行推断原点、不联网重建白名单。
