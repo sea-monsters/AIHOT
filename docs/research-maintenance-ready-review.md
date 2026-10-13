@@ -2,6 +2,8 @@
 
 基线 `a43272ad9c8669360fae58ad1f3ccc5751950c0d`，分支 `review/research-maintenance-ready-20261013`。仅候选审查，未合入、部署或操作生产。与独立CLI原点修复分开提交；本文不保存真实运行统计、站点身份、论文ID或凭证。
 
+固定实现为 [3f4fde1c81de1d7ded29c76976e1705eb616a26b](https://github.com/sea-monsters/AIHOT/commit/3f4fde1c81de1d7ded29c76976e1705eb616a26b)。后续来源固定提交仅更新审计元数据，结构化事实见 [验收JSON](fixtures/research-maintenance-ready-validation.json)。
+
 原 `legacy_unattributed` 只说明缺原 ready，不能据此判断缺脚本分、没有有效分析或可以再次付费。原 ready 表的 cohort 为非空，既有 enrich 也不能任意按ID晋升 legacy。新增增量迁移0023仅创建 `research_maintenance_ready` 和索引；无历史回填或旧表重建。该证明记录本次真实维护运行、ready时点、当前hash/修订/实体及来源记录，没有batch/cohort字段。发布时须先应用该增量迁移，再运行依赖此表的Worker；本轮没有执行生产迁移。
 
 `GET /api/site/research/maintenance/prepare?paperIds=id1,id2` 为默认只读预览，`POST` 省略apply也只读。两个路径在旧初始化修复之前处理，不触发读侧修复、actor、配额、供应商或模型。与现有process一致核对唯一所有者配置和已有身份；浏览器POST仍校验origin/请求标记。输入只收paperIds、apply、maxMs、deadlineAt，最多3个明确ID；apply须显式true。请求最多6秒，留1.5秒收尾，独立15秒metadata lease；数据库时钟同时限制lease和请求截止。

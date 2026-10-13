@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "baseline": "a43272ad9c8669360fae58ad1f3ccc5751950c0d",
   "branch": "review/research-maintenance-ready-20261013",
-  "implementationCommit": null,
+  "implementationCommit": "3f4fde1c81de1d7ded29c76976e1705eb616a26b",
   "assurance": "Implementation-side SQLite and real workerd/D1 protocol evidence; independent review pending; no host interception or machine ledger claim",
   "scope": "Explicit 1-3 stored paper IDs; query-only preview; local script normalization and current maintenance proof; no collection membership fabrication",
   "migration": {"number": 23, "file": "drizzle/0023_maintenance_ready.sql", "newTable": "research_maintenance_ready", "existingSqlAndSnapshotsUnchanged": true, "oldJournalEntriesUnchanged": true, "productionApplied": false},
