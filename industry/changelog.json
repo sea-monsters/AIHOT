@@ -1,8 +1,44 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-12T13:38:11Z",
+  "latestVersion": "2026-10-13T03:52:54Z",
   "releases": [
+    {
+      "id": "research-scoring-recovery-review-hardening-20261013",
+      "at": "2026-10-13T03:52:54Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "评分派发前重验租约并收紧选择范围",
+      "body": [
+        "模型回执提交后再次核对评分租约、证据和110秒剩余量；确认过迟或状态未确认时保留预占回执，明确未发送模型，不自动重放。",
+        "显式选择论文时限制分析维护范围，避免修改未选论文及元数据队列；旧同步入口采用相同来源证明，未知恢复运行或未知片段不再绕过核对。",
+        "补评分工具保留安全请求标识，欠账计数与筛选统一按已存状态，返回项另列语义版本核对结果。本次仅独立审查候选，未部署、修改生产或执行真实补评分。"
+      ],
+      "sources": [
+        {
+          "label": "评分恢复五项边界复核",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/693f5de828e946a141d51838d0faf1e1526919e4/docs/research-scoring-recovery-review.md"
+        }
+      ]
+    },
+    {
+      "id": "research-scoring-recovery-review-20261013",
+      "at": "2026-10-13T02:27:32Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "持久积压恢复与明确缺失评分候选",
+      "body": [
+        "保留全库持久工作安全屏障，增加独立短租约的纯本地恢复与只读归属/评分欠账诊断；评分入锁、写入和模型回执预占均核对租约、已入库与就绪版本。",
+        "元数据每片降至32项，以确认进度有限续进；已就绪论文可独立评分，未就绪者等待。补评分工具默认只读，显式选择少量ID后先本地分类，再仅处理无回执的待评估项；未知提交先回读，失败/未知付费请求不重放。",
+        "本次为独立审查候选，最终快照614/614、类型检查及隔离Worker验收通过；尚未合入或部署，也未执行真实补评分、抓取或修改调度，不把合成测试写成生产完成。"
+      ],
+      "sources": [
+        {
+          "label": "持久积压与评分恢复候选审查",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/7e952a5d1fd1aac08592546b320a28e00b7dfc2f/docs/research-scoring-recovery-review.md"
+        }
+      ]
+    },
     {
       "id": "research-local-finalize-main-integration-20261012",
       "at": "2026-10-12T13:38:11Z",

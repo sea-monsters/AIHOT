@@ -11,6 +11,7 @@ export function batchLifecycle(batch:any,at=new Date()){
 // Used inside the terminal CAS: admission and close both consult batch.status
 // in their write transaction, rather than relying on an earlier SELECT.
 export const databaseNowSql="strftime('%Y-%m-%dT%H:%M:%fZ','now')";
+export const ingestionIdle="NOT EXISTS(SELECT 1 FROM research_ingestion_work WHERE status='pending')";
 export const processingIdle=`NOT EXISTS(SELECT 1 FROM research_settings WHERE key='processing_lock' AND value>=${databaseNowSql})`;
 export const finalizingAdmissionOpen=`NOT EXISTS(SELECT 1 FROM research_settings l JOIN research_batches b ON l.key='batch-finalizing:'||b.key WHERE b.status='running') AND NOT EXISTS(SELECT 1 FROM research_settings WHERE key='lock:__finalize__' AND value>=${databaseNowSql})`;
 export const collectionIdle=`NOT EXISTS(SELECT 1 FROM research_batches WHERE status='running') AND NOT EXISTS(SELECT 1 FROM research_runs WHERE status='running' AND phase='collection' AND coalesce(lease_until,strftime('%Y-%m-%dT%H:%M:%fZ',started_at,'+10 minutes'))>${databaseNowSql}) AND NOT EXISTS(SELECT 1 FROM research_settings WHERE key LIKE 'lock:%' AND key<>'lock:__metadata__' AND value>=${databaseNowSql})`;
@@ -44,14 +45,15 @@ export async function admitRun(db:any,sourceId:string,batchKey:string|null,entry
  * SQLite RAISE(ABORT) rolls back the whole D1 batch if ownership is lost.
  * The database clock prevents a delayed transaction using an old client time.
  */
-export function fencedRunDatabase(db:any,runId:string,signal?:AbortSignal){
+export function fencedRunDatabase(db:any,runId:string,signal?:AbortSignal,guard?:{sql:string;args:any[]}){
  // D1PreparedStatement itself has a raw() method. Track only our wrappers;
  // inspecting a property named raw would turn real Worker statements into functions.
  const originals=new WeakMap<object,any>(),unwrap=(s:any)=>originals.get(s)||s;
  const batch=async(statements:any[])=>{
   try{
    checkCollectionCancellation(signal);
-   const result=await db.batch([db.prepare('INSERT INTO research_run_write_guards(run_id) VALUES(?)').bind(runId),...statements.map(unwrap),db.prepare('DELETE FROM research_run_write_guards WHERE run_id=?').bind(runId)]);
+   const fence=guard?db.prepare(`INSERT INTO research_run_write_guards(run_id) SELECT CASE WHEN (${guard.sql}) THEN ? ELSE '__invalid_processing_fence__' END`).bind(...guard.args,runId):db.prepare('INSERT INTO research_run_write_guards(run_id) VALUES(?)').bind(runId);
+   const result=await db.batch([fence,...statements.map(unwrap),db.prepare('DELETE FROM research_run_write_guards WHERE run_id=?').bind(runId)]);
    // Submitted transactions may commit before cancellation is observed. Retain
    // that atomic evidence; stop before the next transaction or HTTP dispatch.
    checkCollectionCancellation(signal);
