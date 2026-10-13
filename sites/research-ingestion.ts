@@ -4,6 +4,7 @@ import {dailyCohortKey} from './research-attribution.ts';
 import {normalizeDoi,normalizedTitle} from './research-domain.ts';
 import {digest} from './research-pipeline.ts';
 import {checkCollectionCancellation} from './research-lifecycle.ts';
+import {assertStoredRecoveryEligible} from './research-recovery.ts';
 import type {OperationTrace} from './research-operations.ts';
 export const INGEST_LIMITS={records:20,payloadBytes:131072,rows:512,statements:600,requestMs:20000,finishReserveMs:3000};
 const parse=(s:any)=>JSON.parse(s),stamp=()=>new Date().toISOString();
@@ -63,6 +64,7 @@ function collapseEntries(papers:any[],entries:any[]){
 /** All paper, queue, membership, record and work versions are checked inside
  * one original run-fenced transaction. Only explicit CAS conflicts retry. */
 export async function drainIngestion(db:any,runId:string,trace:OperationTrace,deadline:number,sourceId?:string,signal?:AbortSignal,limits:{batchKey?:string;statementLimit?:number;reserveMs?:number}={}){
+ await assertStoredRecoveryEligible(db,sourceId,runId);
  const where=(sourceId?' AND source_id=?':'')+(limits.batchKey?' AND origin_batch_key=?':''),args=[...(sourceId?[sourceId]:[]),...(limits.batchKey?[limits.batchKey]:[])],reserve=limits.reserveMs??INGEST_LIMITS.finishReserveMs,statementLimit=Math.min(INGEST_LIMITS.statements,limits.statementLimit??INGEST_LIMITS.statements);
  const rows=(await db.prepare("SELECT * FROM research_ingestion_work WHERE status='pending'"+where+' ORDER BY observed_at,group_id,ordinal LIMIT 32').bind(...args).all()).results;
  let used=trace.workStatements,added=0,updated=0,processed=0,identityAmbiguous=0;const completed:any[]=[];

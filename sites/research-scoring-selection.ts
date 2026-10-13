@@ -1,10 +1,11 @@
 type Call=(path:string,body?:any,timeoutMs?:number)=>Promise<any>;
+const safeOperationId=(v:any)=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)?v.toLowerCase():null;
 const blocked=(v:any)=>!v||!!v.code||!!v.error||['unknown','deferred','blocked','busy','failed','error'].includes(v.status);
 /** Explicit IDs only. Preview is GET-only; apply never supplements metadata or retries a model POST. */
 export async function runSelectedScoring(call:Call,paperIds:string[],options:{apply?:boolean;maxPapers?:number}={},now=Date.now,started=now()){
  if(!Array.isArray(paperIds)||paperIds.length<1||paperIds.length>3||paperIds.some(id=>typeof id!=='string'||!/^[-a-zA-Z0-9:_]{1,100}$/.test(id))||options.maxPapers!==undefined&&(!Number.isInteger(options.maxPapers)||options.maxPapers<1||options.maxPapers>3))throw Error('明确选择1–3个论文ID，maxPapers为1–3');
  const selected=[...new Set(paperIds)],deadline=started+540000,remaining=()=>Math.max(0,deadline-now()),steps:any[]=[];
- const invoke=async(phase:string,path:string,body?:any,limit=15000)=>{if(remaining()<limit){steps.push({phase,status:'deferred',reason:'deadline'});return {status:'deferred',reason:'deadline'};}try{const v=await call(path,body,Math.min(limit,remaining()));steps.push({phase,status:v?.status||'ok',reason:v?.reason||v?.blocked||v?.code||null,attempted:v?.attempted||0,completed:v?.completed||0});return v}catch{steps.push({phase,status:'unknown'});return {status:'unknown'};}};
+ const invoke=async(phase:string,path:string,body?:any,limit=15000)=>{if(remaining()<limit){steps.push({phase,status:'deferred',reason:'deadline'});return {status:'deferred',reason:'deadline'};}try{const v=await call(path,body,Math.min(limit,remaining()));steps.push({phase,status:v?.status||'ok',reason:v?.reason||v?.blocked||v?.code||null,attempted:v?.attempted||0,completed:v?.completed||0,requestId:safeOperationId(v?.requestId),sentRequestId:safeOperationId(v?.sentRequestId),operationIdMismatch:v?.operationIdMismatch===true});return v}catch{steps.push({phase,status:'unknown',requestId:null,sentRequestId:null,operationIdMismatch:false});return {status:'unknown'};}};
  const diagnosticPath='/api/site/research/processing?limit=3&paperIds='+encodeURIComponent(selected.join(','));
  const inspect=()=>invoke('inspect',diagnosticPath);
  const summary=(v:any)=>({pendingIngestion:v?.pendingIngestion||null,scoringDebt:v?.scoringDebt||null,callsToday:v?.callsToday??null,dailyLimit:v?.dailyLimit??null,eligible:v?.eligible??false,blocked:v?.blocked||null});

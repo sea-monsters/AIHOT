@@ -3,6 +3,7 @@
   "baseline": "f1beb562acd7fc4031e372165885cb06dcf4c6fc",
   "branch": "review/research-scoring-recovery-20261013",
   "candidateCommit": "7e952a5d1fd1aac08592546b320a28e00b7dfc2f",
+  "initialEvidenceCommit": "7e952a5d1fd1aac08592546b320a28e00b7dfc2f",
   "assurance": "Protocol records; no skill machine ledger or host interception claim",
   "fixtures": "Synthetic SQLite and Miniflare workerd/D1 only",
   "negativeBaseline": {"tests": 3, "failedAsExpected": 3, "cases": ["direct scoring with historical pending DOI update", "API precheck to processing lock race", "metadata partial blocks independent ready scoring"]},
@@ -34,5 +35,41 @@
   "scheduleChanges": false,
   "deployment": false,
   "remaining": ["independent candidate review", "official hosting package in parent checkout", "real pending attribution and collector adoption inspection", "production publication and authorized selected scoring execution by parent", "PostgreSQL integration requiring separate test database"],
+  "reviewHardening": {
+    "baseline": "1f93c51d8ddf19523e8f3c4340d8d61b1941ec71",
+    "implementationCommit": null,
+    "negativeBaseline": {"tests": 5, "failedAsExpected": 5, "serverCases": 3, "clientDiagnosticCases": 2},
+    "fixes": ["post-receipt acknowledgment dispatch ownership and 110s coverage", "selected-only analysis maintenance; no unrelated paper/queue expiry", "common proven-origin gate for recovery and legacy sync", "safe sent/response operation IDs on all CLI outcomes", "stored debt classification with bounded separate semantic verification"],
+    "passed": [
+      {"command": "node --test --test-concurrency=1 --test-timeout=120000 research/pipeline-blocking and ai test paths from rg", "files": 21, "tests": 294, "passed": 294, "failed": 0, "cancelled": 0, "skipped": 0, "exitCode": 0, "completedAt": "2026-10-13T03:54:07Z"},
+      {"check": "policy subset including original 150 RSS RPC upper bound and unknown origin stop", "tests": 43, "passed": 43, "exitCode": 0, "includedInAffectedCombination": true},
+      {"check": "recovery/client/pipeline combination", "tests": 49, "passed": 49, "exitCode": 0, "includedInAffectedCombination": true},
+      {"command": "npm run typecheck", "exitCode": 0, "completedAt": "2026-10-13T03:52:51Z"},
+      {"command": "node sites/test-scoring-recovery-worker.mjs", "scenarios": 5, "passed": 5, "exitCode": 0, "completedAt": "2026-10-13T03:53:11Z"},
+      {"command": "node sites/test-scoring-recovery-worker.mjs --production", "scenarios": 1, "passed": 1, "exitCode": 0, "formalPackaging": false, "completedAt": "2026-10-13T03:54:08Z"},
+      {"command": "npm run build -w @aihot/web", "exitCode": 0, "completedAt": "2026-10-13T03:54:56Z"},
+      {"command": "npm run check:changelog", "releases": 97, "exitCode": 0},
+      {"command": "node --test sites/changelog.test.ts", "tests": 19, "passed": 19, "failed": 0, "exitCode": 0}
+    ],
+    "nativeCosts": [
+      {"scenario": "normal", "firstRpc": 39, "firstSql": 288, "slices": 2, "models": 0},
+      {"scenario": "pause", "firstRpc": 56, "firstSql": 316, "slices": 2, "models": 0},
+      {"scenario": "ack", "firstRpc": 22, "firstSql": 151, "retryBlocked": true, "models": 0},
+      {"scenario": "model", "firstRpc": 39, "firstSql": 288, "slices": 2, "models": 1, "simulatedOnly": true},
+      {"scenario": "dispatch-ack", "firstRpc": 39, "firstSql": 288, "slices": 2, "models": 0, "receiptCommitted": true, "freshCollectorAdmittedBeforeOldAckReturned": true, "receiptRetained": true, "attempted": 0, "reservedUnsent": 1, "retryBlocked": true},
+      {"scenario": "metadata32", "rpc": 181, "sql": 490}
+    ],
+    "dispatchCoverage": ["lease expired after actual receipt commit", "deadline elapsed after receipt acknowledgment", "lease remaining below 110s", "ownership read acknowledgment delayed beyond lease/deadline"],
+    "oracleChange": "Old generic checkpoint acknowledgment failure remains unknown; subsequent legacy sync must stop with retained pending evidence and unchanged watermark, instead of automatically retrying an unconfirmed origin. Original RPC limit unchanged.",
+    "correctedValidationFailure": "Initial changelog source used a review branch path unsupported by the existing validator; fixed to its supported maintenance-source format without changing the validator, then 19/19 passed. Final metadata pins the actual implementation SHA.",
+    "all96PriorReleasesUnchanged": true,
+    "realExternalRequests": 0,
+    "productionWrites": false,
+    "mainChanged": false,
+    "scheduleChanges": false,
+    "deployment": false,
+    "unrelatedFullSuiteRepeated": false,
+    "initialFullSuiteEvidenceOnly": "614/614 belongs to initialEvidenceCommit, not this later hardened snapshot"
+  },
   "blocker": null
 }

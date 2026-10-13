@@ -1,5 +1,5 @@
 import {captureIngestion,drainIngestion,INGEST_LIMITS} from './research-ingestion.ts';
-import {recoverIngestion,pendingWorkDiagnostics} from './research-recovery.ts';
+import {assertStoredRecoveryEligible,recoverIngestion,pendingWorkDiagnostics} from './research-recovery.ts';
 import {scoringDebt} from './research-scoring-debt.ts';
 import {OperationTrace,operationFailure,operationCall,operationRequestId,operationReason} from './research-operations.ts';
 import {METADATA_READ_LIMIT,queueMetadata,enrichMetadata} from './research-enrichment.ts';
@@ -186,6 +186,7 @@ export async function syncSource(db:any,s:JournalSource,maxPages=1,batchKey:stri
  }
  if(!batchKey&&entryPoint==='service'){const plan=await intervalPlan(db,new Date(started)),due=plan.sources.find(p=>p.id===s.id);if(!plan.value.verified)return {sourceId:s.id,status:'interval_owner_ambiguous',pending:false};if(!due?.due)return {sourceId:s.id,status:'not_due',pending:false,interval:due}}
  const deadline=Math.min(Date.now()+Math.min(INGEST_LIMITS.requestMs,requestMs),control.deadlineAt?Date.parse(control.deadlineAt):Infinity),rawDb=db;
+ try{await assertStoredRecoveryEligible(rawDb,s.id)}catch(e){if(!(e instanceof AIError))throw e;return {sourceId:s.id,status:'deferred',deferredReason:e.code,pending:true,crossrefPages:[],collectionControl:{...control,stop:true,reason:e.code,nextAction:'readback_reconcile'}};}
  const admission=await admitRun(rawDb,s.id,batchKey,entryPoint,started);if(!admission){if(batchKey&&control.pass==='head')await rawDb.prepare('INSERT OR IGNORE INTO research_settings(key,value) VALUES(?,?)').bind('head-deferred:'+batchKey+':'+s.id,'lock_busy').run();await phaseEvent(rawDb,{sourceId:s.id,batchKey,phase:'collection'},phaseTiming(started),'lock_busy');return {sourceId:s.id,status:'deferred',deferredReason:'lock_busy',pending:true,message:'This source is already refreshing or batch is closed',collectionControl:await collectionControl(rawDb,batchKey)};}
  const timing=phaseTiming(started),runId=admission.id,lockKey=admission.key,expires=admission.lockValue;db=fencedRunDatabase(rawDb,runId,signal);db.cleanup=fencedRunDatabase(rawDb,runId);
  const trace=existingTrace||new OperationTrace(rawDb,batchKey,s.id,deadline);trace.deadline=Math.min(trace.deadline,deadline);trace.legacyCollection=true;

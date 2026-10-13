@@ -4,7 +4,7 @@ import {AIError,endpoint,unseal,stripSecrets,redactPayload,KIMI_CODE_ENDPOINT,va
 import {stamp} from './settings.ts';
 import {TOOL_DEFS} from './tools.ts';
 /** D1 implementation of the receipt + budget gate. Every provider attempt is recorded before sending; uncertain attempts are never automatically replayed. */
-export async function providerCall(db:any,id:string,config:any,env:any,requestId:string,round:number,input:any[],purpose='chat',options:{allowTools?:boolean;maxOutputTokens?:number;claimGuard?:{sql:string;args:any[]}}={}){
+export async function providerCall(db:any,id:string,config:any,env:any,requestId:string,round:number,input:any[],purpose='chat',options:{allowTools?:boolean;maxOutputTokens?:number;claimGuard?:{sql:string;args:any[]};dispatchGuard?:()=>Promise<{valid:boolean;leaseUntil:string|null;deadlineAt:number}>}={}){
  // Coding-plan access is personal and interactive only, never a background batch provider.
  if(config.endpoint===KIMI_CODE_ENDPOINT&&!['chat','test'].includes(purpose))throw new AIError('interactive_only',403,'Kimi Code 仅用于本人主动发起的对话或测试，不能用于无人值守的批量分析管线；自动分析需另选支持该用途的 API');
  // Reject an invalid stored budget before credentials, receipts, or network; never clamp or raise it.
@@ -19,9 +19,14 @@ export async function providerCall(db:any,id:string,config:any,env:any,requestId
  const payload:any=responses?{model:config.model,input,reasoning:{effort:config.reasoning},max_output_tokens:maxTokens,store:false,tools:defs.map(d=>({type:'function',...d,strict:true})),parallel_tool_calls:false}:{model:config.model,messages:input,reasoning_effort:config.reasoning,max_completion_tokens:maxTokens,store:false,tools:defs.map(d=>({type:'function',function:{...d,strict:true}})),parallel_tool_calls:false};
  if(options.allowTools===false)payload.tool_choice='none';
  if(responses&&config.endpoint==='https://api.openai.com/v1')payload.include=['reasoning.encrypted_content'];
+ const body=JSON.stringify(payload);
+ // Receipt commit and its acknowledgment can be far apart. Re-read ownership
+ // after that acknowledgment, then check time again after the read returns.
+ // Keep the real reservation if dispatch is no longer safe; never replay it.
+ if(options.dispatchGuard){let state:any;try{state=await options.dispatchGuard()}catch{throw new AIError('dispatch_not_sent',409,'派发前状态未确认，回执保留；未发送模型，先回读核对，不自动重试');}if(state?.valid!==true||!Number.isFinite(state.deadlineAt)||!Number.isFinite(Date.parse(state.leaseUntil||''))||Math.min(state.deadlineAt,Date.parse(state.leaseUntil))-Date.now()<110000)throw new AIError('dispatch_not_sent',409,'评分租约、证据或剩余时限不足，回执保留；未发送模型，不自动重试');}
  const started=Date.now();let received=false,httpStatus:number|null=null,providerRequestId:string|null=null,phase="connect",responseInfo:any={};
  try{
-  const response=await fetch(config.endpoint+(responses?'/responses':'/chat/completions'),{method:'POST',headers:{'Content-Type':'application/json','User-Agent':'HKIS/1.0 (personal research assistant)',Authorization:`Bearer ${secret}`},body:JSON.stringify(payload),redirect:'manual',signal:AbortSignal.timeout(90000)});
+  const response=await fetch(config.endpoint+(responses?'/responses':'/chat/completions'),{method:'POST',headers:{'Content-Type':'application/json','User-Agent':'HKIS/1.0 (personal research assistant)',Authorization:`Bearer ${secret}`},body,redirect:'manual',signal:AbortSignal.timeout(90000)});
   httpStatus=response.status;phase='read_response';responseInfo=responseMetadata(response);
   if(response.status>=300&&response.status<400)throw new AIError('provider_redirect',502,'供应商返回重定向，已停止请求；不会将凭证转发到其他地址，请检查接入点');
   const responseId=response.headers.get('x-request-id')||response.headers.get('request-id');

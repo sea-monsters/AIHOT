@@ -2,7 +2,7 @@
 
 基线 `f1beb562acd7fc4031e372165885cb06dcf4c6fc`，独立分支 `review/research-scoring-recovery-20261013`。本次仅本地候选与合成验收；没有生产数据库写入、实际供应商/模型请求、调度修改或部署。保留日期 UI、0021/0022 迁移、既有归档与简报。本文不保存生产标识、原始运行日志或聊天内容。
 
-固定已推实现：[7e952a5d1fd1aac08592546b320a28e00b7dfc2f](https://github.com/sea-monsters/AIHOT/commit/7e952a5d1fd1aac08592546b320a28e00b7dfc2f)。该源码包含最终 614 项全套验证的代码；随后的来源固定提交仅修改审计元数据。
+初版固定已推实现：[7e952a5d1fd1aac08592546b320a28e00b7dfc2f](https://github.com/sea-monsters/AIHOT/commit/7e952a5d1fd1aac08592546b320a28e00b7dfc2f)，元数据提交为 `1f93c51d8ddf19523e8f3c4340d8d61b1941ec71`。614 项全套证据属于该初版。后续五项复核修正及其单独验证见文末，不把初版全套结果写成后续源码已重跑全套。
 
 ## 已复现根因与安全边界
 
@@ -43,3 +43,17 @@ helper 串行执行 local recovery → metadata → ready-only scoring。恢复�
 执行器恢复后已验证中文日志 19/19、96 条记录结构与原 95 条历史内容完全保留，diff 检查通过。候选推送到独立 review 分支，main 未改变；父端独立审查及正式包装后再决定发布/补评分。Git 固定源码与结构化验收关联由随后的元数据提交补充。
 
 本地验证采用协议记录；未运行 skill 机器 ledger，也不声称主机拦截或全局认证。并发保护的独立证据为现有 SQLite 触发器与真实 workerd/D1，父端另行独立复核候选。实际 collector 正文/采用、生产 RTT/取消传播、正式私有 hosting 包装和真实补评分完成数均未由本地测试证明。D1 单个已提交事务不能由应用软时限强制抢占；未确认或不满足原始来源证明的历史片段须停止、回读与明确核对。旧冻结 ready 版本与当前 paper 不匹配时继续待元数据，不为补评分改写历史。
+
+## 五项独立复核修正
+
+复核基线为 `1f93c51d8ddf19523e8f3c4340d8d61b1941ec71`。三个服务端反例和两个客户端/诊断反例在该基线全部按预期失败，随后只修正对应边界。
+
+1. 回执事务已提交而确认返回过迟时，原评分 actor 可能已失去租约，仍继续模型 fetch。现于回执确认后重新读取全库屏障、评分锁/actor、就绪版本及模型配置，并在读取返回后再次用当前时间要求 lease 与请求 deadline 均至少余 110 秒（90 秒供应商超时与 20 秒提交余量）。不满足或读取未知时返回 `dispatch_not_sent`，保留真实 pending 回执及额度预占，记录 `reservedUnsent`，未发送不计 attempted；不删除、退回额度或自动重试。延迟回执、整轮截止、短 lease、状态读取本身延迟四种反例均验证模型为 0。原生 D1 反例在回执实际提交后使旧 lease 过期，并成功接纳新 collector，再确认旧评分者不会派发。
+2. 显式 `paperIds` 不再执行全库 paper/metadata queue 到期维护；running/unknown analyses 的维护 UPDATE 也仅处理选定 ID。未选论文、队列与分析逐行保持原值。独立 ingestion recovery 仍是全局安全阶段，不以选择范围缩小全库 pending 屏障。
+3. legacy sync 的入锁前与公共 drain 入口使用同一持久来源证明。未知恢复 actor、未知/缺失/取消来源不能跨入口恢复；证明查询合并为一条 SQL，保留既有 RPC 上限。匹配且未 finished 的 persist_pending 来源只接受已知 work_pending/record_conflict，不接受 unknown。旧 checkpoint 测试曾预期未确认失败后由 sync 自动恢复，现按此契约改为 deferred、停止派发、保留片段/原 watermark/未知状态及零额外抓取，没有放松未知恢复策略。
+4. 两个 CLI 复用安全请求适配器，步骤保留 sentRequestId、有效 response requestId 和 mismatch。502、截断、抛错均保留已发送标识；响应中的非安全标识不输出，不把 token 或原始异常写入日志。未知请求仍只回读，不重放。
+5. 欠账 counts、state 筛选与 items.state 一致采用已存状态，响应明确 `classificationBasis=stored_version_status`。仅返回页的最多 100 项进行语义 hash 核对，另给 verifiedState/readyVersionMatches 与 `verificationScope=returned_items_only`；选择工具继续以版本核对结果拒绝陈旧项，不为全库计数计算无界语义 hash。
+
+当前修正源码的受影响组合为 21 个文件、294/294，failed/cancelled/skipped 均 0，退出码 0，完成于 `2026-10-13T03:54:07Z`；其中策略子集 43/43、客户端/恢复组合 49/49 已分别通过，不能与 294 项重复相加。完整 typecheck 与当前 production Worker bundle 隔离路由 1/1 通过。原生 workerd/D1 为 5/5：normal 首片 39 RPC/288 SQL；pause 56/316；ack 22/151 且不重放；model 39/288、仅一次模拟请求；dispatch-ack 39/288、模型 0。metadata32 仍为 181/490。全部场景真实外部请求 0；未调用生产数据库、供应商或模型，没有修改调度、合入 main 或部署。初版的 614/614 保留为历史快照，本轮按影响范围验证，未重跑无关全套。
+
+Web 构建退出 0；中文日志 97 条、19/19 通过，原 96 条历史记录保持原值。初次日志校验因使用未支持的 review 分支来源路径失败，改用现有维护来源格式后通过，未放宽校验器；最终元数据固定真实实现 SHA。未执行 PostgreSQL 集成、正式私有 hosting 包装、生产补评分或真实 collector 采用核查，这些仍由父端按原授权处理。
