@@ -3,7 +3,8 @@
 ## 当前同步索引
 
 - 最后完整 merge：`cf8f8d07d68dfa9079becc72b0717a45b33485f3`，由 fork `ed0cf9a24790602902b6350bb2d2d18a6168a4e7` 合入；未把后续审查 head 记成已完整合并。
-- 最近一次选择性审查：`8ef28ebcd167b311ffab8c0308181e2912262ae2` → `9cf2a3c261d3e4d8f4350ece98d1f9e197a71a8b`，本轮 13 项，见下节。上游 head 原始 committer 时间为 **2026-10-10T13:32:05Z**。
+- 最近一次选择性审查（review 候选）：`9cf2a3c261d3e4d8f4350ece98d1f9e197a71a8b` → `791a6f56b2ef5e69b6f1b37e2115804f6eafd22d`，8 项审查、1 项局部择取、7 项跳过；见 [2026-10-14 适配记录](hkis-selective-adaptation-2026-10-14.md)。上游 head 原始 committer 时间为 **2026-10-13T18:13:12Z**；不表示已合入 main 或发布。
+- 前次选择性审查：`8ef28ebcd167b311ffab8c0308181e2912262ae2` → `9cf2a3c261d3e4d8f4350ece98d1f9e197a71a8b`，13 项，见下节。上游 head 原始 committer 时间为 **2026-10-10T13:32:05Z**。
 - 上次选择性审查：`8e34e05feb161cb5838e592ee22715f791c7f814` → `8ef28ebcd167b311ffab8c0308181e2912262ae2`，共 18 项；详见 [2026-10-09 适配记录](hkis-selective-adaptation-2026-10-09.md)。原第四轮的 `8e34e05` 是历史节点，不能继续当作当前索引。
 
 ## 2026-10-10 UTC · 第六轮审查，仅导航维护说明适配

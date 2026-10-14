@@ -1,8 +1,34 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-13T16:09:05Z",
+  "latestVersion": "2026-10-14T04:47:13Z",
   "releases": [
+    {
+      "id": "upstream-sites-response-defaults-20261014",
+      "at": "2026-10-14T04:47:13Z",
+      "kind": "upstream",
+      "basis": "record",
+      "title": "择取上游安全响应默认值，补齐 Sites 防 MIME 嗅探头",
+      "body": [
+        "审查上游新增8项，从安全提交局部择取 nosniff 默认值，统一补齐页面、接口、导航数据、静态资源、重定向与错误响应中缺失的安全头。保留原正文、状态、MIME、cookies、缓存与已有强 referrer 策略。",
+        "已有 RSS、AI 接入点和网页结果的尾点拒绝只补离线回归，不记为新漏洞修复；不导入其他部署安全头、未启用的 Node 图片/新闻提示词或新服务。论文采集、模型预算和回执、中文日志及抽屉月历保持原有实现。",
+        "本条为独立 review 候选维护记录，不表示已合入主分支或发布生产。完整采用/跳过清单和真实验证边界见审查记录；既有 Windows cache 动态 import 14项失败未修复。"
+      ],
+      "sources": [
+        {
+          "label": "上游8项完整审查范围",
+          "url": "https://github.com/KKKKhazix/AIHOT/compare/9cf2a3c261d3e4d8f4350ece98d1f9e197a71a8b...791a6f56b2ef5e69b6f1b37e2115804f6eafd22d"
+        },
+        {
+          "label": "原安全提交与适配来源",
+          "url": "https://github.com/KKKKhazix/AIHOT/commit/ea96060783f556a5d1afbdbc67f7348c38e6131d"
+        },
+        {
+          "label": "HKIS局部适配及验证记录",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/upstream-sync.md"
+        }
+      ]
+    },
     {
       "id": "paper-calendar-review-fixes-20261013",
       "at": "2026-10-13T16:09:05Z",
