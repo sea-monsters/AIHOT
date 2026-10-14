@@ -1,8 +1,60 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-13T16:09:05Z",
+  "latestVersion": "2026-10-14T05:13:30Z",
   "releases": [
+    {
+      "id": "upstream-sites-response-defaults-main-20261014",
+      "at": "2026-10-14T05:13:30Z",
+      "kind": "upstream",
+      "basis": "record",
+      "title": "已复核的 Sites 上游安全响应适配正常合入主分支",
+      "body": [
+        "独立复核通过后正常合入 review 候选，统一补齐 Sites 中缺失的 nosniff 安全头，保留正文流、响应状态、cookies、缓存与原有强 referrer 策略；没有整批覆盖上游。",
+        "上游审查仍为8项、局部择取1项、跳过7项；已有尾点拒绝只补回归。保留105条原历史及候选记录，维持论文采集、预算回执和抽屉月历等 HKIS 定制。",
+        "本条使用实际合入维护时刻；源码合入、远端确认和生产发布分别核实。未发布生产或运行真实采集/付费模型；既有 Windows cache 动态 import 14项失败未修复，未将未知 CI 状态记为通过。"
+      ],
+      "sources": [
+        {
+          "label": "已独立复核的候选完整提交",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/8b795250d9cc7770fa6d5e79272516e5cbcf9115"
+        },
+        {
+          "label": "上游安全边界原提交",
+          "url": "https://github.com/KKKKhazix/AIHOT/commit/ea96060783f556a5d1afbdbc67f7348c38e6131d"
+        },
+        {
+          "label": "固定基线、采用与跳过证据",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/05cc9a82d1fc40aafe823e1ce798d2035e292b27/docs/upstream-sync.md"
+        }
+      ]
+    },
+    {
+      "id": "upstream-sites-response-defaults-20261014",
+      "at": "2026-10-14T04:47:13Z",
+      "kind": "upstream",
+      "basis": "record",
+      "title": "择取上游安全响应默认值，补齐 Sites 防 MIME 嗅探头",
+      "body": [
+        "审查上游新增8项，从安全提交局部择取 nosniff 默认值，统一补齐页面、接口、导航数据、静态资源、重定向与错误响应中缺失的安全头。保留原正文、状态、MIME、cookies、缓存与已有强 referrer 策略。",
+        "已有 RSS、AI 接入点和网页结果的尾点拒绝只补离线回归，不记为新漏洞修复；不导入其他部署安全头、未启用的 Node 图片/新闻提示词或新服务。论文采集、模型预算和回执、中文日志及抽屉月历保持原有实现。",
+        "本条为独立 review 候选维护记录，不表示已合入主分支或发布生产。完整采用/跳过清单和真实验证边界见审查记录；既有 Windows cache 动态 import 14项失败未修复。"
+      ],
+      "sources": [
+        {
+          "label": "上游8项完整审查范围",
+          "url": "https://github.com/KKKKhazix/AIHOT/compare/9cf2a3c261d3e4d8f4350ece98d1f9e197a71a8b...791a6f56b2ef5e69b6f1b37e2115804f6eafd22d"
+        },
+        {
+          "label": "原安全提交与适配来源",
+          "url": "https://github.com/KKKKhazix/AIHOT/commit/ea96060783f556a5d1afbdbc67f7348c38e6131d"
+        },
+        {
+          "label": "HKIS局部适配及验证记录",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/05cc9a82d1fc40aafe823e1ce798d2035e292b27/docs/upstream-sync.md"
+        }
+      ]
+    },
     {
       "id": "paper-calendar-review-fixes-20261013",
       "at": "2026-10-13T16:09:05Z",

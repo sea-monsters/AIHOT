@@ -4,6 +4,8 @@ import {fetchFeed} from './rss.ts';
 import {navigationResponse} from './navigation-response.ts';
 import {handleError} from '../apps/web/app/lib/errors.server.ts';
 import {siteContext} from './context.ts';
+import {endpoint,PUBLIC_ENDPOINTS} from './ai/security.ts';
+import {publicResultUrl} from './anysearch/domain.ts';
 
 test('navigation MIME keeps bodies, status and private response policy for GET, HEAD and errors',async()=>{
  for(const [method,status] of [['GET',200],['HEAD',200],['GET',404],['POST',405]] as const){
@@ -27,7 +29,21 @@ test('legacy feed retains valid journal domains and same-host redirects; blocks 
  globalThis.fetch=async(input)=>{const url=String(input);calls.push(url);return url.endsWith('/old.xml')?new Response(null,{status:302,headers:{Location:target}}):new Response('<rss><channel/></rss>')};
  try{
   for(const host of ['www.nature.com','onlinelibrary.wiley.com','ieeexplore.ieee.org','rss.sciencedirect.com','www.science.org']){calls=[];assert.deepEqual(await fetchFeed('https://'+host+'/old.xml'),[]);assert.equal(calls.length,2)}
-  for(target of ['https://198.18.0.1/feed','https://[::ffff:198.18.0.1]/feed','https://other.example/feed','http://www.nature.com/feed','https://user:secret@www.nature.com/feed','https://www.nature.com:8443/feed']){calls=[];await assert.rejects(fetchFeed('https://www.nature.com/old.xml'));assert.equal(calls.length,1)}
+  for(target of ['https://198.18.0.1/feed','https://[::ffff:198.18.0.1]/feed','https://other.example/feed','http://www.nature.com/feed','https://user:secret@www.nature.com/feed','https://www.nature.com:8443/feed','https://www.nature.com./feed','https://WWW.NATURE.COM./feed']){calls=[];await assert.rejects(fetchFeed('https://www.nature.com/old.xml'));assert.equal(calls.length,1)}
+ }finally{globalThis.fetch=previous}
+});
+
+test('existing RSS, AI endpoint and web-result guards reject root-dot private names without fetching',async()=>{
+ const previous=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw Error('must not fetch')};
+ try{
+  for(const name of ['localhost','child.localhost','metadata.google.internal','anything.internal'])for(const host of [name+'.',name.toUpperCase()+'.']){
+   await assert.rejects(fetchFeed('https://'+host+'/feed'));
+   const base='https://'+host+'/v1';assert.throws(()=>endpoint(base,{HKIS_AI_ALLOWED_ENDPOINTS:base}));
+   assert.equal(publicResultUrl('https://'+host+'/paper'),null,host);
+  }
+  assert.equal(calls,0);
+  for(const base of PUBLIC_ENDPOINTS)assert.equal(endpoint(base,{}),base);
+  assert.equal(publicResultUrl('https://www.nature.com/articles/paper'),'https://www.nature.com/articles/paper');
  }finally{globalThis.fetch=previous}
 });
 test('SSR diagnostics never emit exception text, stack, cause, URL, query, key or headers',async()=>{
