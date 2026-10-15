@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-14T05:13:30Z",
+  "latestVersion": "2026-10-15T00:45:00Z",
   "releases": [
+    {
+      "id": "paper-formula-display-20261015",
+      "at": "2026-10-15T00:45:00Z",
+      "kind": "feature",
+      "basis": "record",
+      "title": "论文标题与摘要按需显示明确公式，错误格式保留原文",
+      "body": [
+        "统一论文卡片与详情页的公式显示，按需加载同源KaTeX，标题保持紧凑、摘要沿用抽屉，手机长公式仅内部横向滚动。",
+        "明确TeX及有限JATS/MathML结构可以渲染；价格、代码、未知宏、坏格式及含不支持语义属性的结构保留原文，不猜测修复已丢上下标或重复内容。",
+        "仅改显示层，不重写历史论文、冻结证据或采集数据，不新增模型请求。已完成云端真实浏览器桌面/手机视口与性能验证，详细范围和不可恢复边界见说明。"
+      ],
+      "sources": [
+        {
+          "label": "公式显示、安全边界与实际验证",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/paper-formula-rendering.md"
+        }
+      ]
+    },
     {
       "id": "upstream-sites-response-defaults-main-20261014",
       "at": "2026-10-14T05:13:30Z",

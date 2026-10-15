@@ -17,3 +17,7 @@ fontsource-noto-sans-sc-*.tgz
 
 .sites-runtime/
 .openai/hosting.json
+
+.formula-preview/
+qa/formula/papers.json
+qa/formula/real-extra.json

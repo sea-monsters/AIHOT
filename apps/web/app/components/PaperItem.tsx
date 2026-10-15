@@ -1,3 +1,4 @@
+import {PaperText} from './PaperText';
 import {useEffect,useId,useRef,useState,type ReactNode} from 'react';
 import {Link} from 'react-router';
 import {PaperCardState,PaperSourceLink} from './PaperReader';
@@ -28,7 +29,7 @@ export function PaperItem({paper:p,className='',heading=2,prefix='',lazy=false,d
  return <PaperCardState id={p.id} title={p.title} className={'paper-item '+className}>
   <div ref={motion.ref} className="paper-item-drawer" data-open={open} data-motion-active={motion.moving}>
    <div className="paper-item-heading">
-    <Heading className="paper-item-title" data-paper-motion-part>{p.id?<Link to={'/research/'+encodeURIComponent(p.id)} onClick={onNavigate}>{prefix}{p.title}</Link>:<>{prefix}{p.title}</>}</Heading>
+    <Heading className="paper-item-title" data-paper-motion-part>{p.id?<Link to={'/research/'+encodeURIComponent(p.id)} onClick={onNavigate}>{prefix}<PaperText text={p.title} compact/></Link>:<>{prefix}<PaperText text={p.title} compact/></>}</Heading>
     <button type="button" className="paper-item-toggle" aria-label={(open?'收起':'展开')+'论文摘要与资料：'+p.title} aria-expanded={open} aria-controls={id} onClick={()=>motion.toggle(()=>setOpen(v=>!v))}><span>{open?'收起详情':'展开详情'}</span><DisclosureIndicator open={open} label={false}/></button>
    </div>
    <div className="paper-item-summary" data-paper-motion-part>
@@ -50,7 +51,7 @@ export function PaperItem({paper:p,className='',heading=2,prefix='',lazy=false,d
      {authorsWords.length>0&&categories.length>0&&<div><dt>分类</dt><dd>{categories.join(' · ')}</dd></div>}
      <div><dt>评分依据</dt><dd>{scoreLabel||'阅读优先级（'+scoreSource+'）'}{ruleVersion&&<span> · {ruleVersion}</span>}<span className="paper-item-ai">{scoreLabel?.startsWith('AI')?'':p.analysis?<AssessmentBadge paper={p}/>:'AI 评分：未提供'}</span><small>阅读优先级用于安排阅读；AI 重要性与摘要方法证据分另列，不代表科学质量。</small></dd></div>
     </dl>
-    <p className="paper-item-abstract">{lazy&&!data?(error||'正在读取完整已存摘要…'):data?.abstract?.trim()||'当前已存记录未提供摘要。'}</p>
+    <p className="paper-item-abstract"><PaperText active={open} text={lazy&&!data?(error||'正在读取完整已存摘要…'):data?.abstract?.trim()||'当前已存记录未提供摘要。'}/></p>
     {error&&<button type="button" className="paper-text-button" onClick={()=>setRetry(v=>v+1)}>重试读取</button>}
     <p className="paper-item-provenance">摘要来源：{data?.provenance?.abstract||data?.abstractSource||'未提供'}{data?.truncated||data?.abstractTruncated?' · 来源保存内容已标记截断':''}</p>
     <div className="paper-item-source" hidden={!open} inert={!open||motion.moving}>

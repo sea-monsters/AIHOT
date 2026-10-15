@@ -1,0 +1,11 @@
+.paper-text{overflow-wrap:anywhere;min-width:0;max-width:100%}
+.paper-math{display:inline-grid;vertical-align:baseline;max-width:100%;overflow-x:auto;overflow-y:hidden;overscroll-behavior-inline:contain;padding:2px;line-height:normal}
+.paper-math .katex{font-size:1.06em}
+.paper-math-display{display:block;margin:.5em 0}
+.paper-math-display .katex-display{margin:0;text-align:left}
+.paper-math math{font-size:1.06em}
+.paper-text-compact .paper-math{padding:1px}
+.paper-text-compact .katex{font-size:1em}
+.paper-math:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+/* KaTeX's italic/script overhang is not part of its measured inline width. */
+.paper-math>.katex{padding-inline-end:.18em}
