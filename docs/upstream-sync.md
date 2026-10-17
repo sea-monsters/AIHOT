@@ -7,6 +7,14 @@
 - 前次选择性审查：`8ef28ebcd167b311ffab8c0308181e2912262ae2` → `9cf2a3c261d3e4d8f4350ece98d1f9e197a71a8b`，13 项，见下节。上游 head 原始 committer 时间为 **2026-10-10T13:32:05Z**。
 - 上次选择性审查：`8e34e05feb161cb5838e592ee22715f791c7f814` → `8ef28ebcd167b311ffab8c0308181e2912262ae2`，共 18 项；详见 [2026-10-09 适配记录](hkis-selective-adaptation-2026-10-09.md)。原第四轮的 `8e34e05` 是历史节点，不能继续当作当前索引。
 
+## 2026-10-17 · 第七轮审查，16 项上游更新无直接 Sites 生产择取
+
+本轮在 fork `origin/main` 安全 fetch 到 `d036424aa217141eb25b4ee59a49b11412eaa4d9` 后，按既有 parent 记录核实真实上游 [KKKKhazix/AIHOT](https://github.com/KKKKhazix/AIHOT)，再直接 fetch 上游 `main` 到 `84a7abb1d00a43a41e3ddcc26c45e1a23785e075`。上次选择性审查 head 为 `791a6f56b2ef5e69b6f1b37e2115804f6eafd22d`；[比较范围](https://github.com/KKKKhazix/AIHOT/compare/791a6f56b2ef5e69b6f1b37e2115804f6eafd22d...84a7abb1d00a43a41e3ddcc26c45e1a23785e075) 共 **16** 项。最后完整 merge 基线仍为 `cf8f8d07d68dfa9079becc72b0717a45b33485f3`。
+
+本轮结论为 **直接采用 0 项、已等价实现 2 项、延期 3 项、不适用 11 项**。`9df66b1` 的阿里云元数据地址回归在 HKIS 固定期刊 RSS 的既有 host/IP 保护中已等价成立；本地适配提交为 `8dba01cb63ec9d0e9820d2dfb030eb013be4e998`，只补三种地址样本，未引入上游 `PRIVATE_FEED_HOSTS` 私网例外。`540c477` 的 durable paid request identity 在 HKIS 当前 `ai_receipts`/unknown 不重放边界中已有等价保护，但原 PG 翻译路径不迁移。`49b4745`、`5e04097`、`c8704e5` 的按信源自身节奏告警延期，等待独立 D1 研究源覆盖设计；其余为未启用 Node/PG 新闻、翻译、X、归组、Readability 或部署路径。
+
+完整逐项理由、原始 SHA/时间、本地适配 SHA、并发任务冲突风险与验证范围见 [2026-10-17 适配记录](hkis-selective-adaptation-2026-10-17.md)。本轮没有整批 cherry-pick、没有修改 `sites/ai`/设置日志、没有数据库迁移、调度变化、真实采集、付费模型或生产发布；review 分支独立保留，等待父任务协调普通合并。
+
 ## 2026-10-10 UTC · 第六轮审查，仅导航维护说明适配
 
 固定核对 [13 项完整比较](https://github.com/KKKKhazix/AIHOT/compare/8ef28ebcd167b311ffab8c0308181e2912262ae2...9cf2a3c261d3e4d8f4350ece98d1f9e197a71a8b)；本地 fetch 该精确 head 后，Git 范围确认 13 个提交。维护记录时间为 `2026-10-10T16:48:37Z`（UTC+08 为 2026-10-11 00:48:37），不是生产上线时间。该范围用于审查，**没有生产功能 cherry-pick，也没有完整 merge**。
