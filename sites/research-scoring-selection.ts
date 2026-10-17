@@ -1,6 +1,7 @@
 type Call=(path:string,body?:any,timeoutMs?:number)=>Promise<any>;
 const safeOperationId=(v:any)=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)?v.toLowerCase():null;
 const blocked=(v:any)=>!v||!!v.code||!!v.error||['unknown','deferred','blocked','busy','failed','error'].includes(v.status);
+const localScoringBlocked=(v:any)=>{if(!v)return true;if(v.status==='blocked'&&v.blocked==='ai_disabled')return false;return ['unknown','deferred','blocked','busy','failed','error'].includes(v.status)||!!v.blocked&&v.blocked!=='ai_disabled';};
 /** Explicit IDs only. Preview is GET-only; apply never supplements metadata or retries a model POST. */
 export async function runSelectedScoring(call:Call,paperIds:string[],options:{apply?:boolean;maxPapers?:number}={},now=Date.now,started=now()){
  if(!Array.isArray(paperIds)||paperIds.length<1||paperIds.length>3||paperIds.some(id=>typeof id!=='string'||!/^[-a-zA-Z0-9:_]{1,100}$/.test(id))||options.maxPapers!==undefined&&(!Number.isInteger(options.maxPapers)||options.maxPapers<1||options.maxPapers>3))throw Error('明确选择1–3个论文ID，maxPapers为1–3');
@@ -15,7 +16,7 @@ export async function runSelectedScoring(call:Call,paperIds:string[],options:{ap
  const snapshot=await inspect();if(blocked(snapshot)||snapshot.pendingIngestion?.items!==0)return {status:'deferred',reason:'readback_not_ready',selected,steps};
  const ids=(snapshot.scoringDebt?.items||[]).filter((p:any)=>selected.includes(p.paperId)&&p.readyVersionMatches===true&&!p.priorReceiptReviewRequired&&['missing_assessment','stale_analysis','queued'].includes(p.state)).map((p:any)=>p.paperId);
  if(!ids.length)return {status:'no_eligible_missing_scores',selected,...summary(snapshot),steps};
- const local=await invoke('rules','/api/site/research/process',{paperIds:ids,maxPapers:0,maxMs:Math.min(240000,remaining()),deadlineAt:new Date(deadline-2000).toISOString()});if(local?.status==='unknown'){const readback=await inspect();return {status:'unknown',reason:'rules_unknown_readback_no_replay',selected,readback:summary(readback),steps};}if(blocked(local)&&local.blocked!=='ai_disabled')return {status:'deferred',reason:local.reason||local.blocked||local.code,selected,steps};
+ const local=await invoke('rules','/api/site/research/process',{paperIds:ids,maxPapers:0,maxMs:Math.min(240000,remaining()),deadlineAt:new Date(deadline-2000).toISOString()});if(local?.status==='unknown'){const readback=await inspect();return {status:'unknown',reason:'rules_unknown_readback_no_replay',selected,readback:summary(readback),steps};}if(localScoringBlocked(local))return {status:'deferred',reason:local.reason||local.blocked||local.code||local.status,selected,steps};
  const prepared=await inspect();if(blocked(prepared))return {status:prepared.status||'unknown',selected,steps};const paid=(prepared.scoringDebt?.items||[]).filter((p:any)=>ids.includes(p.paperId)&&p.state==='queued'&&p.readyVersionMatches===true&&!p.receiptStatus&&!p.priorReceiptReviewRequired).map((p:any)=>p.paperId);
  if(!paid.length||!prepared.eligible||prepared.callsToday>=prepared.dailyLimit)return {status:paid.length?'deferred':'local_classification_complete',reason:paid.length?prepared.blocked||'budget_exceeded':null,selected,...summary(prepared),steps};
  if(remaining()<110000)return {status:'deferred',reason:'deadline',selected,steps};

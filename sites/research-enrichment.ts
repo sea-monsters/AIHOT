@@ -126,10 +126,13 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace
   // provider.  This is capped by METADATA_READ_LIMIT and never calls a model
   // or an external endpoint.
   for(const row of candidates){
+   if(Date.now()+5000>=deadline){row.deadlineDeferred=true;continue;}
    if(!adequateMetadata(row.p))continue;
    const source=RESEARCH_SOURCES.find(s=>s.id===row.source_id);
    if(row.scope_pending&&(!source||!sourceAccepts(row.p,source)))continue;
+   if(Date.now()+5000>=deadline){row.deadlineDeferred=true;continue;}
    if(!await localSourceEvidence(db,row.p))continue;
+   if(Date.now()+5000>=deadline){row.deadlineDeferred=true;continue;}
    const saved=await savePaper(db,row.p,stamp(),{runId:row.origin_run_id||lease.id,batchKey:row.origin_batch_key,firstSeen:row.first_seen,cohortKey:row.daily_cohort_key||dailyCohortKey(row.first_seen),deferScoring:false});
    if(saved.skipped){row.providers.crossref={status:'blocked',at:stamp(),runId:lease.id,reason:'identity_ambiguous'};continue;}
    const stored=await db.prepare('SELECT * FROM research_papers WHERE id=?').bind(saved.id).first(),paper={...rowPaper(stored),metadataStatus:'ready'},readyReason='sufficient_source_evidence';
@@ -143,8 +146,8 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace
     const configs=(await db.prepare('SELECT key_ciphertext,test_status,endpoint,revision FROM scholarly_settings WHERE service=? LIMIT 2').bind(service).all()).results;
     configured=configs.length===1&&configs[0].test_status==='ok'&&!!configs[0].key_ciphertext;expectedRevision=configured?configs[0].revision:undefined;
    }
-   for(const row of candidates){if(row.localReady)continue;if(!row.p.doi)row.providers[service]={status:'no_identifier',at:stamp(),runId:lease.id};else if(adequateMetadata(row.p)&&!row.scope_pending&&!TERMINAL.has(row.providers[service]?.status))row.providers[service]={status:'not_needed',at:stamp(),runId:lease.id,reason:'sufficient_source_evidence'};else if(!configured&&!TERMINAL.has(row.providers[service]?.status))row.providers[service]={status:'deferred',at:stamp(),runId:lease.id,reason:'connection_unavailable'};}
-   const needed=configured?candidates.filter((r:any)=>!r.localReady&&r.p.doi&&!TERMINAL.has(r.providers[service]?.status)):[];
+   for(const row of candidates){if(row.localReady||row.deadlineDeferred)continue;if(!row.p.doi)row.providers[service]={status:'no_identifier',at:stamp(),runId:lease.id};else if(adequateMetadata(row.p)&&!row.scope_pending&&!TERMINAL.has(row.providers[service]?.status))row.providers[service]={status:'not_needed',at:stamp(),runId:lease.id,reason:'sufficient_source_evidence'};else if(!configured&&!TERMINAL.has(row.providers[service]?.status))row.providers[service]={status:'deferred',at:stamp(),runId:lease.id,reason:'connection_unavailable'};}
+   const needed=configured?candidates.filter((r:any)=>!r.localReady&&!r.deadlineDeferred&&r.p.doi&&!TERMINAL.has(r.providers[service]?.status)):[];
    const chunks=metadataChunks(service,needed.map((r:any)=>r.p.doi));let calls=0;
    for(const keys of chunks){
     if(Date.now()+5000>=deadline){result.reason='deadline';break;}
@@ -209,8 +212,10 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace
   for(const row of candidates){
    const source=RESEARCH_SOURCES.find(s=>s.id===row.source_id),terminal=SERVICES.every(s=>TERMINAL.has(row.providers[s]?.status)),sufficient=adequateMetadata(row.p);
    let status='deferred',reason=result.reason||'provider_pending';
-   const day=publicationDay(row.p).date,commitWindow=monthWindow();
-   if(row.localReady){
+   const day=publicationDay(row.p).date,commitWindow=window;
+   if(row.deadlineDeferred){
+    status='deferred';reason='deadline';result.deferred++;
+   }else if(row.localReady){
     status='done';reason='sufficient_source_evidence';
    }else if(day&&(day<commitWindow.startDate||day>commitWindow.endDate)){
     status='abstain';reason='expired_update_window';result.abstained=(result.abstained||0)+1;

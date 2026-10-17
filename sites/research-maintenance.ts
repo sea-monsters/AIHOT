@@ -16,7 +16,7 @@ export function explicitPaperIds(value:any){if(!Array.isArray(value)||value.leng
 function rowSnapshot(table:string,row:any){return {sql:`EXISTS(SELECT 1 FROM ${table} t,json_each(?) expected WHERE ${Object.keys(row).map(k=>`t.${k} IS json_extract(expected.value,'$.${k}')`).join(' AND ')})`,args:[JSON.stringify([row])]};}
 function rowsSnapshot(table:string,where:string,args:any[],rows:any[]){return {sql:`((SELECT count(*) FROM ${table} WHERE ${where})=? AND NOT EXISTS(SELECT 1 FROM json_each(?) expected WHERE NOT EXISTS(SELECT 1 FROM ${table} t WHERE ${rows.length?Object.keys(rows[0]).map(k=>`t.${k} IS json_extract(expected.value,'$.${k}')`).join(' AND '):'1'})))`,args:[...args,rows.length,JSON.stringify(rows)]};}
 const receiptReview=receiptSafeSql();
-async function inspect(db:any,id:string,key:string|null){
+async function inspect(db:any,id:string,key:string|null,window=monthWindow()){
  const row=await db.prepare('SELECT * FROM research_papers WHERE id=?').bind(id).first();if(!row)return {item:{paperId:id,state:'not_found',eligible:false},plan:null};
  const p=rowPaper(row),contentHash=await digest(analysisFields(p)),metadataHash=await digest(metadataFields(p));
  const member=(await db.prepare('SELECT * FROM research_batch_members WHERE paper_id=?').bind(id).all()).results;
@@ -29,7 +29,7 @@ async function inspect(db:any,id:string,key:string|null){
  const valid=analyses.find((a:any)=>a.content_hash===contentHash&&a.config_hash===key&&a.schema_version===ANALYSIS_SCHEMA&&(['rules_only','insufficient'].includes(a.status)||a.status==='completed'&&parse(a.result_json)?.decision==='assessed'));
  const item:any={paperId:id,firstSeen:row.first_seen,state:'prepare_eligible',eligible:true,contentHash,scriptScoreAvailable:row.rule_version===RULE_VERSION&&['ready','legacy_ready'].includes(row.metadata_status),currentAnalysisId:valid?.id||null,existingMember:member.length>0,existingQueue:queues.length>0,networkRequired:false};
  const stop=(state:string,network=false)=>{item.state=state;item.eligible=false;item.networkRequired=network;return {item,plan:null}};
- if(row.priority<0)return stop('filtered');if(!inUpdateWindow(p))return stop('outside_update_window');if(review.review)return stop('receipt_review_required');
+ if(row.priority<0)return stop('filtered');if(!inUpdateWindow(p,window))return stop('outside_update_window');if(review.review)return stop('receipt_review_required');
  if(review.ready&&row.content_hash===contentHash&&item.scriptScoreAvailable){item.state=valid?'reuse_current_analysis':'reuse_ready';return {item,plan:null}};
  if(records.length>PREPARE_LIMITS.recordsPerPaper||queues.length>32)return stop('identity_review_required');
  if(analyses.length>PREPARE_LIMITS.analysesPerPaper)return stop('analysis_review_required');
@@ -58,9 +58,9 @@ export async function prepareMaintenance(rawDb:any,body:any={},options:{startedM
  const ids=explicitPaperIds(body.paperIds);if(body.apply!==undefined&&typeof body.apply!=='boolean')throw new AIError('invalid_selection',400,'apply须为布尔值，默认只读');
  if(body.maxMs!==undefined&&(!Number.isInteger(body.maxMs)||body.maxMs<1||body.maxMs>6000))throw new AIError('invalid_deadline',400,'维护准备最多6000毫秒');
  if(body.deadlineAt!==undefined&&(typeof body.deadlineAt!=='string'||!Number.isFinite(Date.parse(body.deadlineAt))))throw new AIError('invalid_deadline',400,'整轮截止时点无效');
- const started=options.startedMs??Date.now(),deadline=Math.min(started+(body.maxMs??6000),body.deadlineAt?Date.parse(body.deadlineAt):Infinity),key=await currentAnalysisKey(rawDb),items:any[]=[],plans:any[]=[];
- for(const id of ids){const v=await inspect(rawDb,id,key);items.push(v.item);if(v.plan)plans.push(v.plan);}
- const result:any={status:body.apply===true?'ok':'preview',selected:ids,items,prepared:0,attempted:0,known:true,window:monthWindow(),limits:PREPARE_LIMITS,metadata:await metadataDiagnostics(rawDb,{paperIds:ids})};
+ const started=options.startedMs??Date.now(),window=monthWindow(new Date(started)),deadline=Math.min(started+(body.maxMs??6000),body.deadlineAt?Date.parse(body.deadlineAt):Infinity),key=await currentAnalysisKey(rawDb),items:any[]=[],plans:any[]=[];
+ for(const id of ids){const v=await inspect(rawDb,id,key,window);items.push(v.item);if(v.plan)plans.push(v.plan);}
+ const result:any={status:body.apply===true?'ok':'preview',selected:ids,items,prepared:0,attempted:0,known:true,window,limits:PREPARE_LIMITS,metadata:await metadataDiagnostics(rawDb,{paperIds:ids})};
  if(body.apply!==true)return result;
  if(!plans.length)return {...result,status:items.every(i=>i.state.startsWith('reuse'))?'ok':'deferred',reason:items.every(i=>i.state.startsWith('reuse'))?'already_ready':'no_prepare_eligible'};
  checkCollectionCancellation(options.signal);if(Date.now()+1500>=deadline)return {...result,status:'deferred',reason:'deadline'};

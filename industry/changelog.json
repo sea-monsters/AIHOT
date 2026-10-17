@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-17T13:56:37Z",
+  "latestVersion": "2026-10-17T14:08:17Z",
   "releases": [
+    {
+      "id": "historical-maintenance-window-20261017",
+      "at": "2026-10-17T14:08:17Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "补齐冻结旧 cohort 的显式维护评分与阶段边界",
+      "body": [
+        "冻结旧 cohort 可沿用现有 1–3 个明确 paperIds 的 maintenance prepare/selected scoring 通路：只写当前论文版本证明，不改 research_daily、冻结快照或 firstSeen，也不重放 failed/unknown 收据或增加 daily budget。",
+        "本地元数据晋级逐候选尊重 deadline；处理窗口固定到同一请求开始时间；local scoring 返回 busy、deferred、failed 或 unknown 时不会继续派发付费评分。新增跨日、deadline、历史维护和异常阶段回归，Sites 完整测试为 692/692。"
+      ],
+      "sources": [
+        {
+          "label": "研究流水线与 Sites 完整回归审查记录",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-pipeline-audit.md"
+        }
+      ]
+    },
     {
       "id": "frozen-pending-paper-refresh-20261017",
       "at": "2026-10-17T13:56:37Z",

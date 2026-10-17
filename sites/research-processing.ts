@@ -35,13 +35,13 @@ export async function currentAnalysisKey(db:any,configSnapshot?:any){
  return digest(configurationFields(rows[0],{keywords:preferences.keywords||[],excludedKeywords:preferences.excludedKeywords||[]}));
 }
 export async function processingStatus(db:any,env:any,diagnosticOptions:any={}){
- let config:any=null,blocked:string|null=null;try{config=await processingConfig(db,env);blocked=eligibility(config,env)}catch(e){blocked=e instanceof AIError?e.code:'not_configured'}
+ const window=monthWindow();let config:any=null,blocked:string|null=null;try{config=await processingConfig(db,env);blocked=eligibility(config,env)}catch(e){blocked=e instanceof AIError?e.code:'not_configured'}
  const activeKey=await currentAnalysisKey(db,config);
  const [countResult,usedResult]=await Promise.all([db.prepare('SELECT a.status,count(*) total FROM research_analyses a JOIN research_papers p ON p.id=a.paper_id AND p.content_hash=a.content_hash WHERE a.config_hash=? AND a.schema_version=? AND a.id=(SELECT b.id FROM research_analyses b WHERE b.paper_id=a.paper_id AND b.content_hash=p.content_hash AND b.config_hash=a.config_hash AND b.schema_version=a.schema_version ORDER BY b.updated_at DESC,b.id DESC LIMIT 1) GROUP BY a.status').bind(activeKey,ANALYSIS_SCHEMA).all(),
  config?db.prepare('SELECT count(*) n FROM ai_receipts WHERE owner_id=? AND created_at>=?').bind(config.owner_id,stamp().slice(0,10)+'T00:00:00.000Z').first():Promise.resolve(null)]);
  const counts=countResult.results,used=Number(usedResult?.n||0);
  const pref=config?await db.prepare('SELECT value_json FROM ai_preferences WHERE owner_id=?').bind(config.owner_id).first():null;
- return {pendingIngestion:await pendingWorkDiagnostics(db),scoringDebt:await scoringDebt(db,activeKey,parse(pref?.value_json,{}),diagnosticOptions),version:PIPELINE_VERSION,window:monthWindow(),limits:PROCESSING_LIMITS,counts,configured:!!config,eligible:!!config&&!blocked,blocked,model:config?.model||null,protocol:config?.protocol||null,reasoning:config?.reasoning||null,settingsRevision:config?.revision||null,configuredMaxTokens:config?.max_tokens||null,dailyLimit:config?.daily_limit||null,callsToday:used,evidenceScope:'abstract_only',scientificQualityVerified:false};
+ return {pendingIngestion:await pendingWorkDiagnostics(db),scoringDebt:await scoringDebt(db,activeKey,parse(pref?.value_json,{}),{...diagnosticOptions,window}),version:PIPELINE_VERSION,window,limits:PROCESSING_LIMITS,counts,configured:!!config,eligible:!!config&&!blocked,blocked,model:config?.model||null,protocol:config?.protocol||null,reasoning:config?.reasoning||null,settingsRevision:config?.revision||null,configuredMaxTokens:config?.max_tokens||null,dailyLimit:config?.daily_limit||null,callsToday:used,evidenceScope:'abstract_only',scientificQualityVerified:false};
 }
 export async function attachAnalyses(db:any,papers:any[],analysisKey?:string|null){
  if(!papers.length)return papers;
@@ -54,14 +54,14 @@ export async function processRecent(rawDb:any,env:any,body:any={},request?:Reque
  const requestStarted=options.startedMs??Date.now();if(body.deadlineAt!==undefined&&(typeof body.deadlineAt!=='string'||!Number.isFinite(Date.parse(body.deadlineAt))))throw new AIError('invalid_deadline',400,'整轮截止时点无效');
  const selected=body.paperIds;if(selected!==undefined&&(!Array.isArray(selected)||selected.length<1||selected.length>3||selected.some((id:any)=>typeof id!=='string'||!/^[-a-zA-Z0-9:_]{1,100}$/.test(id))||body.cohort!==undefined))throw new AIError('invalid_selection',400,'明确补评分须传1–3个paperIds，不同时指定cohort');
  let db=rawDb;
- const config=await processingConfig(db,env,request),blocked=eligibility(config,env);const window=monthWindow();
+ const config=await processingConfig(db,env,request),blocked=eligibility(config,env);const window=monthWindow(new Date(requestStarted));
  const prefRow=await db.prepare('SELECT value_json FROM ai_preferences WHERE owner_id=?').bind(config.owner_id).first();const preferences=parse(prefRow?.value_json,{keywords:[],excludedKeywords:[]});
  const safeConfig=configurationFields(config,{keywords:preferences.keywords||[],excludedKeywords:preferences.excludedKeywords||[]});const configHash=await digest(safeConfig);
  const maxPapers=Math.min(PROCESSING_LIMITS.papersPerRequest,Math.max(0,Math.floor(Number(body.maxPapers??1)||0)));
  const maxMs=Math.min(PROCESSING_LIMITS.requestMs,Math.max(1,Math.min(Number(body.maxMs??PROCESSING_LIMITS.requestMs),body.deadlineAt===undefined?Infinity:Date.parse(body.deadlineAt)-requestStarted)));
  // Old callers omit cohort: retain the body shape, but never spend on an
  // unbounded legacy/month backlog. Only this cohort's current ready version.
- const today=new Date(Date.now()+8*3600000).toISOString().slice(0,10),day=body.cohort==='previous_day'?await preparationCohort(db,today):today;const cohortGate=selected?" AND p.id IN (SELECT value FROM json_each(?)) AND "+selectedReadySql()+" AND NOT EXISTS(SELECT 1 FROM research_analyses prior JOIN ai_receipts receipt ON receipt.id=prior.request_id||':0' WHERE prior.paper_id=p.id AND (prior.status IN ('failed','unknown','running') OR receipt.status IN ('pending','unknown')))":" AND EXISTS(SELECT 1 FROM research_ready_evidence e WHERE e.paper_id=p.id AND e.content_hash=p.content_hash AND e.daily_cohort_key IN (?,?))";const cohortArgs=selected?[JSON.stringify([...new Set(selected)])]:[day+'/08',day+'/20'];
+ const today=window.endDate,day=body.cohort==='previous_day'?await preparationCohort(db,today):today;const cohortGate=selected?" AND p.id IN (SELECT value FROM json_each(?)) AND "+selectedReadySql()+" AND NOT EXISTS(SELECT 1 FROM research_analyses prior JOIN ai_receipts receipt ON receipt.id=prior.request_id||':0' WHERE prior.paper_id=p.id AND (prior.status IN ('failed','unknown','running') OR receipt.status IN ('pending','unknown')))":" AND EXISTS(SELECT 1 FROM research_ready_evidence e WHERE e.paper_id=p.id AND e.content_hash=p.content_hash AND e.daily_cohort_key IN (?,?))";const cohortArgs=selected?[JSON.stringify([...new Set(selected)])]:[day+'/08',day+'/20'];
  const started=new Date(requestStarted).toISOString(),runId=crypto.randomUUID(),until=new Date(Date.now()+6*60000).toISOString(),expires=until+'|'+runId;
  // The global work barrier belongs to the atomic lock claim, not a preflight.
  const lock=await rawDb.batch([
