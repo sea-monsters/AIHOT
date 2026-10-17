@@ -11,7 +11,7 @@
       "title": "审查上游16项更新，保留 HKIS Sites 边界并补元数据地址回归",
       "body": [
         "固定 fork parent 为 KKKKhazix/AIHOT，确认 origin/main 基线 d036424 与上游 head 84a7abb；相对上次选择性审查 791a6f5 共审查16项，直接采用0项、已等价实现2项、延期3项、不适用11项，没有整批 cherry-pick 或完整 merge。",
-        "上游 9df66b1 的阿里云元数据地址回归在 HKIS 固定 HTTPS 期刊 RSS 的既有 IP、映射 IPv6、私有主机和重定向守卫中已等价成立；本地 ba310fe 仅补三种地址样本并确认 fetch 前拒绝。上游 540c477 的付费请求持久身份与当前 Sites ai_receipts/unknown 不重放边界等价，但原 PG 翻译流水线不迁移。",
+        "上游 9df66b1 的阿里云元数据地址回归在 HKIS 固定 HTTPS 期刊 RSS 的既有 IP、映射 IPv6、私有主机和重定向守卫中已等价成立；本地 8dba01c 仅补三种地址样本并确认 fetch 前拒绝。上游 540c477 的付费请求持久身份与当前 Sites ai_receipts/unknown 不重放边界等价，但原 PG 翻译流水线不迁移。",
         "按信源自身节奏的三项 source-health 更新延期到独立 D1 设计；其余 Node/PostgreSQL 新闻、X、归组、Readability 和私有 feed 配置不适用于 Sites。保留 Workers+D1、32个论文信源、领域分类/评分、owner-private、08/20 UTC+08、预算回执与暖橙纸色界面；本轮只在 review 分支验证，未运行真实采集、模型、生产数据或调度。"
       ],
       "sources": [
