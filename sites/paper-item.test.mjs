@@ -1,3 +1,4 @@
+import {testStylePlugin,testStyleLoaders} from './test-style-bundle.ts';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
@@ -8,7 +9,7 @@ import {paperDoi,paperSource,paperUpdate,paperWords} from '../apps/web/app/lib/p
 import {createPaperDetailCache} from '../apps/web/app/lib/paper-detail-cache.ts';
 await mkdir('.sites-runtime',{recursive:true});
 await writeFile('.sites-runtime/paper-item-ssr.tsx',`import React from 'react';import {renderToStaticMarkup} from 'react-dom/server';import {MemoryRouter} from 'react-router';import {PaperItem} from '../apps/web/app/components/PaperItem';export function render(p){return renderToStaticMarkup(<MemoryRouter><PaperItem paper={p}/></MemoryRouter>)}`);
-await build({entryPoints:['.sites-runtime/paper-item-ssr.tsx'],outfile:'.sites-runtime/paper-item-ssr.mjs',bundle:true,platform:'node',format:'esm',packages:'external',jsx:'automatic',logLevel:'silent'});
+await build({plugins:[testStylePlugin],loader:testStyleLoaders,entryPoints:['.sites-runtime/paper-item-ssr.tsx'],outfile:'.sites-runtime/paper-item-ssr.mjs',bundle:true,platform:'node',format:'esm',packages:'external',jsx:'automatic',logLevel:'silent'});
 const {render}=await import(pathToFileURL(resolve('.sites-runtime/paper-item-ssr.mjs')).href);
 test('DOI normalization retains the complete identifier and creates a safe HTTPS path',()=>{
  assert.equal(paperDoi(' DOI:10.1234/ABC/long#suffix?x=y '),'10.1234/abc/long#suffix?x=y');

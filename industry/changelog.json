@@ -1,8 +1,27 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-15T00:45:00Z",
+  "latestVersion": "2026-10-17T11:52:00Z",
   "releases": [
+    {
+      "id": "bounded-collection-diagnostics-20261017",
+      "at": "2026-10-17T11:52:00Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "采集改为有界并行切片，补全停止原因与可翻页诊断",
+      "body": [
+        "新增按冻结批次执行的有限并行采集，统一收尾后再补齐元数据与评分；Crossref共享锁、间隔、35页与单刊2页配额保持不变。",
+        "区分调用返回、批次结束与来源覆盖完整；记录未尝试、失败、待处理来源、剩余预算及请求关联，并支持操作日志分页回读。",
+        "保留540秒总预算与现有调度；源码发布不会自动替换外部任务，正式服务认证、实际部署与真实窗口效果仍须分别回读确认。",
+        "补齐既有SSR测试的CSS与字体打包配置，核对迁移20至23的链和索引保留；完整Sites离线聚合682项通过，不改变生产界面或迁移。"
+      ],
+      "sources": [
+        {
+          "label": "采集契约与任务替换说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/collection-orchestration.md"
+        }
+      ]
+    },
     {
       "id": "paper-formula-display-20261015",
       "at": "2026-10-15T00:45:00Z",

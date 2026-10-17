@@ -32,7 +32,7 @@ export async function collectionControl(db:any,batchKey:string|null,at=new Date(
  const continuations=expected.filter(id=>headSettled.has(id)&&!deferredHeads.has(id)&&pages(id)===1&&(byId.get(id)?.latest?.some((j:any)=>j.status==='pending')||byId.get(id)?.history?.length)).sort((a,b)=>String(byId.get(a)?.lastContinuationAttemptAt||'').localeCompare(String(byId.get(b)?.lastContinuationAttemptAt||''))||a.localeCompare(b));
  const persisted=(await db.prepare("SELECT DISTINCT source_id FROM research_ingestion_work WHERE origin_batch_key=? AND status='pending' ORDER BY observed_at,ordinal").bind(batchKey).all()).results.map((r:any)=>r.source_id);
  const nextSourceId=(heads.length?heads:persisted.length?persisted:continuations)[0]||null;
- return {stop:!nextSourceId,scope:'batch',reason:nextSourceId?null:'sources_exhausted',nextAction:nextSourceId?'sync_next':'finish_batch',nextSourceId,deadlineAt:new Date(Date.parse(batch.started_at)+maxMs).toISOString(),pass:heads.length?'head':persisted.length?'persist':'continuation',headSourcesRemaining:heads,headDeferredSources:[...deferredHeads],expectedSources:expected};
+ return {stop:!nextSourceId,scope:'batch',reason:nextSourceId?null:'sources_exhausted',nextAction:nextSourceId?'sync_next':'finish_batch',nextSourceId,dispatchableSources:heads.length?heads:persisted.length?persisted:continuations,deadlineAt:new Date(Date.parse(batch.started_at)+maxMs).toISOString(),pass:heads.length?'head':persisted.length?'persist':'continuation',headSourcesRemaining:heads,headDeferredSources:[...deferredHeads],expectedSources:expected};
 }
 export async function stopCrossrefSlot(db:any,at=new Date()){
  const row=await db.prepare("SELECT value FROM research_settings WHERE key='crossref_http_cooldown'").first();

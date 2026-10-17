@@ -1,3 +1,4 @@
+import {testStylePlugin,testStyleLoaders} from './test-style-bundle.ts';
 import {test} from 'node:test';
 import {strict as assert} from 'node:assert';
 import {DatabaseSync} from 'node:sqlite';
@@ -29,9 +30,9 @@ test('navigation refresh deduplicates within a store and never across separate a
 });
 
 test('daily skips only month-only navigation; date changes, form requests and explicit refresh still load',async()=>{
- // Bundle in memory so the exact route export runs without writing generated test artifacts.
- const built=await build({stdin:{contents:"export {shouldRevalidate} from './apps/web/app/routes/paper-daily.tsx'",resolveDir:process.cwd(),sourcefile:'daily-route-test.ts'},bundle:true,write:false,platform:'node',format:'esm',jsx:'automatic',logLevel:'silent'});
- const {shouldRevalidate}=await import('data:text/javascript;base64,'+Buffer.from(built.outputFiles[0]!.text).toString('base64'));
+ // Bundle JS and CSS in memory; only the JS route export is executed in Node.
+ const built=await build({plugins:[testStylePlugin],loader:testStyleLoaders,stdin:{contents:"export {shouldRevalidate} from './apps/web/app/routes/paper-daily.tsx'",resolveDir:process.cwd(),sourcefile:'daily-route-test.ts'},bundle:true,write:false,outfile:'.sites-runtime/daily-route-test.mjs',platform:'node',format:'esm',jsx:'automatic',logLevel:'silent'});
+ const {shouldRevalidate}=await import('data:text/javascript;base64,'+Buffer.from(built.outputFiles.find(f=>f.path.endsWith('.mjs'))!.text).toString('base64'));
  const currentUrl=new URL('https://local.test/daily?date=2026-10-03&month=2026-10');
  const check=(next:string,formMethod?:string)=>shouldRevalidate({currentUrl,nextUrl:new URL(next,'https://local.test'),defaultShouldRevalidate:true,formMethod});
  assert.equal(check('/daily?date=2026-10-03&month=2026-09'),false);
