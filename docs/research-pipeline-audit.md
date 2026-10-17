@@ -33,7 +33,7 @@ npm run build
 - 当前提交序列（再加冻结来源日晋级回归）为 688 tests，688 pass，0 fail，0 cancelled，0 skipped，0 todo。
 - 先前报告的 574 是不完整命令（只覆盖顶层 TS/MJS）；此前完整命令实际应补回 112 项嵌套测试：AI 71、AnySearch 20、Scholarly 21。那一版代码新增 7 项并替换 3 项旧 slot 预期，净增 4 项，所以此前应为 686/686，且 `682 - 574 = 112 - 4 = 108`。本次独立审查再补 1 条图表分箱回归和 1 条冻结日期回归；当前完整命令为 688/688，不完整顶层命令会变为 576，因此当前口径差为 `682 - 576 = 112 - 6 = 106`。
 
-完整回归输出留在 Cloud 临时文件：`/tmp/aihot-sites-baseline-expanded.log` 与 `/tmp/aihot-sites-current-expanded-final.log`。代码与审查差异可用 `git diff --stat 5bf0ffd..HEAD`、`git diff 5bf0ffd..HEAD` 或交付的 format-patch/bundle 读取；当前工作树保持干净。
+基线完整回归输出留在 Cloud 临时文件：`/tmp/aihot-sites-baseline-expanded.log`；当前 688/688 是本次 Cloud 中执行完整命令的终端结果，容器临时日志不作为跨会话交付。代码与审查差异可用 `git diff --stat 5bf0ffd..HEAD`、`git diff 5bf0ffd..HEAD` 或本审查分支读取；当前工作树保持干净。
 
 ### 生产欠账边界与关键词图表
 
