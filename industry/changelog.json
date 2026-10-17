@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-17T13:49:20Z",
+  "latestVersion": "2026-10-17T13:56:37Z",
   "releases": [
+    {
+      "id": "frozen-pending-paper-refresh-20261017",
+      "at": "2026-10-17T13:56:37Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "解耦冻结简报与论文当前元数据更新",
+      "body": [
+        "cohort=pending 不再把已冻结来源日误当成论文当前行的更新锁；已有精确 D1 源记录的论文仍可在本地晋级 ready 并重跑规则分。research_daily、批次成员历史快照和冻结来源日的 ready evidence 继续保持不可变。",
+        "新增冻结日期本地晋级回归，确认不访问 provider、不创建 daily_work、不改变冻结简报哈希；只补 Cloud 流水线边界，不运行生产采集、调度或模型。"
+      ],
+      "sources": [
+        {
+          "label": "研究流水线与 Sites 完整回归审查记录",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-pipeline-audit.md"
+        }
+      ]
+    },
     {
       "id": "keyword-chart-placeholder-20261017",
       "at": "2026-10-17T13:49:20Z",

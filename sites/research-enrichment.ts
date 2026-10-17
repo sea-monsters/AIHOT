@@ -113,8 +113,12 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace
   if(body.cohort==='previous_day'&&localHour(new Date(started))===8)await db.prepare("INSERT OR IGNORE INTO research_daily_work(date,source_date,status,created_at,updated_at) SELECT ?,?,'pending',?,? WHERE NOT EXISTS(SELECT 1 FROM research_daily WHERE date=?)").bind(today,dailyWindow(new Date(started),today).sourceDate,started,started,today).run();
   const day=body.cohort==='previous_day'?await preparationCohort(db,today):body.cohort==='current'?today:null;result.sourceDay=day;
   // Pending maintenance is a bounded current-month debt pass.  Requiring a
-  // daily_work row here silently stranded older collection days forever.
-  const pendingGate="AND origin_run_id IS NOT NULL AND daily_cohort_key>=? AND daily_cohort_key<=? AND NOT EXISTS(SELECT 1 FROM research_daily d WHERE d.source_date=substr(daily_cohort_key,1,10))";
+  // daily_work row here silently stranded older collection days forever.  A
+  // frozen daily report is only a fence for its archived snapshot/evidence;
+  // it must not fence current paper metadata or rule fields.  The writes below
+  // still keep research_daily, batch-member snapshots, and ready evidence
+  // immutable once that source date has been archived.
+  const pendingGate="AND origin_run_id IS NOT NULL AND daily_cohort_key>=? AND daily_cohort_key<=?";
   const pendingBounds=[window.startDate+'/08',window.endDate+'/20'];
   const rows=(await db.prepare(`SELECT * FROM research_enrichment_queue WHERE status IN ('pending','deferred') AND next_attempt_at<=? ${day?'AND daily_cohort_key IN (?,?)':body.batchKey?'AND origin_batch_key=?':body.cohort==='pending'?pendingGate:''} ORDER BY CASE WHEN length(trim(coalesce(json_extract(paper_json,'$.abstract'),'')))>=180 AND json_type(json_extract(paper_json,'$.authors'))='array' AND json_array_length(json_extract(paper_json,'$.authors'))>0 AND json_extract(paper_json,'$.datePrecision')='day' THEN 0 ELSE 1 END,first_seen,doi,source_id LIMIT ${METADATA_READ_LIMIT}`).bind(started,...(day?[day+'/08',day+'/20']:body.batchKey?[body.batchKey]:body.cohort==='pending'?pendingBounds:[])).all()).results;
   const candidates=rows.map((r:any)=>({...r,p:parse(r.paper_json),providers:parse(r.provider_json)}));
