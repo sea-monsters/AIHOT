@@ -169,6 +169,13 @@
       "when": 1791867137395,
       "tag": "0023_maintenance_ready",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1792246870669,
+      "tag": "0024_previous_terror",
+      "breakpoints": true
     }
   ]
 }

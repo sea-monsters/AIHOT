@@ -58,7 +58,7 @@ async function conversation(db:any,id:string,config:any,env:any,body:any,request
   // Preserve complete reasoning/call/output pairings. Do not slice a live Responses transcript.
   if(jsonBytes(input)>AI_TOOL_LIMITS.contextBytes)return partial('context_limit');
   let result:any;
-  try{result=await providerCall(db,id,config,env,requestId,round,input,'chat',{allowTools:!finalOnly});providerCalls++}
+  try{result=await providerCall(db,id,config,env,requestId,round,input,'chat',{allowTools:!finalOnly,telemetry:{phase:'interactive_chat',runId:requestId,paperIds:[...evidence.keys()],configRevision:config.revision}});providerCalls++}
   catch(e){providerCalls=Number((await db.prepare('SELECT count(*) n FROM ai_receipts WHERE request_id=?').bind(requestId).first())?.n||0);if(evidence.size||webEvidence.size||proposals.length||governor.total){const error=e instanceof AIError?e:new AIError('ai_unavailable',503,'AI 服务暂不可用');return partial(error.code,error.message)}throw e}
   if(!result.calls.length){
    let parsed:any;try{parsed=parseAnswer(result.text,evidence,webEvidence)}catch(e){if(evidence.size||webEvidence.size||proposals.length||governor.total){const error=e instanceof AIError?e:new AIError('answer_format',502,'模型回答格式无效');return partial(error.code,error.message)}throw e}
@@ -122,12 +122,12 @@ export async function aiApi(request:Request,env:any){
   if(typeof body.requestId!=='string'||!/^[a-f0-9-]{36}$/i.test(body.requestId))throw new AIError('invalid_request_id',400,'请求标识无效');
   const requestId=id+':'+body.requestId;logRequest=requestId;manualAnalysis=Array.isArray(body.paperIds)&&body.paperIds.length>0;const fp=await fingerprint(JSON.stringify({body,revision:config.revision,path}));
   const previous=await db.prepare('SELECT * FROM ai_requests WHERE id=? AND owner_id=?').bind(requestId,id).first();
-  if(previous){if(previous.fingerprint!==fp)throw new AIError('request_conflict',409,'同一请求标识不能用于不同问题或设置');if(previous.status==='completed'&&previous.result_json)return json(JSON.parse(previous.result_json));throw new AIError('request_already_attempted',409,'此请求已尝试或仍在处理中，不会自动重复调用；再次主动发送是新请求，可能再次计费')}
+  if(previous){if(previous.fingerprint!==fp)throw new AIError('request_conflict',409,'同一请求标识不能用于不同问题或设置');if(previous.status==='completed'&&previous.result_json){await db.prepare('UPDATE ai_requests SET cache_reuse_count=coalesce(cache_reuse_count,0)+1,cache_last_reused_at=? WHERE id=? AND owner_id=?').bind(stamp(),requestId,id).run();return json(JSON.parse(previous.result_json));}throw new AIError('request_already_attempted',409,'此请求已尝试或仍在处理中，不会自动重复调用；再次主动发送是新请求，可能再次计费')}
   const claimed=await db.prepare("INSERT OR IGNORE INTO ai_requests(id,owner_id,fingerprint,status,created_at) VALUES(?,?,?,'pending',?)").bind(requestId,id,fp,stamp()).run();if(!claimed.meta?.changes)throw new AIError('request_busy',409,'此请求正在处理中');
   try{
    let result:any;
    if(path==='test'){
-    const r=await providerCall(db,id,config,env,requestId,0,[{role:'user',content:'This is a protocol connectivity test. Call connection_check with ok=true. Do not access any other tools or generate analysis.'}],'test');
+    const r=await providerCall(db,id,config,env,requestId,0,[{role:'user',content:'This is a protocol connectivity test. Call connection_check with ok=true. Do not access any other tools or generate analysis.'}],'test',{telemetry:{phase:'connection_test',runId:requestId,configRevision:config.revision}});
     if(!r.calls.some((c:any)=>c.name==='connection_check'&&(()=>{try{return JSON.parse(c.arguments).ok===true}catch{return false}})()))throw new AIError('tool_unsupported',502,'接入点已响应，但未完成工具调用验证；该模型/协议/思考等级组合可能不支持助手所需工具');
     await db.prepare("UPDATE ai_settings SET tested_at=?,test_status='ok' WHERE owner_id=? AND revision=?").bind(stamp(),id,config.revision).run();result={ok:true,message:'连接、模型、思考等级与工具调用已通过本次实际测试',model:config.model,reasoning:config.reasoning};
    }else result=await conversation(db,id,config,env,body,requestId);
