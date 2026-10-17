@@ -1,6 +1,7 @@
 import {parseAssessment} from './research-pipeline.ts';
 import type {Paper} from './research-domain.ts';
 export type KeywordSource='author'|'publisher-index'|'openalex-keyword'|'openalex-topic'|'ai'|'derived';
+export type KeywordConfidence='high'|'medium'|'low';
 export const KEYWORD_POLICY='first-three-v2';
 // Only narrow synonyms are canonicalized. Materials, devices and mechanisms remain distinct.
 const TERMS:[string,string,string[],RegExp][]=[
@@ -48,8 +49,10 @@ export function canonicalKeyword(raw:string){const label=raw.replace(/\s+/g,' ')
 const INVALID=/^(?:keywords?|index terms?|none|null|n\/a|unknown|unclassified|article|research|study|science|engineering|physics|materials science|computer science)$/i;
 export function validKeyword(raw:unknown):raw is string{return typeof raw==='string'&&raw.trim().length>=2&&raw.trim().length<=120&&!INVALID.test(raw.trim())&&!/[<>\x00-\x1f]/.test(raw)&&!/^https?:/i.test(raw)&&/[\p{L}]/u.test(raw)}
 export function keywordCandidates(p:Paper&{analysis?:any}){
- const members=new Map<string,{id:string;label:string;sources:KeywordSource[]}>();
- const add=(raw:unknown,source:KeywordSource)=>{if(!validKeyword(raw))return;const k=canonicalKeyword(raw),old=members.get(k.id);if(old){if(!old.sources.includes(source))old.sources.push(source)}else members.set(k.id,{...k,sources:[source]})};
+ const confidenceFor=(source:KeywordSource):KeywordConfidence=>source==='author'?'high':source==='publisher-index'||source==='openalex-keyword'||source==='derived'?'medium':'low';
+ const rank=(value:KeywordConfidence)=>value==='high'?3:value==='medium'?2:1;
+ const members=new Map<string,{id:string;label:string;sources:KeywordSource[];confidence:KeywordConfidence}>();
+ const add=(raw:unknown,source:KeywordSource)=>{if(!validKeyword(raw))return;const k=canonicalKeyword(raw),old=members.get(k.id),confidence=confidenceFor(source);if(old){if(!old.sources.includes(source))old.sources.push(source);if(rank(confidence)>rank(old.confidence))old.confidence=confidence}else members.set(k.id,{...k,sources:[source],confidence})};
  for(const k of p.keywords||[])add(k,'author');
  const evidence=p.provenance?.keywordEvidence;
  for(const group of ['publisher-index','openalex-keyword','openalex-topic'] as const)for(const e of evidence?.records||[])if(e.kind===group)for(const k of e.terms||[])add(typeof k==='string'?k:k.label,group);

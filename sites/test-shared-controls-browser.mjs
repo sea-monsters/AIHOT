@@ -6,6 +6,7 @@ import {mkdir,mkdtemp,readFile,readdir,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {resolve,join,basename} from 'node:path';
 import {build} from 'esbuild';
+import {testStylePlugin,testStyleLoaders} from './test-style-bundle.ts';
 const output=resolve(process.env.UI_SCREENSHOT_DIR||'.sites-runtime/shared-control-screenshots');await mkdir(output,{recursive:true});
 await mkdir('.sites-runtime',{recursive:true});
 const fixture=`import React,{useState} from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter} from 'react-router';
@@ -28,7 +29,7 @@ return <MemoryRouter><main className="page-frame research-page" style={{padding:
 <button className="fixture-ai" onClick={()=>window.dispatchEvent(new CustomEvent('hkis:open-ai'))}>打开 AI</button><button className="fixture-web" onClick={()=>window.dispatchEvent(new CustomEvent('hkis:web-search',{detail:{query:'synthetic TCAD'}}))}>打开网页搜索</button>
 <AIAssistant/><WebSearch/></main></MemoryRouter>};createRoot(document.getElementById('root')).render(<App/>);`;
 await writeFile('.sites-runtime/shared-controls-fixture.tsx',fixture);
-await build({entryPoints:['.sites-runtime/shared-controls-fixture.tsx'],outfile:'.sites-runtime/shared-controls-fixture.js',bundle:true,platform:'browser',format:'esm',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},logLevel:'silent'});
+await build({plugins:[testStylePlugin],loader:testStyleLoaders,entryPoints:['.sites-runtime/shared-controls-fixture.tsx'],outfile:'.sites-runtime/shared-controls-fixture.js',bundle:true,platform:'browser',format:'esm',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},logLevel:'silent'});
 const files=await readdir('dist/client/assets'),css=files.filter(f=>f.endsWith('.css'));assert.ok(css.length,'built production CSS');
 let chrome,server,ws;const checks=[],errors=[],measurements=[];let settings=0,searches=0;
 const record=(name,value=true)=>{assert.ok(value,name);checks.push(name);console.log('SHARED BROWSER OK',name)};

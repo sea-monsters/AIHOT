@@ -1,8 +1,81 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-17T11:52:00Z",
+  "latestVersion": "2026-10-17T13:34:27Z",
   "releases": [
+    {
+      "id": "shared-controls-browser-fixture-20261017",
+      "at": "2026-10-17T13:34:27Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "补齐共享控件浏览器 fixture 的公式资源加载器",
+      "body": [
+        "共享控件的真实 Chromium fixture 现在与论文抽屉 fixture 一样加载 CSS 和 KaTeX 字体资源，Cloud 中可实际完成 390/640/1440 视口、键盘、折叠、减弱动画、对话框与导航交互验收。",
+        "只修正本地浏览器测试打包，不改生产构建、论文数据、身份、采集或模型调用；本次合成浏览器回归通过78项且无外部请求。"
+      ],
+      "sources": [
+        {
+          "label": "研究流水线与 Cloud 浏览器验收边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-pipeline-audit.md"
+        }
+      ]
+    },
+    {
+      "id": "research-pipeline-local-debt-20261017",
+      "at": "2026-10-17T13:27:55Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "修复研究流水线的本地元数据债务与限流后分阶段预算",
+      "body": [
+        "当前月待处理债务现在按有界队列公平选择：已在 D1 持久化且 DOI、标题、摘要、作者证据精确一致的论文可在不访问外部 provider 的情况下晋级 ready、重跑规则分并写入 ready evidence；旧日期不再因缺少 daily_work 被永久漏掉。",
+        "补全响应提供确认的进度字段以支持第二个有限切片；采集 provider 限流不再扩大为全阶段阻断，恢复确认后仍可执行本地晋级。确定性本地阶段与付费评分分开预算，保留540秒总上限、110秒长请求保留和既有租约/恢复屏障。",
+        "Sites 评分 DTO、论文卡片和关键词图明确区分待补全占位零分与真实零分，并保留关键词来源与置信等级。新增旧债务、队头公平、第二切片、限流、本地零网络、预算和 UI 回归；未调用生产采集或模型。详见流水线审查记录。"
+      ],
+      "sources": [
+        {
+          "label": "研究流水线审查与 Cloud 本地验收边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-pipeline-audit.md"
+        }
+      ]
+    },
+    {
+      "id": "paper-item-browser-fixture-20261017",
+      "at": "2026-10-17T12:48:14Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "补齐论文抽屉浏览器 fixture 的公式资源加载器",
+      "body": [
+        "为真实 Chromium 的论文阅读层级 fixture 配置 CSS 与 KaTeX 字体资源的空 loader，继续使用已构建的 Sites CSS 验证页面；避免测试在启动阶段因 esbuild 资源解析失败而中止。",
+        "该修复只影响本地合成浏览器回归，不加载外部资源、不连接生产数据库、不改变论文数据或模型调用。"
+      ],
+      "sources": [
+        {
+          "label": "浏览器 fixture 验收记录",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/industry/changelog.json"
+        }
+      ]
+    },
+    {
+      "id": "sites-topic-redirect-20261017",
+      "at": "2026-10-17T12:42:37Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "修复 Sites 主题直达链接的 Worker 重定向与水合错误",
+      "body": [
+        "有效的 /topics/:slug 及分页直达链接现在由 Worker 以同源302重定向到论文情报筛选页，避免仅依赖客户端水合时出现路由找不到错误；无效主题和页码仍不被放宽处理。",
+        "本次只修正 Sites 路由与本地验收路径，不改变论文数据、采集开关、模型调用、身份边界或生产发布；已用合成 D1、loopback owner 和真实 Chromium 交互验收。"
+      ],
+      "sources": [
+        {
+          "label": "Sites Worker 主题路由实现",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/industry/changelog.json"
+        },
+        {
+          "label": "主题路由页面实现",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/industry/changelog.json"
+        }
+      ]
+    },
     {
       "id": "bounded-collection-diagnostics-20261017",
       "at": "2026-10-17T11:52:00Z",

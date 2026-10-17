@@ -24,8 +24,9 @@ export function PaperItem({paper:p,className='',heading=2,prefix='',lazy=false,d
  const data=lazy?(detail?.key===JSON.stringify([p.id,revision,detailPath])?detail.value:null):p,source=paperSource(data?.doi??p.doi,data?.url??p.url),Heading=`h${heading}` as 'h2'|'h3'|'h4';
  const authorsWords=paperWords(p.keywords),categories=paperWords(p.categories),words=authorsWords.length?authorsWords:categories;
  const affiliations=[...new Set([...paperWords(p.affiliations),...paperWords(p.metadata?.institutions)])];
- const priority=scoreLabel?score:p.readingScore?.value??p.priority??p.ruleScore;
- const updated=paperUpdate(p.updatedAt),label=scoreLabel||'阅读优先级',scoreSource=scoreLabel?'':p.readingScore?'归档规则分':'规则分',ruleVersion=p.readingScore?.ruleVersion||p.ruleVersion;
+ const scoreAvailability=p.readingScore?'available':p.scoreAvailability||(p.metadataStatus==null||p.metadataStatus==='ready'||p.metadataStatus==='legacy_ready'?'available':p.metadataStatus==='abstain'?'abstained':'pending'),scoreReady=scoreAvailability==='available';
+ const priority=scoreLabel?score:scoreReady?(p.readingScore?.value??p.priority??p.ruleScore):null;
+ const updated=paperUpdate(p.updatedAt),label=scoreLabel||'阅读优先级',scoreSource=scoreLabel?'':p.readingScore?'归档规则分':scoreReady?'规则分':scoreAvailability==='abstained'?'未纳入评分':'等待元数据归一化',ruleVersion=p.readingScore?.ruleVersion||p.ruleVersion,scoreText=typeof priority==='number'&&Number.isFinite(priority)?priority:scoreAvailability==='pending'?'等待补全':scoreAvailability==='abstained'?'未纳入':'未提供';
  return <PaperCardState id={p.id} title={p.title} className={'paper-item '+className}>
   <div ref={motion.ref} className="paper-item-drawer" data-open={open} data-motion-active={motion.moving}>
    <div className="paper-item-heading">
@@ -39,7 +40,7 @@ export function PaperItem({paper:p,className='',heading=2,prefix='',lazy=false,d
       <div className="paper-item-affiliations"><dt>单位机构</dt><dd><span className="paper-item-affiliation-preview">{affiliations[0]||'未提供'}</span>{affiliations.length>1&&<small>共 {affiliations.length} 项 · 展开查看完整机构</small>}</dd></div>
       <div className="paper-item-updated"><dt>更新</dt><dd>{updated?<time dateTime={p.updatedAt}>{updated}</time>:'未提供'}</dd></div>
      </dl>
-     <dl className="paper-item-score"><dt>{label}</dt><dd><span className="paper-item-score-value" data-missing={!(typeof priority==='number'&&Number.isFinite(priority))}>{typeof priority==='number'&&Number.isFinite(priority)?priority:'未提供'}</span>{scoreSource&&<small>{scoreSource}</small>}</dd></dl>
+     <dl className="paper-item-score"><dt>{label}</dt><dd><span className="paper-item-score-value" data-missing={!(typeof priority==='number'&&Number.isFinite(priority))}>{scoreText}</span>{scoreSource&&<small>{scoreSource}</small>}</dd></dl>
     </div>
    </div>
    {note&&<div className="paper-item-note">{note}</div>}

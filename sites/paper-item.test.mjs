@@ -26,6 +26,7 @@ test('rows retain full data with a concise score and recoverable institutions; m
  assert.match(html,/class="paper-item-source" hidden="" inert=""/);assert.match(html,/target="_blank" rel="noopener noreferrer"/);
  assert.match(html,/阅读优先级<\/dt><dd><span class="paper-item-score-value" data-missing="false">0<\/span><small>规则分/);assert.match(html,/AI 评分：未提供/);
  const missing=render({title:'Missing evidence',publishedAt:'2025-01-01'});assert.match(missing,/<dt>更新<\/dt><dd>未提供/);assert.match(missing,/<dt>单位机构<\/dt><dd><span class="paper-item-affiliation-preview">未提供/);assert.match(missing,/<dt>关键词<\/dt><dd>未提供/);assert.match(missing,/阅读优先级<\/dt><dd><span class="paper-item-score-value" data-missing="true">未提供/);
+ const pending=render({title:'Pending metadata',metadataStatus:'pending',priority:0});assert.match(pending,/阅读优先级<\/dt><dd><span class="paper-item-score-value" data-missing="true">等待补全/);assert.match(pending,/等待元数据归一化/);
  assert.equal(paperUpdate('invalid'),null);assert.deepEqual(paperWords(['a',{label:'b'},'a',null]),['a','b']);
 });
 test('detail cache reuses complete stored data, expires and respects revision and abort boundaries',async()=>{

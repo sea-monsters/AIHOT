@@ -17,7 +17,7 @@ test('advertised bounded collection uses serial 75s slices and decrements source
   return maintenance(path);
  },20,()=>0);
  assert.equal(paths.some(p=>p.endsWith('/sync')),false);assert.deepEqual(bodies.map(b=>b.maxCalls),[35,15]);assert.ok(bodies.every(b=>b.batchKey===key&&b.concurrency===3));
- assert.deepEqual(paths.slice(-4),['/api/site/research/batch/finish','/api/site/research/ingestion/recover','/api/site/research/enrich','/api/site/research/process']);
+ assert.ok(paths.includes('/api/site/research/batch/finish'));assert.deepEqual(paths.slice(-4),['/api/site/research/ingestion/recover','/api/site/research/enrich','/api/site/research/process','/api/site/research/process']);
  assert.equal(result.collectionCalls,35);assert.equal(result.collectionRequests,2);assert.equal(result.remainingCollectionCalls,0);assert.equal(result.collectionStopReason,'sources_exhausted');assert.equal(result.coverageStatus,'complete');assert.equal(result.status,'ok');
 });
 
@@ -68,8 +68,20 @@ test('finished HTTP response alone never declares collection coverage complete',
 });
 
 test('settled bounded 429 response closes safely then stops all maintenance',async()=>{
- const paths:string[]=[];const result=await runResearchSlot(async path=>{paths.push(path);if(path.endsWith('/start'))return start();if(path.endsWith('/collect'))return settled(1,{results:[{status:'error'}],collectionControl:{stop:true,reason:'crossref_rate_limit'},stopReason:'crossref_rate_limit'});return finish({status:'partial',completeSources:0});},20,()=>0);
- assert.deepEqual(paths,['/api/site/research/batch/start','/api/site/research/batch/collect','/api/site/research/batch/finish']);assert.equal(result.reason,'provider_cooldown');assert.equal(result.collectionStopReason,'crossref_rate_limit');assert.equal(result.coverageStatus,'partial');assert.equal(result.remainingCollectionCalls,34);
+ const paths:string[]=[];const result=await runResearchSlot(async path=>{paths.push(path);if(path.endsWith('/start'))return start();if(path.endsWith('/collect'))return settled(1,{results:[{status:'error'}],collectionControl:{stop:true,reason:'crossref_rate_limit'},stopReason:'crossref_rate_limit'});if(path.endsWith('/enrich'))return {status:'partial',reason:'provider_cooldown',metadataProgress:{confirmed:true,processedItems:1},remainingMetadata:1};if(path.endsWith('/process'))return {status:'ok'};return path.endsWith('/finish')?finish({status:'partial',completeSources:0}):maintenance(path);},20,()=>0);
+ assert.deepEqual(paths.slice(0,3),['/api/site/research/batch/start','/api/site/research/batch/collect','/api/site/research/batch/finish']);assert.ok(paths.includes('/api/site/research/enrich'));assert.ok(paths.includes('/api/site/research/process'));assert.equal(result.reason,'provider_cooldown');assert.equal(result.collectionStopReason,'crossref_rate_limit');assert.equal(result.coverageStatus,'partial');assert.equal(result.remainingCollectionCalls,34);
+});
+
+test('full collection plus metadata deadline still runs local scoring but defers paid scoring',async()=>{
+ let time=0;const paths:string[]=[];
+ const result=await runResearchSlot(async(path,body,timeout)=>{paths.push(path);if(path.endsWith('/start'))return start();if(path.endsWith('/collect')){time+=timeout!;return settled(1);}if(path.endsWith('/enrich')){time+=75000;return {status:'partial',reason:'provider_deferred',metadataProgress:{confirmed:true,processedItems:1},remainingMetadata:1};}if(path.endsWith('/process'))return {status:'ok'};return path.endsWith('/finish')?finish():maintenance(path);},20,()=>time);
+ assert.ok(paths.includes('/api/site/research/enrich'));assert.ok(paths.includes('/api/site/research/process'));assert.equal(paths.filter(p=>p.endsWith('/api/site/research/process')).length,1);assert.ok(result.steps.some((s:any)=>s.phase==='scoring'&&s.reason==='paid_scoring_budget'));assert.equal(result.status,'partial');
+});
+
+test('confirmed metadata progress permits the bounded second slice',async()=>{
+ let enrichCalls=0;const processBodies:any[]=[];
+ const result=await runResearchSlot(async(path,body)=>{if(path.endsWith('/start'))return start();if(path.endsWith('/collect'))return settled(1,{collectionControl:{stop:true,reason:'sources_exhausted'},stopReason:'sources_exhausted'});if(path.endsWith('/enrich')){enrichCalls++;return {status:'partial',reason:'pending_metadata',metadataProgress:{confirmed:true,processedItems:1},remainingMetadata:enrichCalls===1?2:0};}if(path.endsWith('/process')){processBodies.push(body);return {status:'ok'};}return path.endsWith('/finish')?finish():maintenance(path);},20,()=>0);
+ assert.equal(enrichCalls,2);assert.deepEqual(processBodies.map(b=>b.maxPapers),[0,2]);assert.equal(result.status,'partial');
 });
 
 test('without explicit bounded contract the existing serial sync path remains compatible',async()=>{

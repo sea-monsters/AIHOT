@@ -53,7 +53,7 @@ test('legacy source and batch orchestration stop on unknown transport without di
 });
 
 test('confirmed terminal finish with partial coverage still allows ready maintenance after explicit local recovery',async()=>{
- const paths:string[]=[];const r=await runResearchSlot(async(path)=>{paths.push(path);if(path.endsWith('/start'))return {status:'running',batchKey:'fixture',collectionControl:{stop:true}};if(path.endsWith('/finish'))return {batchStatus:'finished',status:'partial'};return {status:'ok'};},20,()=>0);assert.deepEqual(paths.slice(-2),['/api/site/research/enrich','/api/site/research/process']);assert.equal(r.status,'partial');
+ const paths:string[]=[];const r=await runResearchSlot(async(path)=>{paths.push(path);if(path.endsWith('/start'))return {status:'running',batchKey:'fixture',collectionControl:{stop:true}};if(path.endsWith('/finish'))return {batchStatus:'finished',status:'partial'};return {status:'ok'};},20,()=>0);assert.deepEqual(paths.slice(-3),['/api/site/research/enrich','/api/site/research/process','/api/site/research/process']);assert.equal(r.status,'partial');
 });
 
 test('cancellation during publisher RSS preserves the committed head, page debit and frozen original attribution',async()=>{

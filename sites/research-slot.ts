@@ -1,9 +1,13 @@
-export const SLOT_LIMITS={totalMs:540000,collection8Ms:260000,collection20Ms:330000,longRequestReserveMs:110000,collectionSliceMs:75000,collectionCalls:35,collectionConcurrency:3};
+export const SLOT_LIMITS={totalMs:540000,collection8Ms:260000,collection20Ms:330000,longRequestReserveMs:110000,collectionSliceMs:75000,collectionCalls:35,collectionConcurrency:3,localScoringMinMs:30000,paidScoringMinMs:120000};
 const safeOperationId=(v:any)=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)?v.toLowerCase():null;
 type Call=(path:string,body?:any,timeoutMs?:number)=>Promise<any>;
 const blocked=(value:any)=>!value||!!value.error||!!value.code||['busy','blocked','deferred','error','failed','interrupted','unknown'].includes(value.status);
 const preparationBlocked=(value:any)=>blocked(value)||value.status==='partial'||Number(value.deferred)>0||Number(value.scopePending)>0;
-const scoringBlocked=(value:any)=>blocked(value)||!!value.recovery||['ingestion_pending','pending_collection','collection_in_progress','metadata_in_progress','processing_in_progress','lock_busy','ingestion_recovery_unknown','ingestion_origin_review_required'].includes(value.reason);
+// A metadata provider cooldown is not a scoring barrier once an item has
+// independently reached sufficient local evidence. Keep ingestion, lease and
+// unknown outcomes hard-blocked; allow only an acknowledged partial metadata
+// result to reach deterministic/local scoring.
+const scoringBlocked=(value:any)=>!value||!!value.error||!!value.code||['busy','blocked','error','failed','interrupted','unknown'].includes(value.status)||!!value.recovery||['ingestion_pending','pending_collection','collection_in_progress','metadata_in_progress','processing_in_progress','lock_busy','deadline','ingestion_recovery_unknown','ingestion_origin_review_required','collection_interrupted_readback_reconcile'].includes(value.reason);
 const coverageEvidence=(value:any)=>{
  const count=(n:any)=>Number.isInteger(n)&&n>=0?n:null,expectedSources=count(value?.expectedSources),attemptedSources=count(value?.attemptedSources),completeSources=count(value?.completeSources),missingSources=Array.isArray(value?.missingSources)?value.missingSources:null;
  const complete=value?.status==='complete'&&value.batchStatus==='finished'&&expectedSources!==null&&attemptedSources===expectedSources&&completeSources===expectedSources&&missingSources?.length===0;
@@ -22,7 +26,7 @@ export async function runResearchSlot(call:Call,slot:8|20,now=Date.now,started=n
   catch{steps.push({phase,status:'unknown',startedMs:at-started,endedMs:now()-started});return null;}
  };
  const recover=async()=>{for(let slice=0;slice<4;slice++){if(remaining()<15000){steps.push({phase:'local_recovery',status:'deferred',reason:'deadline'});return {status:'deferred',reason:'deadline'};}const value=await invoke('local_recovery','/api/site/research/ingestion/recover',{maxMs:6000,deadlineAt:new Date(deadline-2000).toISOString()},15000);if(!value)return null;const p=value.recovery;if(p?.known!==true||p?.confirmed!==true)return {status:'deferred',reason:value.reason||'recovery_unconfirmed'};if(!blocked(value)&&p.remainingItems===0)return value;if(value.status!=='partial'||value.reason!=='ingestion_pending'||!Number.isInteger(p.processedItems)||p.processedItems<=0||!Number.isInteger(p.remainingItems)||p.remainingItems<=0)return {status:'deferred',reason:value.reason||'ingestion_pending'};}return {status:'deferred',reason:'ingestion_pending'};};
- const metadata=async(cohort:string)=>{let value:any=null;for(let slice=0;slice<2&&remaining()>=110000;slice++){value=await invoke('metadata','/api/site/research/enrich',{cohort,maxMs:75000},90000);if(!value)return null;if(value.reason!=='pending_metadata'||value.metadataProgress?.confirmed!==true||value.metadataProgress.processedItems<=0||!Number.isInteger(value.remainingMetadata)||value.remainingMetadata<=0)break;}return value||{status:'deferred',reason:'deadline'};};
+ const metadata=async(cohort:string)=>{let value:any=null;for(let slice=0;slice<2&&remaining()>=110000;slice++){value=await invoke('metadata','/api/site/research/enrich',{cohort,maxMs:75000},90000);if(!value)return null;const progress=value.metadataProgress;const canContinue=['pending_metadata','provider_deferred','provider_cooldown'].includes(value.reason)&&progress?.confirmed===true&&Number(progress.processedItems)>0&&Number.isInteger(value.remainingMetadata)&&value.remainingMetadata>0;if(!canContinue)break;}return value||{status:'deferred',reason:'deadline'};};
  // The previous day's journals have already been collected. Prepare that cohort
  // before opening today's batch; today's papers cannot enter the prior-day report.
  if(slot===8){
@@ -78,7 +82,7 @@ export async function runResearchSlot(call:Call,slot:8|20,now=Date.now,started=n
  }
  else if(!['finished','interrupted'].includes(batch.status))return outcome('deferred',{reason:'batch_not_terminal'});
  else {collectionStopReason=control?.reason||'batch_closed';collectionStoppedAt=now();coverage=coverageEvidence(batch.coverage);}
- if(/rate_limit|cooldown|429/.test(control?.reason||collectionStopReason||''))return outcome('partial',{reason:'provider_cooldown'});
+ if(/rate_limit|cooldown|429/.test(control?.reason||collectionStopReason||''))steps.push({phase:'collection',status:'partial',reason:'provider_cooldown'});
  const recovery=await recover();if(!recovery)return outcome('unknown');if(blocked(recovery))return outcome('deferred',{reason:recovery.reason});
  let metadataReady=true;
  if(slot===20&&remaining()>=110000){
@@ -86,9 +90,19 @@ export async function runResearchSlot(call:Call,slot:8|20,now=Date.now,started=n
   if(!enriched)return outcome('unknown');
   metadataReady=!scoringBlocked(enriched);
  }else if(slot===20){metadataReady=false;steps.push({phase:'metadata',status:'deferred',reason:'deadline'});}
- if(slot===20&&metadataReady&&remaining()>=200000){
-  const processed=await invoke('scoring','/api/site/research/process',{maxPapers:2,cohort:'current',maxMs:Math.min(210000,remaining()),deadlineAt:new Date(deadline-2000).toISOString()},210000);
-  if(!processed)return outcome('unknown');
- }else if(slot===20)steps.push({phase:'scoring',status:'deferred',reason:metadataReady?'deadline':'metadata_deferred'});
- return outcome(coverage.status!=='complete'||steps.some(s=>!(s.phase==='collection'&&s.status==='partial')&&['deferred','partial','blocked','busy','error','interrupted','budget_deferred','backfill_pending','scope_pending','coverage_incomplete','identity_ambiguous'].includes(s.status))?'partial':'ok');
+ if(slot===20&&metadataReady&&remaining()>=SLOT_LIMITS.localScoringMinMs){
+  // This pass only materializes deterministic rules/analysis gates. It never
+  // dispatches a model (maxPapers=0), so a nearly exhausted collection slot
+  // can still finish local promotion safely.
+  const local=await invoke('local_scoring','/api/site/research/process',{maxPapers:0,cohort:'current',maxMs:Math.min(SLOT_LIMITS.localScoringMinMs,remaining()),deadlineAt:new Date(deadline-2000).toISOString()},SLOT_LIMITS.localScoringMinMs);
+  if(!local)return outcome('unknown');
+  const paidBudget=remaining();
+  // Paid/model scoring is optional work. Its threshold is separate from the
+  // local pass and never expands SLOT_LIMITS.totalMs.
+  if(paidBudget>=SLOT_LIMITS.paidScoringMinMs){
+   const processed=await invoke('scoring','/api/site/research/process',{maxPapers:2,cohort:'current',maxMs:Math.min(210000,paidBudget),deadlineAt:new Date(deadline-2000).toISOString()},Math.min(210000,paidBudget));
+   if(!processed)return outcome('unknown');
+  }else steps.push({phase:'scoring',status:'deferred',reason:'paid_scoring_budget'});
+ }else if(slot===20)steps.push({phase:'scoring',status:'deferred',reason:metadataReady?'local_scoring_budget':'metadata_deferred'});
+ return outcome(coverage.status!=='complete'||steps.some(s=>!(s.phase==='collection'&&s.status==='partial')&&['deferred','partial','blocked','busy','error','interrupted','budget_deferred','backfill_pending','scope_pending','coverage_incomplete','identity_ambiguous'].includes(s.status))?'partial':'ok',steps.some(s=>s.phase==='collection'&&s.reason==='provider_cooldown')?{reason:'provider_cooldown'}:{});
 }
