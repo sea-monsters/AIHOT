@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-17T13:34:27Z",
+  "latestVersion": "2026-10-17T13:47:15Z",
   "releases": [
+    {
+      "id": "sites-full-regression-count-audit-20261017",
+      "at": "2026-10-17T13:47:15Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "校正 Sites 完整回归命令与计数口径",
+      "body": [
+        "明确完整 Sites 回归必须同时展开顶层和 ai、anysearch、scholarly 三组嵌套测试；固定基线 5bf0ffd 为682/682，本次提交 89c7496 为686/686，均为0失败、0跳过、0取消、0 todo。",
+        "说明此前574项报告漏掉的112个嵌套测试，以及本次新增测试净增4项的算术关系；只补验收记录和文档，不改变生产数据库、采集、调度或模型调用。"
+      ],
+      "sources": [
+        {
+          "label": "Sites 完整回归与研究流水线审查记录",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-pipeline-audit.md"
+        }
+      ]
+    },
     {
       "id": "shared-controls-browser-fixture-20261017",
       "at": "2026-10-17T13:34:27Z",

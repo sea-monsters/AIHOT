@@ -15,12 +15,24 @@
 
 新增/更新测试覆盖：旧日期当前月债务、队头阻塞、本地零网络晋级、metadata 第二切片、采集限流后的本地继续、付费预算不足、占位零分、关键词来源置信度，以及冻结分数不被 pending 状态隐藏。
 
-验证命令：
+### 完整 Sites 回归命令与计数口径
+
+仓库当前与基线都包含 59 个 `*.test.ts`（其中顶层 55 个，`sites/ai/` 2 个、`sites/anysearch/` 1 个、`sites/scholarly/` 1 个）和 15 个顶层 `*.test.mjs`。只写 `sites/*.test.ts` 时，shell 不会递归展开这 4 个嵌套 TS 文件。
+
+完整回归必须使用以下同一命令：
 
 ```sh
-node --test sites/*.test.ts sites/*.test.mjs
+node --test sites/*.test.ts sites/*.test.mjs sites/ai/*.test.ts sites/scholarly/*.test.ts sites/anysearch/*.test.ts
 npm run typecheck
 npm run build
 ```
+
+独立复核结果：
+
+- `5bf0ffd`：682 tests，682 pass，0 fail，0 cancelled，0 skipped，0 todo。
+- `89c7496`：686 tests，686 pass，0 fail，0 cancelled，0 skipped，0 todo。
+- 先前报告的 574 是不完整命令（只覆盖顶层 TS/MJS）；当前完整命令漏掉的嵌套文件共 112 项：AI 71、AnySearch 20、Scholarly 21。当前修正新增 7 项并替换 3 项旧 slot 预期，净增 4 项，因此 `682 - 574 = 112 - 4 = 108`。
+
+完整回归输出留在 Cloud 临时文件：`/tmp/aihot-sites-baseline-expanded.log` 与 `/tmp/aihot-sites-current-expanded.log`。代码与审查差异可用 `git show --stat 89c7496` 和 `git show 89c7496` 读取；当前工作树保持干净。
 
 真实 Cloud 预览仍须使用 loopback owner 与合成 D1；不能把 HTTP 成功响应当作浏览器点击验收，也不能把本文件作为生产运行或调度完成证明。
