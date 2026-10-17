@@ -20,7 +20,7 @@ test('HTML, JSON, downloads and assets are not rewritten',()=>{
 });
 test('legacy feed blocks IP literals, mapped IPv6, credentials and private names before fetching',async()=>{
  const previous=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw Error('must not fetch')};
- try{for(const host of ['198.18.0.1','198.19.255.255','100.64.0.1','192.0.2.1','203.0.113.1','224.0.0.1','127.1','2130706433','0x7f000001','[::1]','[::ffff:198.18.0.1]','[64:ff9b::c612:1]','[2002:c612:1::1]','[fc00::1]','localhost','a.localhost','a.internal','a.local'])await assert.rejects(fetchFeed('https://'+host+'/feed'));
+ try{for(const host of ['198.18.0.1','198.19.255.255','100.64.0.1','100.100.100.200','[::ffff:100.100.100.200]','[::ffff:6464:64c8]','192.0.2.1','203.0.113.1','224.0.0.1','127.1','2130706433','0x7f000001','[::1]','[::ffff:198.18.0.1]','[64:ff9b::c612:1]','[2002:c612:1::1]','[fc00::1]','localhost','a.localhost','a.internal','a.local'])await assert.rejects(fetchFeed('https://'+host+'/feed'));
   await assert.rejects(fetchFeed('https://user:secret@www.nature.com/feed'));await assert.rejects(fetchFeed('https://www.nature.com:8443/feed'));assert.equal(calls,0);
  }finally{globalThis.fetch=previous}
 });
