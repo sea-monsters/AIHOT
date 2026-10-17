@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-17T13:47:15Z",
+  "latestVersion": "2026-10-17T13:49:20Z",
   "releases": [
+    {
+      "id": "keyword-chart-placeholder-20261017",
+      "at": "2026-10-17T13:49:20Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "补齐关键词图表占位分数回归",
+      "body": [
+        "将关键词直方图分箱逻辑提取为可测试 helper；pending 元数据的占位零分进入未评分箱，ready 论文的真实零分仍进入 0–9 箱，分类前三关键词和关键词篇数保持完整。",
+        "只补 Cloud 离线回归覆盖，不改变生产论文、采集、调度或模型调用。"
+      ],
+      "sources": [
+        {
+          "label": "研究流水线与 Sites 完整回归审查记录",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-pipeline-audit.md"
+        }
+      ]
+    },
     {
       "id": "sites-full-regression-count-audit-20261017",
       "at": "2026-10-17T13:47:15Z",

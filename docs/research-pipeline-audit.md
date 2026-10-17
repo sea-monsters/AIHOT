@@ -30,9 +30,15 @@ npm run build
 独立复核结果：
 
 - `5bf0ffd`：682 tests，682 pass，0 fail，0 cancelled，0 skipped，0 todo。
-- `89c7496`：686 tests，686 pass，0 fail，0 cancelled，0 skipped，0 todo。
-- 先前报告的 574 是不完整命令（只覆盖顶层 TS/MJS）；当前完整命令漏掉的嵌套文件共 112 项：AI 71、AnySearch 20、Scholarly 21。当前修正新增 7 项并替换 3 项旧 slot 预期，净增 4 项，因此 `682 - 574 = 112 - 4 = 108`。
+- 当前提交序列（最终提交见交付报告，再加图表回归）为 687 tests，687 pass，0 fail，0 cancelled，0 skipped，0 todo。
+- 先前报告的 574 是不完整命令（只覆盖顶层 TS/MJS）；此前完整命令实际应补回 112 项嵌套测试：AI 71、AnySearch 20、Scholarly 21。那一版代码新增 7 项并替换 3 项旧 slot 预期，净增 4 项，所以此前应为 686/686，且 `682 - 574 = 112 - 4 = 108`。本次独立审查再补 1 条图表分箱回归；当前完整命令为 687/687，不完整顶层命令会变为 575，因此当前口径差为 `682 - 575 = 112 - 5 = 107`。
 
-完整回归输出留在 Cloud 临时文件：`/tmp/aihot-sites-baseline-expanded.log` 与 `/tmp/aihot-sites-current-expanded.log`。代码与审查差异可用 `git show --stat 89c7496` 和 `git show 89c7496` 读取；当前工作树保持干净。
+完整回归输出留在 Cloud 临时文件：`/tmp/aihot-sites-baseline-expanded.log` 与 `/tmp/aihot-sites-current-expanded-final.log`。代码与审查差异可用 `git diff --stat 5bf0ffd..HEAD`、`git diff 5bf0ffd..HEAD` 或交付的 format-patch/bundle 读取；当前工作树保持干净。
+
+### 生产欠账边界与关键词图表
+
+- 生产现有 121 条待补全不能被本地验收直接宣称已清零。下一次经授权的 20 点 slot 会调用现有 `/api/site/research/enrich` 的 `cohort=pending` 路径；每片最多读取 32 条，确认有进展且仍有债务时最多开启第二片。对已有 D1 `research_records` 且 DOI、规范化标题、摘要和至少一名作者精确一致的条目，直接本地 `savePaper(... deferScoring:false)`、重跑规则分并写 `research_ready_evidence`，不调用 provider 或模型。
+- 因而在 121 条全部满足本地证据、均属当前月且已归属的理想情形下，需要多个受预算约束的 20 点 slot（每 slot 最多本地推进约 64 条）；缺少队列归属、已冻结日期或缺少精确源记录的条目不会被冒充恢复。它们需要另行只读核对后，才可由正常 provider 元数据路径或经批准的维护操作处理；本次没有运行维护端点、生产采集或付费模型。
+- `paperCategories(...).slice(0,3)` 的前三有效关键词由 `sites/paper-keywords.test.ts` 覆盖。`keyword-map` 将 pending/abstain 的占位 `0` 输出为 `score=null`，但保留关键词篇数；`keyword-chart.histogram` 的直接回归确认 pending 进入“未评分”箱，ready 的真实 `0` 进入 0–9 箱。散点图的中位数/四分位数使用同一 null 排除统计，因此未把 placeholder 0 当成数值评分。
 
 真实 Cloud 预览仍须使用 loopback owner 与合成 D1；不能把 HTTP 成功响应当作浏览器点击验收，也不能把本文件作为生产运行或调度完成证明。
