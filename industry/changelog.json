@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-17T14:25:37Z",
+  "latestVersion": "2026-10-17T14:45:59Z",
   "releases": [
+    {
+      "id": "sites-ai-usage-telemetry-20261017",
+      "at": "2026-10-17T14:45:59Z",
+      "kind": "feature",
+      "basis": "record",
+      "title": "补充 Sites AI provider 用量与缓存遥测",
+      "body": [
+        "在 Sites provider 层按白名单解析 Responses、Chat Completions、DeepSeek 及 SSE 的 token usage，区分缺失、未知、冲突和非法计数，并避免把 reasoning token 重复计入总量。",
+        "将请求结果、失败原因、耗时、重试关联和应用缓存复用写入独立 D1 遥测；设置页为 owner 展示按 provider 的调用与 token 汇总，未启用模型时保持明确的禁用状态。",
+        "不自动拉取价格、不复制生产密钥、不改变采集或调度边界；缺失 usage 只保留可审计的 unknown，不猜测计费金额。"
+      ],
+      "sources": [
+        {
+          "label": "Sites provider usage telemetry implementation",
+          "url": "https://github.com/sea-monsters/AIHOT/commit/58afcc9fef3e1c92ae0225257d0976a9087fe194"
+        }
+      ]
+    },
     {
       "id": "upstream-review-20261017",
       "at": "2026-10-17T14:25:37Z",
