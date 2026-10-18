@@ -98,7 +98,7 @@ export function usageColumns(snapshot:UsageSnapshot){return {
  inputTokens:snapshot.input_tokens,outputTokens:snapshot.output_tokens,totalTokens:snapshot.total_tokens,cachedInputTokens:snapshot.cached_input_tokens,cacheCreationInputTokens:snapshot.cache_creation_input_tokens,reasoningTokens:snapshot.reasoning_tokens,cacheSemantics:snapshot.cache_semantics,cacheHit:snapshot.cache_hit,
  }};
 
-export type CostStatus='estimated'|'unknown_usage'|'missing_rate'|'provider_unknown'|'reference_not_loaded'|'unavailable'|'not_found'|'unsupported_tier'|'historical_price_snapshot_missing'|'not_calculated';
+export type CostStatus='estimated'|'unknown_usage'|'missing_rate'|'provider_unknown'|'reference_not_loaded'|'unavailable'|'not_found'|'unsupported_tier'|'unsupported_pricing'|'historical_price_snapshot_missing'|'not_calculated';
 export type CostRecord={
  version:1;
  status:CostStatus;
@@ -128,6 +128,7 @@ function costStatusForReference(reference:ModelsDevReference):CostStatus{
  if(reference.status==='unavailable')return 'unavailable';
  if(reference.status==='not_found')return 'not_found';
  if(reference.status==='unsupported_tiers')return 'unsupported_tier';
+ if(reference.status==='unsupported_pricing')return 'unsupported_pricing';
  return 'missing_rate';
 }
 /**
@@ -164,7 +165,7 @@ export function estimateUsageCost(snapshot:UsageSnapshot,reference:ModelsDevRefe
 }
 export function parseCostRecord(value:any):CostRecord|null{
  if(!value||typeof value!=='object'||Array.isArray(value)||value.version!==1||typeof value.status!=='string')return null;
- const statuses=new Set<CostStatus>(['estimated','unknown_usage','missing_rate','provider_unknown','reference_not_loaded','unavailable','not_found','unsupported_tier','historical_price_snapshot_missing','not_calculated']);
+ const statuses=new Set<CostStatus>(['estimated','unknown_usage','missing_rate','provider_unknown','reference_not_loaded','unavailable','not_found','unsupported_tier','unsupported_pricing','historical_price_snapshot_missing','not_calculated']);
  if(!statuses.has(value.status))return null;
  return {version:1,status:value.status,amountUsd:typeof value.amountUsd==='number'&&Number.isFinite(value.amountUsd)&&value.amountUsd>=0?value.amountUsd:null,currency:value.currency==='USD'?'USD':null,source:value.source==='models.dev'?'models.dev':null,sourceUrl:value.sourceUrl==='https://models.dev'?value.sourceUrl:null,providerId:typeof value.providerId==='string'&&/^[a-z0-9][a-z0-9._-]{0,80}$/i.test(value.providerId)?value.providerId:null,modelId:typeof value.modelId==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,119}$/.test(value.modelId)?value.modelId:null,fetchedAt:typeof value.fetchedAt==='string'?value.fetchedAt:null,refreshedAt:typeof value.refreshedAt==='string'?value.refreshedAt:null,contentHash:typeof value.contentHash==='string'&&/^[a-f0-9]{64}$/.test(value.contentHash)?value.contentHash:null,basis:value.basis==='current_reference_reestimate'?'current_reference_reestimate':value.basis==='snapshot'?'snapshot':'none',rates:value.rates&&typeof value.rates==='object'?value.rates:null,components:value.components&&typeof value.components==='object'?{freshInputTokens:numberOrNull(value.components.freshInputTokens),cacheReadTokens:numberOrNull(value.components.cacheReadTokens),cacheWriteTokens:numberOrNull(value.components.cacheWriteTokens),outputTokens:numberOrNull(value.components.outputTokens),reasoningTokens:numberOrNull(value.components.reasoningTokens)}:emptyComponents(),gaps:Array.isArray(value.gaps)?value.gaps.filter((v:any)=>typeof v==='string').slice(0,16):[],warnings:Array.isArray(value.warnings)?value.warnings.filter((v:any)=>typeof v==='string').slice(0,8):[]};
 }

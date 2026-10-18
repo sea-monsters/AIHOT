@@ -10,11 +10,11 @@ HKIS 设置页的“模型调用与费用趋势”只读取 Sites 已保存的 `
 
 ## models.dev 价目边界
 
-目录来源是 `https://models.dev/api.json?type=decision`，服务端有 6 小时内存缓存、5 秒超时、8 MiB 响应上限、provider/model 数量上限和 JSON 校验；失败时保留旧缓存或返回明确的 unavailable 状态。匹配前先将审核过的完整接入点映射为 provider，再要求模型名精确相等，不按同名模型跨供应商套价。第三方或未审核网关显示 provider unknown；接入点和密钥永远不会传给 models.dev。
+目录来源是 models.dev 官方默认 API `https://models.dev/api.json`（官方也支持可选的 `type=decision` 筛选；当前实现遵循无参默认），服务端有 6 小时内存缓存、5 秒超时、8 MiB 响应上限、provider/model 数量上限和 JSON 校验；失败时保留旧缓存或返回明确的 unavailable 状态。匹配前先将审核过的完整接入点映射为 provider，再要求模型名精确相等，不按同名模型跨供应商套价。第三方或未审核网关显示 provider unknown；接入点和密钥永远不会传给 models.dev。
 
 费率按 models.dev 的 USD / 百万 token 解释，保存来源 URL、provider/model、获取时间、刷新时间和目录内容 SHA-256。输入 token 的缓存读、缓存写和新输入桶互斥；只有遥测明确说明 input 包含缓存时才做减法。reasoning token 是 output 的子集，只记录不再次收费。usage、费率、缓存包含关系或上下文阶梯不明确时显示缺口，不按 0 计算。
 
-models.dev 公开价是估算参考，不是供应商账单。新回执在参考价已加载时保存价目来源和获取时间；历史回执若没有价目快照，趋势查询会在有当前参考价时明确标记 `current_reference_reestimate`，否则标记 `historical_price_snapshot_missing`，不冒充历史真实费用。DeepSeek 的 models.dev 价目可用于显示有意义的低峰（off-peak）参考估算，但当前遥测没有 UTC 时段/节假日维度，界面会明确提示峰时可能更高；context 阶梯或服务模式差价无法完整表达时则显示未支持与计价缺口。
+models.dev 公开价是估算参考，不是供应商账单。新回执在参考价已加载时保存价目来源和获取时间；历史回执若没有价目快照，趋势查询会独立按回执保存的 provider/model 加载目录并在有当前参考价时明确标记 `current_reference_reestimate`，不依赖当前设置是否仍是同一接入点；否则标记 `historical_price_snapshot_missing`，不冒充历史真实费用。DeepSeek 的 models.dev 价目可用于显示有意义的低峰（off-peak）参考估算，但当前遥测没有 UTC 时段/节假日维度，界面会明确提示峰时可能更高；Kimi Coding 目前只有全零订阅/套餐占位价，不能当作按量免费，显示计价缺口；context 阶梯或服务模式差价无法完整表达时也显示未支持与计价缺口。
 
 ## 接口与验证
 

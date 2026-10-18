@@ -9,7 +9,7 @@
  */
 import {KIMI_CODE_ENDPOINT} from './security.ts';
 
-export const MODELS_DEV_URL='https://models.dev/api.json?type=decision';
+export const MODELS_DEV_URL='https://models.dev/api.json';
 export const MODELS_DEV_SOURCE='https://models.dev';
 const CACHE_TTL_MS=6*60*60*1000;
 const MAX_RESPONSE_BYTES=8*1024*1024;
@@ -24,7 +24,7 @@ export type ModelsDevTier={type:'context';size:number;rates:ModelsDevRate};
 export type ModelsDevReference={
  source:'models.dev';
  sourceUrl:string;
- status:'matched'|'not_found'|'provider_unknown'|'unavailable'|'disabled'|'reference_not_loaded'|'unsupported_tiers';
+ status:'matched'|'not_found'|'provider_unknown'|'unavailable'|'disabled'|'reference_not_loaded'|'unsupported_tiers'|'unsupported_pricing';
  providerId:string|null;
  modelId:string|null;
  displayName:string|null;
@@ -70,9 +70,10 @@ function modelReference(providerId:string,modelId:string,model:JsonObject,meta:P
  if(variableContext)warnings.push('包含旧版长上下文价目字段；当前遥测未保存请求上下文长度，未将其压成统一费率');
  if(providerId==='deepseek')warnings.push('models.dev 对 DeepSeek 记录的是低峰（off-peak）参考价；当前遥测未保存 UTC 时段与节假日，峰时可能更高，图表为低峰参考估算而非实际扣费');
  if(object(model.experimental)&&object(model.experimental.modes)&&Object.keys(model.experimental.modes).length)warnings.push('模型存在服务模式差价；当前配置/遥测未保存模式，未将模式价混为默认价');
- const rates=rateSet(model.cost),hasRate=Object.values(rates).some(value=>value!==null);
- const status=parsed.tiers.length||parsed.invalid||variableContext?'unsupported_tiers':hasRate?'matched':'not_found';
- return {source:'models.dev',sourceUrl:MODELS_DEV_SOURCE,status,providerId,modelId,displayName:boundedString(model.name,200),rates:hasRate?rates:null,tiers:parsed.tiers,warnings,fetchedAt:new Date(meta.fetchedAt).toISOString(),refreshedAt:new Date().toISOString(),contentHash:meta.contentHash,cacheState,fetchError};
+ const rates=rateSet(model.cost),hasRate=Object.values(rates).some(value=>value!==null),zeroSubscriptionPlaceholder=providerId==='kimi-code-plan-cn'&&hasRate&&Object.values(rates).every(value=>value===null||value===0);
+ if(zeroSubscriptionPlaceholder)warnings.push('models.dev 对 Kimi Coding 仅返回全零订阅/套餐占位价；这不是已验证的按量免费费率，未按 $0 计费并显示计价缺口');
+ const status=parsed.tiers.length||parsed.invalid||variableContext?'unsupported_tiers':zeroSubscriptionPlaceholder?'unsupported_pricing':hasRate?'matched':'not_found';
+ return {source:'models.dev',sourceUrl:MODELS_DEV_SOURCE,status,providerId,modelId,displayName:boundedString(model.name,200),rates:hasRate&&!zeroSubscriptionPlaceholder?rates:null,tiers:parsed.tiers,warnings,fetchedAt:new Date(meta.fetchedAt).toISOString(),refreshedAt:new Date().toISOString(),contentHash:meta.contentHash,cacheState,fetchError};
 }
 function baseReference(providerId:string|null,modelId:string|null,status:ModelsDevReference['status'],extra:Partial<ModelsDevReference>={}):ModelsDevReference{
  return {source:'models.dev',sourceUrl:MODELS_DEV_SOURCE,status,providerId,modelId,displayName:null,rates:null,tiers:[],warnings:[],fetchedAt:null,refreshedAt:new Date().toISOString(),contentHash:null,cacheState:'missing',fetchError:null,...extra};
@@ -83,9 +84,10 @@ export function providerIdForEndpoint(value:unknown):string|null{
  return ({
   'https://api.openai.com/v1':'openai',
   'https://api.deepseek.com':'deepseek',
+  'https://api.moonshot.ai/v1':'moonshotai',
   'https://openrouter.ai/api/v1':'openrouter',
   'https://generativelanguage.googleapis.com/v1beta/openai':'google',
-  [KIMI_CODE_ENDPOINT]:'moonshotai',
+  [KIMI_CODE_ENDPOINT]:'kimi-code-plan-cn',
  } as Record<string,string>)[clean]||null;
 }
 
@@ -132,6 +134,8 @@ async function loadCatalog(env:any,force=false){
  })();
  return pending;
 }
+/** Load the bounded public catalog for historical provider/model re-estimation. */
+export async function ensureModelsDevCatalog(env:any){return loadCatalog(env)}
 
 export async function modelsDevReference(config:any,env:any,options:{refresh?:boolean}={}):Promise<ModelsDevReference>{
  const providerId=providerIdForEndpoint(config?.endpoint),modelId=boundedString(config?.model,120);
