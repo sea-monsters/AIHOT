@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-17T14:45:59Z",
+  "latestVersion": "2026-10-18T08:39:48Z",
   "releases": [
+    {
+      "id": "sites-ai-usage-cost-trends-20261018",
+      "at": "2026-10-18T08:39:48Z",
+      "kind": "feature",
+      "basis": "record",
+      "title": "在模型设置页加入调用量与费用趋势",
+      "body": [
+        "复用现有 ai_receipts token/cache 遥测，在 HKIS 模型配置附近按最近1天（小时）、7天或30天（日）展示调用次数、费用估算与累计趋势；Asia/Singapore 日期边界、空数据和调用/费用单位分别处理。",
+        "服务端按审核过的完整 provider + model 精确匹配 models.dev 公开 USD/百万 token 参考价，缓存并限制响应大小、超时和错误回退；缓存读写、新输入与 reasoning 子集不重复计费，未知 usage、未映射端点、阶梯价和历史缺少价目快照显示计价缺口，DeepSeek 时段价明确按低峰参考估算并警告峰时差异，不冒充供应商账单。",
+        "设置读取不调用模型；趋势读取只返回 owner 自己的有界汇总和脱敏价目元数据。实现、文档与隔离合成回执测试不读取或输出密钥，不改变生产采集、调度或模型预算。"
+      ],
+      "sources": [
+        {
+          "label": "HKIS 实现说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/ai-usage-costs.md"
+        }
+      ]
+    },
     {
       "id": "sites-ai-usage-telemetry-20261017",
       "at": "2026-10-17T14:45:59Z",

@@ -2,7 +2,8 @@ import {test} from 'node:test';
 import {strict as assert} from 'node:assert';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,readdirSync} from 'node:fs';
-import {normalizeUsage,usageSummary} from './usage.ts';
+import {normalizeUsage,usageSummary,estimateUsageCost,costJson,usageJson,usageTrend} from './usage.ts';
+import {primeModelsDevCacheForTests,resetModelsDevCache,cachedModelsDevReference,publicModelsDevReference} from './models-dev.ts';
 import {parseProviderResponse,providerCall} from './provider.ts';
 import {seal} from './security.ts';
 
@@ -85,4 +86,22 @@ test('summary uses mutually exclusive outcomes, excludes anomalous cache rows, a
 test('summary aggregates the full window even when more than 200 groups are returned',async()=>{
  const f=fixture(),insert=f.sql.prepare('INSERT INTO ai_receipts(id,owner_id,request_id,purpose,model,status,created_at,phase,protocol,outcome,usage_state,input_tokens,output_tokens,total_tokens,cached_input_tokens,cache_hit,wall_time_ms) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');for(let i=0;i<201;i++)insert.run('g'+i,'owner','g'+i,'p','m','received','2026-10-17T01:00:00Z','phase-'+i,'responses','completed','known',1,0,1,0,'miss',1);
  const summary=await usageSummary(f.db,'owner',{days:2});assert.equal(summary.groups.length,200);assert.equal(summary.groupsTruncated,true);assert.equal(summary.groupLimit,200);assert.equal(summary.totals.calls,201);assert.equal(summary.totals.completed,201);assert.equal(summary.totals.completed+summary.totals.incomplete+summary.totals.failed+summary.totals.unknown,summary.totals.calls);assert.equal(summary.totals.cacheKnownCalls,201);assert.equal(summary.totals.cacheInputTokens,201);f.sql.close();
+});
+test('cost estimate keeps cache buckets exclusive and reasoning inside output',()=>{
+ const snapshot=normalizeUsage({input_tokens:100,output_tokens:40,total_tokens:140,input_tokens_details:{cached_tokens:20,cache_write_tokens:10},output_tokens_details:{reasoning_tokens:20}},'responses');
+ const reference={source:'models.dev',sourceUrl:'https://models.dev',status:'matched',providerId:'openai',modelId:'synthetic-model',displayName:'Synthetic',rates:{input:1,output:2,reasoning:9,cacheRead:.5,cacheWrite:1.5},tiers:[],warnings:[],fetchedAt:'2026-10-18T00:00:00.000Z',refreshedAt:'2026-10-18T00:00:00.000Z',contentHash:'a'.repeat(64),cacheState:'fresh',fetchError:null} as any;
+ const cost=estimateUsageCost(snapshot,reference);assert.equal(cost.status,'estimated');assert.equal(cost.components.freshInputTokens,70);assert.equal(cost.components.cacheReadTokens,20);assert.equal(cost.components.cacheWriteTokens,10);assert.equal(cost.components.outputTokens,40);assert.equal(cost.components.reasoningTokens,20);assert.equal(cost.amountUsd,70/1e6+20*.5/1e6+10*1.5/1e6+40*2/1e6);
+ const unknown={...snapshot,input_includes_cache:'unknown' as const};assert.equal(estimateUsageCost(unknown,reference).status,'missing_rate');assert.ok(estimateUsageCost(unknown,reference).gaps.includes('input_cache_relationship_unknown'));
+ const missing=normalizeUsage({input_tokens:10,output_tokens:0,total_tokens:10},'responses');assert.equal(estimateUsageCost(missing,reference).amountUsd,10/1e6);assert.equal(estimateUsageCost(missing,reference).components.reasoningTokens,null);
+});
+test('Singapore trend buckets boundaries, gaps and current-reference reestimate are explicit',async()=>{
+ const f=fixture(),now=Date.parse('2026-10-18T00:30:00.000Z'),config={endpoint:'https://api.openai.com/v1',model:'synthetic-model'};
+ await primeModelsDevCacheForTests({openai:{models:{'synthetic-model':{name:'Synthetic',cost:{input:1,output:2,cache_read:.5,cache_write:1.5}}}}},now);
+ const snapshot=normalizeUsage({input_tokens:10,output_tokens:5,total_tokens:15},'responses');
+ const legacyCost={version:1,status:'reference_not_loaded',amountUsd:null,currency:null,source:'models.dev',sourceUrl:'https://models.dev',providerId:'openai',modelId:'synthetic-model',fetchedAt:null,refreshedAt:null,contentHash:null,basis:'snapshot',rates:null,components:{freshInputTokens:null,cacheReadTokens:null,cacheWriteTokens:null,outputTokens:5,reasoningTokens:null},gaps:['price_reference_not_loaded'],warnings:[]};
+ const insert=f.sql.prepare('INSERT INTO ai_receipts(id,owner_id,request_id,purpose,model,status,created_at,outcome,usage_state,input_tokens,output_tokens,total_tokens,protocol,usage_json,cost_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+ insert.run('before-midnight','owner','before-midnight','chat','synthetic-model','received','2026-10-17T15:59:00.000Z','completed','known',10,5,15,'responses',usageJson(snapshot),costJson(legacyCost as any));
+ insert.run('after-midnight','owner','after-midnight','chat','synthetic-model','received','2026-10-17T16:01:00.000Z','completed','known',10,5,15,'responses',usageJson(snapshot),costJson(legacyCost as any));
+ const trend=await usageTrend(f.db,'owner','7d',{now,pricing:cachedModelsDevReference(config)});assert.equal(trend.timeZone,'Asia/Singapore');assert.equal(trend.window.bucket,'day');assert.equal(trend.recordCount,2);assert.equal(trend.coverage.estimatedCalls,2);assert.equal(trend.coverage.reestimatedCalls,2);assert.equal(trend.points.filter((point:any)=>point.calls).length,2);const active=trend.points.filter((point:any)=>point.calls);assert.equal(active[0].label,'2026-10-17');assert.equal(active[1].label,'2026-10-18');assert.equal(trend.totals.estimatedCostUsd,2*(10/1e6+5*2/1e6));
+ resetModelsDevCache();const missing=await usageTrend(f.db,'owner','1d',{now,pricing:null});assert.equal(missing.totals.estimatedCalls,0);assert.equal(missing.totals.costGapCalls,2);assert.ok(missing.costGaps.some((gap:any)=>gap.reason==='reference_not_loaded'||gap.reason==='historical_price_snapshot_missing'));await primeModelsDevCacheForTests({openai:{models:{'synthetic-model':{name:'Synthetic',cost:{input:1,output:2}}}}},now);assert.equal(publicModelsDevReference(cachedModelsDevReference(config)).providerId,'openai');resetModelsDevCache();f.sql.close();
 });
