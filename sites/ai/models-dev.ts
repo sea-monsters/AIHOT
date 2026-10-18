@@ -38,9 +38,10 @@ export type ModelsDevReference={
  fetchError:string|null;
 };
 type CatalogSnapshot={catalog:ModelsDevCatalog;fetchedAt:number;contentHash:string};
+type CatalogLoadResult={snapshot:CatalogSnapshot|null;cacheState:'fresh'|'stale'|'missing';fetchError:string|null};
 
 let snapshot:CatalogSnapshot|null=null;
-let pending:Promise<{snapshot:CatalogSnapshot|null;cacheState:'fresh'|'stale'|'missing';fetchError:string|null}>|null=null;
+let pending:Promise<CatalogLoadResult>|null=null;
 
 const object=(value:unknown):value is JsonObject=>!!value&&typeof value==='object'&&!Array.isArray(value);
 const boundedString=(value:unknown,max:number)=>typeof value==='string'&&value.length<=max?value:null;
@@ -137,12 +138,12 @@ async function loadCatalog(env:any,force=false){
 /** Load the bounded public catalog for historical provider/model re-estimation. */
 export async function ensureModelsDevCatalog(env:any){return loadCatalog(env)}
 
-export async function modelsDevReference(config:any,env:any,options:{refresh?:boolean}={}):Promise<ModelsDevReference>{
+export async function modelsDevReference(config:any,env:any,options:{refresh?:boolean;loaded?:CatalogLoadResult}={}):Promise<ModelsDevReference>{
  const providerId=providerIdForEndpoint(config?.endpoint),modelId=boundedString(config?.model,120);
  if(env?.HKIS_MODELS_DEV_ENABLED==='false'||env?.HKIS_MODELS_DEV_ENABLED==='0')return baseReference(providerId,modelId,'disabled',{cacheState:'disabled'});
  if(!providerId)return baseReference(null,modelId,'provider_unknown',{warnings:['第三方或自定义接入点没有经过 models.dev provider 映射；未套用同名模型费率']});
  if(!modelId||!/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,119}$/.test(modelId))return baseReference(providerId,null,'not_found');
- const loaded=await loadCatalog(env,options.refresh===true);if(!loaded.snapshot)return baseReference(providerId,modelId,'unavailable',{fetchError:loaded.fetchError});
+ const loaded=options.loaded||await loadCatalog(env,options.refresh===true);if(!loaded.snapshot)return baseReference(providerId,modelId,'unavailable',{fetchError:loaded.fetchError});
  const provider=loaded.snapshot.catalog[providerId],model=provider?.models?.[modelId];
  if(!model||!object(model))return baseReference(providerId,modelId,'not_found',{cacheState:loaded.cacheState,fetchedAt:new Date(loaded.snapshot.fetchedAt).toISOString(),refreshedAt:new Date().toISOString(),contentHash:loaded.snapshot.contentHash,fetchError:loaded.fetchError});
  return modelReference(providerId,modelId,model,loaded.snapshot,loaded.cacheState==='missing'?'stale':loaded.cacheState,loaded.fetchError);

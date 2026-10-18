@@ -110,8 +110,7 @@ export async function aiApi(request:Request,env:any){
    if(path==='usage'){
     const selected=(['1d','7d','month'] as UsageTrendRange[]).includes(requestUrl.searchParams.get('range') as UsageTrendRange)?requestUrl.searchParams.get('range') as UsageTrendRange:'7d';
     const usageStarted=Date.now(),stored=await db.prepare('SELECT endpoint,model,protocol,reasoning FROM ai_settings WHERE owner_id=?').bind(id).first(),config=stored?{endpoint:stored.endpoint,model:stored.model,protocol:stored.protocol,reasoning:stored.reasoning}:undefined;
-    await ensureModelsDevCatalog(env);
-    const pricing=await modelsDevReference(config||{},env),trend=await usageTrend(db,id,selected,{pricing});return json({...trend,pricing:publicModelsDevReference(pricing)},200,{'Server-Timing':`ai-usage;dur=${Date.now()-usageStarted}`,'X-HKIS-Usage-Records':String(trend.recordsRead)});
+    const catalog=await ensureModelsDevCatalog(env),pricing=await modelsDevReference(config||{},env,{loaded:catalog}),trend=await usageTrend(db,id,selected,{pricing});return json({...trend,pricing:publicModelsDevReference(pricing)},200,{'Server-Timing':`ai-usage;dur=${Date.now()-usageStarted}`,'X-HKIS-Usage-Records':String(trend.recordsRead)});
    }
    if(path==='preferences')return json(await preferenceStatus(db,id));
    throw new AIError('not_found',404,'接口不存在');
