@@ -2,13 +2,15 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readdirSync,readFileSync} from 'node:fs';
-import {startBatch,startManualBatch,validateBatch,finishBatch} from './research-batches.ts';
+import {startBatch,startManualBatch,validateBatch,finishBatch,previousCoverage} from './research-batches.ts';
 import {batchBudgetMs} from './research-lifecycle.ts';
 import {collectionCycle} from './research-crossref.ts';
 import {savePaper} from './research.ts';
 import {planMetadataQueue,enrichMetadata} from './research-enrichment.ts';
 import {processRecent} from './research-processing.ts';
 import {dailyRead} from './research-daily.ts';
+import {captureIngestion,drainIngestion} from './research-ingestion.ts';
+import {OperationTrace} from './research-operations.ts';
 
 function fixture(){
  const sql=new DatabaseSync(':memory:');
@@ -41,6 +43,37 @@ test('manual batch uses an opaque key, fixed 540s fence, and atomic scheduled ex
   const daily=await dailyRead(db,new URLSearchParams('date=2026-10-21'),new Date('2026-10-22T00:03:00Z'));
   assert.deepEqual(daily.batches.map((b:any)=>b.key),['2026-10-21/08']);
   assert.deepEqual(daily.manualBatches.map((b:any)=>b.key),[manual.batchKey]);
+ }finally{sql.close()}
+});
+
+test('manual capture and drain use a non-null explicit marker while paper attribution stays excluded',async()=>{
+ const {db,sql}=fixture();
+ try{
+  const key='manual/11111111-2222-4333-8444-555555555555',runId='manual-ingestion-run',at='2026-10-21T12:01:00.000Z';
+  sql.prepare("INSERT INTO research_batches(key,date,slot,mode,status,sources_json,started_at) VALUES(?,?,0,'manual','running','[]',?)").run(key,'2026-10-21',at);
+  sql.prepare("INSERT INTO research_runs(id,phase,started_at,status,source_id,batch_key,entry_point,close_reason,details_json) VALUES(?,?,?,'persist_pending',?,?,?,'work_pending','{}')").run(runId,'collection',at,'ieee-ted',key,'manual');
+  const paper:any={doi:'10.5555/manual-capture',title:'Manual captured fixture paper',url:'https://example.invalid/manual-capture',publisher:'IEEE',journal:'Fixture',sourceId:'ieee-ted',issn:'0018-9383',publishedAt:'2026-10-21',datePrecision:'day',authors:[{name:'Fixture Author',affiliations:[]}],affiliations:[],abstract:'Fixture abstract',keywords:[],topics:[],provenance:{},relevance:0,priority:0,reasons:[],ruleVersion:'fixture',sourceIndexedAt:null,discovery:'crossref'};
+  await captureIngestion(db,'ieee-ted','crossref',[{paper,store:true,scope:false}],runId,key,{});
+  assert.equal(sql.prepare('SELECT daily_cohort_key FROM research_ingestion_work WHERE origin_batch_key=?').get(key).daily_cohort_key,key);
+  const trace=new OperationTrace(db,key,'ieee-ted',Date.now()+60000,runId);trace.runId=runId;
+  const drained=await drainIngestion(db,runId,trace,Date.now()+60000,'ieee-ted',undefined,{batchKey:key});
+  assert.equal(drained.pending,false);
+  assert.equal(drained.processed,1);
+  assert.equal(sql.prepare('SELECT daily_cohort_key FROM research_batch_members WHERE batch_key=?').get(key).daily_cohort_key,null);
+  assert.equal(sql.prepare('SELECT daily_cohort_key FROM research_enrichment_queue WHERE origin_batch_key=?').get(key).daily_cohort_key,null);
+ }finally{sql.close()}
+});
+
+test('manual membership is excluded from next-day coverage while a true orphan remains visible',async()=>{
+ const {db,sql}=fixture();
+ try{
+  const key='manual/11111111-2222-4333-8444-555555555555',firstSeen='2026-10-21T12:01:00Z';
+  sql.prepare("INSERT INTO research_batches(key,date,slot,mode,status,sources_json,started_at) VALUES(?,?,0,'manual','finished','[]',?)").run(key,'2026-10-21',firstSeen);
+  const base:any={doi:null,title:'Manual coverage paper',url:'https://example.invalid/manual-coverage',publisher:'IEEE',journal:'Fixture',sourceId:'ieee-ted',issn:'0018-9383',publishedAt:'2026-10-21',datePrecision:'day',authors:[{name:'Fixture Author',affiliations:[]}],affiliations:[],abstract:null,keywords:[],topics:[],provenance:{},relevance:0,priority:0,reasons:[],ruleVersion:'fixture',sourceIndexedAt:null,discovery:'crossref'};
+  await savePaper(db,base,firstSeen,{runId:'manual-coverage-run',batchKey:key,firstSeen,deferScoring:true});
+  assert.equal((await previousCoverage(db,'2026-10-22')).untrackedNewPapers,0);
+  await savePaper(db,{...base,doi:'10.5555/orphan',url:'https://example.invalid/orphan'},'2026-10-21T12:02:00Z');
+  assert.equal((await previousCoverage(db,'2026-10-22')).untrackedNewPapers,1);
  }finally{sql.close()}
 });
 

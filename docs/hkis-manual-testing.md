@@ -96,7 +96,9 @@ POST /api/site/research/enrich，JSON {"cohort":"指定归属","maxMs":75000}，
 
 
 
-九、有界采集与安全收尾
+九、有界采集与安全收尾（scheduled）
+
+本节的 slot、08/20 时段和对应采集预算仅适用于 scheduled；用户明确要求的 manual 运行优先适用第十二节的实际顺序与固定 540 秒合同。
 
 POST /api/site/research/batch/start，JSON {"slot":8或20}。保存真实返回batchKey并核对当天日期和时段；不能自行构造。已有finished/interrupted终态批次不重新采集或重复finish。running必须检查collectionContract和collectionControl。
 
@@ -149,7 +151,7 @@ finished只表示收尾，不代表所有来源成功或全目录完成。interr
 任何失败、版本变化或访问阻塞都不授权自行暂停、禁用、删除、修改、替换或重建真实定时任务。只报告并保持其当前状态。不要重建/发布站点，不向GitHub写运行数据或秘密。无需更新调度镜像；如确需镜像，只能使用官方已核实的同一任务id、enabled、schedule、匹配TZID的timezone和已知nextRun，未知保持null，保留dailyEnabled:true及既有dailyContractVersion；镜像不是调度执行证据。
 
 
-十三、用户主动手动测试模式（新增；仅补充必要合同）
+十二、用户主动手动测试模式（新增；仅补充必要合同）
 
 本节仅在用户明确主动要求手动测试时生效。定时 wake、定时任务、日报任务或恢复任务不得自行把 scheduled 请求改成 manual，也不得用 manual 绕过 08:00/20:00 的定时门控。手动模式不是授权无限多次运行、补造历史、提高来源尝试次数或提高共享模型费用预算。
 
@@ -157,12 +159,12 @@ finished只表示收尾，不代表所有来源成功或全目录完成。interr
 
 2. manual 与 scheduled 共用同一原子 admission：任一运行中的批次、有效采集租约或冲突锁存在时，另一模式都只能得到 deferred/collection_in_progress，不得依赖先 SELECT 再 INSERT 的竞态检查。manual、collect、finish、状态查询、租约、断连恢复和 fence 都使用这个 manual batchKey；manual 的真实 started_at 决定固定 deadline，预算为 540 秒，即使采集跨过 19:59/20:00 或午夜也不随 collectionCycle 切换。
 
-3. 手动采集仍遵守原有安全与成本边界：总预算 540 秒、最多 35 次来源尝试、每个来源最多 2 次、客户端并发不超过 3、严格 provider/原点/重定向限制、现有共享模型费用预算，以及结果未知即停止且不自动重试。手动批次可以在任意真实时间启动，但不能因此扩大来源、模型或费用权限。
+3. 手动运行仍遵守原有安全与成本边界：总预算 540 秒、采集阶段建议最多 330 秒并至少保留 110 秒维护/收尾余量、最多 35 次来源尝试、每个来源最多 2 次；客户端始终单请求串行等待，服务端有界 worker 的 concurrency 上限为 3。严格 provider/原点/重定向限制、现有共享模型费用预算，以及结果未知即停止且不自动重试。手动批次可以在任意真实时间启动，但不能因此扩大来源、模型或费用权限。
 
 4. manual 的 origin、firstSeen、batch 归属和快照在 ingestion、metadata queue、enrichment、ready evidence、评分和状态读取中显式保留；不得用 dailyCohortKey(firstSeen) 回退成当日 08/20。manual 的 daily_cohort_key 为显式排除值，不进入 previous_day/current 定时日报候选、日报精华或缺期统计。manual 补充定时批次的元数据不得改写已冻结的 firstSeen、原批次归属、快照或 ready evidence。
 
 5. manual finish 只完成该手动批次的覆盖与生命周期收束，明确跳过自动 prepareBrief；不创建 research_briefs 或 brief_evidence，不改变 latestBrief。latestBatch 仍只表达最近定时批次；手动状态通过 latestManualBatch、批次列表或手动批次展示读取。早晚日历、日报、缺期统计和定时简报选择不得因为 manual 被补齐、阻塞或改写。
 
-6. collect 断连、finish 超时、start 响应丢失和迟到 collector 都按既有 read-only 定位与 fence 规则处理：先读取操作 ID、manual batchKey、run、lease、状态和 close reason；未知结果停止，不创建新批次或重复收费。迟到 collector 必须被租约/fence 拒绝。测试必须使用隔离 fixture、mock provider 和隔离数据库，不调用生产 start、collect、finish、模型评分或日报生成作为冒烟测试。
+6. 实际手动顺序为：POST /api/site/research/batch/start {"mode":"manual"}，保存服务端返回的 manual batchKey；随后用同一 batchKey 按第九节 collect 合同采集，采集最多建议 330 秒并服从整轮 540 秒 deadline；确认没有在飞工作后调用 POST /api/site/research/batch/finish 收束批次；最后仅在服务端明确允许且仍有预算时执行最多允许的本地恢复/后续步骤。手动默认不调用 daily/generate、brief/prepare 或付费评分。collect 断连、finish 超时、start 响应丢失和迟到 collector 都按既有 read-only 定位与 fence 规则处理：先读取操作 ID、manual batchKey、run、lease、状态和 close reason；未知结果停止，不创建新批次或重复收费。迟到 collector 必须被租约/fence 拒绝。开发验收另行使用隔离 fixture、mock provider 和隔离数据库，不把生产 start、collect、finish、模型评分或日报生成作为冒烟测试。
 
 其余章节关于站点 owner-only 访问、同源 service access、凭证只存在安全内存通道、请求阶段顺序、HTTP 白名单和不下载执行任意最新代码的约束全部继续有效。

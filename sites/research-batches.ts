@@ -192,7 +192,7 @@ export async function startBatch(db:any,slot:number,at=new Date()){
  * manual batch from racing a scheduled batch. */
 export async function startManualBatch(db:any,at=new Date()){
  await reconcileBatches(db,at);
- const plan=await intervalPlan(db,at);if(!plan.value.verified)throw new AIError('interval_owner_ambiguous',409,'�޷�ȷ�ϲɼ���������˻������������߱�������');
+ const plan=await intervalPlan(db,at);if(!plan.value.verified)throw new AIError('interval_owner_ambiguous',409,'无法确认采集间隔所属账户，请由所有者保存配置');
  const key='manual/'+crypto.randomUUID(),date=collectedDay(at.toISOString())!,sources=JSON.stringify(RESEARCH_SOURCES.map(s=>s.id));
  const result=await db.prepare(`INSERT INTO research_batches(key,date,slot,mode,status,sources_json,started_at) SELECT ?,?,0,'manual','running',?,? WHERE ${metadataIdle} AND ${processingIdle} AND ${collectionIdle}`).bind(key,date,sources,at.toISOString()).run();
  if(!result.meta?.changes)return {status:'deferred',reason:'collection_in_progress',batchKey:null,mode:'manual'};
@@ -202,7 +202,7 @@ export async function validateBatch(db:any,key:any,at=new Date()){
  if(key===undefined||key===null)return null;
  if(typeof key==='string'&&/^manual\/[0-9a-f-]{36}$/.test(key)){
   const manual=await db.prepare("SELECT mode,status FROM research_batches WHERE key=?").bind(key).first();
-  if(manual?.mode!=='manual'||manual.status!=='running')throw new AIError('batch_closed',409,'�ɼ����β����ڡ��ѽ������ѹ���');
+  if(manual?.mode!=='manual'||manual.status!=='running')throw new AIError('batch_closed',409,'采集批次不存在、已结束或已过期');
   return key;
  }
  if(typeof key!=='string'||!/^\d{4}-\d{2}-\d{2}\/(08|20)$/.test(key))throw new AIError('invalid_batch',400,'无效采集批次');
@@ -235,4 +235,4 @@ export async function batchCoverage(db:any,key:string,cutoff:string){
  const complete=!!batch&&batch.status==='finished'&&batch.finished_at&&batch.finished_at<cutoff&&completeSources.length===expected.length;
  return {key,recorded:!!batch,status:complete?'complete':batch?'partial':'missing',...batchLifecycle(batch,new Date(cutoff)),startedAt:batch?.started_at||null,finishedAt:batch?.finished_at||null,expectedSources:expected.length,attemptedSources:expected.filter((id:string)=>last.has(id)).length,completeSources:completeSources.length,missingSources:missing,...sourceCheckEvidence(expected,last),runs:rows.map(detailedRun)};
 }
-export async function previousCoverage(db:any,date:string){const w=dailyWindow(new Date(),date),batches=[];for(const key of w.batchKeys)batches.push(await batchCoverage(db,key,w.cutoff));const untracked=await db.prepare('SELECT count(*) n FROM research_papers p WHERE p.first_seen>=? AND p.first_seen<? AND NOT EXISTS(SELECT 1 FROM research_batch_members m WHERE m.paper_id=p.id AND '+cohortExpression+' IN (?,?))').bind(w.start,w.cutoff,...w.batchKeys).first();return {...w,batches,complete:batches.every(b=>b.status==='complete'),untrackedNewPapers:Number(untracked?.n||0)};}
+export async function previousCoverage(db:any,date:string){const w=dailyWindow(new Date(),date),batches=[];for(const key of w.batchKeys)batches.push(await batchCoverage(db,key,w.cutoff));const untracked=await db.prepare('SELECT count(*) n FROM research_papers p WHERE p.first_seen>=? AND p.first_seen<? AND NOT EXISTS(SELECT 1 FROM research_batch_members m WHERE m.paper_id=p.id AND '+cohortExpression+' IN (?,?)) AND NOT EXISTS(SELECT 1 FROM research_batch_members mm JOIN research_batches mb ON mb.key=mm.batch_key AND coalesce(mb.mode,\'scheduled\')=\'manual\' WHERE mm.paper_id=p.id)').bind(w.start,w.cutoff,...w.batchKeys).first();return {...w,batches,complete:batches.every(b=>b.status==='complete'),untrackedNewPapers:Number(untracked?.n||0)};}
