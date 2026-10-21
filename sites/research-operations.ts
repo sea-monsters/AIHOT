@@ -7,6 +7,7 @@ const phases=new Set(['sync','batch_start','batch_collect','batch_finish','metad
 const reasons=new Set(['client_canceled','request_deadline','network_timeout','network_failed','parse_failed','database_unknown','lease_expired','collection_lease_lost','record_conflict','work_pending','capture_capacity','capture_too_large','batch_in_flight','batch_finalizing','collection_canceled','collection_unknown','collection_in_progress','metadata_in_progress','processing_in_progress','pending_metadata','pending_scoring','pending_collection','ingestion_pending','ingestion_recovery_unknown','ingestion_origin_review_required','no_prepare_eligible','already_ready','maintenance_gate_blocked','maintenance_prepare_unconfirmed','identity_review_required','origin_review_required','metadata_required','identity_ambiguous','invalid_selection','invalid_diagnostics','scoring_state_changed','dispatch_not_sent','commit_ack_reconciled','processing_lease_lost_readback','lock_busy','deadline','provider_cooldown','budget_exceeded','not_configured','ai_disabled','key_unavailable','connection_test_required','owner_required','batch_window','daily_window','batch_not_finished','invalid_batch','batch_closed','invalid_deadline','interval_owner_ambiguous']);
 for(const reason of ['page_budget','time_budget','sources_exhausted','crossref_cooldown','crossref_rate_limit','batch_interrupted','head_deferred','head_pass_pending','backfill_pending','latest_pending','history_pending','coverage_incomplete','collection_stopped','collection_failed','operation_failed','provider_deferred','provider_pending','configuration_changed','no_dispatchable_source','sync_call_budget','slice_deadline','slice_call_limit'])reasons.add(reason);
 const sources=new Set(RESEARCH_SOURCES.map(s=>s.id));
+const isStoredBatchKey=(value:any)=>isManualBatchKey(value)||/^\d{4}-\d{2}-\d{2}\/(08|20)$/.test(value||'');
 const clamp=(n:any,max=1e9)=>Number.isFinite(n)?Math.max(0,Math.min(max,Math.floor(n))):0;
 export function operationReason(value:any){return reasons.has(value)?value:'other';}
 export function operationRequestId(value:any){return typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)?value.toLowerCase():null;}
@@ -70,6 +71,7 @@ export async function operationsApi(request:Request,env:any){
   const params=new URL(request.url).searchParams,now=Date.now(),where=['observed_at>=?'],args:any[]=[new Date(now-OPERATION_DAYS*86400000).toISOString()],filters:(string|null)[]=[];
   for(const [param,column]of[['runId','run_id'],['requestId','request_id'],['batchKey','batch_key'],['sourceId','source_id']] as const){
    const value=params.get(param)||null;filters.push(value);if(value===null&&!params.has(param))continue;
+   if(param==='batchKey'&&isManualBatchKey(value)){where.push(column+'=?');args.push(value);continue;}
    if(param==='sourceId'?!sources.has(value!):param==='batchKey'?!/^\d{4}-\d{2}-\d{2}\/(08|20)$/.test(value||''):!validOperationId(value))throw new AIError('invalid_action',400,'操作日志关联字段无效');
    where.push(column+'=?');args.push(value);
   }

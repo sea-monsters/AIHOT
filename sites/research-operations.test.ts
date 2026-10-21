@@ -43,6 +43,21 @@ test('operation filters intersect, paginate by configured source and cannot chan
  }finally{f.sql.close()}
 });
 
+test('operation read-only lookup accepts an opaque manual batch key without widening validation',async()=>{
+ const f=fixture(),manual='manual/11111111-2222-4333-8444-555555555555';try{
+  f.insert('manual-operation',undefined,{batchKey:manual});
+  const response=await f.read({batchKey:manual});
+  assert.equal(response.status,200);
+  const body=await response.json();
+  assert.equal(body.operations.length,1);
+  assert.equal(body.operations[0].batch_key,manual);
+  for(const batchKey of ['manual/not-a-uuid','manual/11111111-2222-4333-8444-55555555555Z','manual/11111111-2222-4333-8444-555555555555-extra','2026-10-17/11']){
+   assert.equal((await f.read({batchKey})).status,400,batchKey);
+  }
+  assert.equal(f.counts.writes,0);
+ }finally{f.sql.close()}
+});
+
 test('operation cursors and filters reject malformed input without echoing private data',async()=>{
  const f=fixture();try{
   const sentinel='SYNTHETIC_PRIVATE_INPUT_SENTINEL';
