@@ -1,8 +1,30 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-22T13:28:54Z",
+  "latestVersion": "2026-10-23T12:18:44Z",
   "releases": [
+    {
+      "id": "upstream-dependency-safety-20261023",
+      "at": "2026-10-23T12:18:44Z",
+      "kind": "upstream",
+      "basis": "record",
+      "title": "择取上游构建依赖更新，保留 HKIS 定制运行边界",
+      "body": [
+        "本轮核对真实上游 KKKKhazix/AIHOT 在 84a7abb 之后至 b3998dc 的 23 项提交；先择取 Vite 8.3.3，并将锁文件中的声明统一为清单的精确版本。",
+        "原 Node/PostgreSQL 引擎、全文、新闻搜索、后台与部署更新逐项审查，适用性和最终依赖安全适配结果见本轮审查记录；未整体合并上游。",
+        "仅更新仓库源码与维护记录，不代表 Sites 已部署或自动任务已更新；保留所有者权限、MCP只读、批次预算、租约、冻结证据和现有界面。"
+      ],
+      "sources": [
+        {
+          "label": "上游23项比较",
+          "url": "https://github.com/KKKKhazix/AIHOT/compare/84a7abb1d00a43a41e3ddcc26c45e1a23785e075...b3998dc6fc138eb9659f33f55eb38c1c716f0d57"
+        },
+        {
+          "label": "HKIS逐项审查与验证",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/hkis-selective-adaptation-2026-10-23.md"
+        }
+      ]
+    },
     {
       "id": "hkis-execution-evidence-gates-20261022",
       "at": "2026-10-22T13:28:54Z",
