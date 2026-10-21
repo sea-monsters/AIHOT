@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-18T08:39:48Z",
+  "latestVersion": "2026-10-21T00:00:00Z",
   "releases": [
+    {
+      "id": "hkis-manual-batches-20261021",
+      "at": "2026-10-21T00:00:00Z",
+      "kind": "feature",
+      "basis": "record",
+      "title": "HKIS 手动测试批次与定时批次隔离",
+      "body": [
+        "新增仅由用户主动请求触发的 manual/<UUID> 批次入口，可在任意真实时间启动；与 Asia/Singapore 08/20 定时批次通过同一原子 admission 互斥，并保留固定 540 秒预算、来源尝试与供应商限制。",
+        "手动批次贯通采集、状态、租约、恢复与完成流程；明确 manual 归属和 firstSeen，不进入早晚简报、日报精华、日报缺期统计或 latestBatch 定时语义。手动完成不会自动冻结 research_briefs。",
+        "更新说明文件，补充未知结果、断连、迟到 collector、跨时段和凭证安全边界；本次验证使用隔离 fixture，不触发生产采集、模型评分或日报。"
+      ],
+      "sources": [
+        {
+          "label": "HKIS 手动测试服务端实现与说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/hkis-manual-testing.md"
+        }
+      ]
+    },
     {
       "id": "sites-ai-usage-cost-trends-20261018",
       "at": "2026-10-18T08:39:48Z",

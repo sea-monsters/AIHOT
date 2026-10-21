@@ -6,7 +6,7 @@ export const headAge=(s:any)=>String(s.crossref&&'lastHeadAttemptAt' in s.crossr
 export const headOrder=(a:any,b:any)=>headAge(a).localeCompare(headAge(b))||a.id.localeCompare(b.id);
 export function collectionStopped(result:any){return !!result?.code||['unknown','interrupted'].includes(result?.status)||result?.collectionControl?.stop===true||/HTTP 429|shared cooldown/.test(result?.error||'');}
 export async function collectionControl(db:any,batchKey:string|null,at=new Date()):Promise<any>{
- const cycle=collectionCycle(at.toISOString(),null);
+ const cycle=collectionCycle(at.toISOString(),batchKey);
  const rows=(await db.prepare("SELECT key,value FROM research_settings WHERE key IN ('crossref_http_cooldown',?,?)").bind('collection-stop:'+cycle,'collection-budget:'+cycle).all()).results;
  const values=new Map<string,string>(rows.map((r:any)=>[r.key,r.value]));
  const saved=parse(values.get('collection-stop:'+cycle),null),retryAt=values.get('crossref_http_cooldown')||null;
@@ -34,9 +34,9 @@ export async function collectionControl(db:any,batchKey:string|null,at=new Date(
  const nextSourceId=(heads.length?heads:persisted.length?persisted:continuations)[0]||null;
  return {stop:!nextSourceId,scope:'batch',reason:nextSourceId?null:'sources_exhausted',nextAction:nextSourceId?'sync_next':'finish_batch',nextSourceId,dispatchableSources:heads.length?heads:persisted.length?persisted:continuations,deadlineAt:new Date(Date.parse(batch.started_at)+maxMs).toISOString(),pass:heads.length?'head':persisted.length?'persist':'continuation',headSourcesRemaining:heads,headDeferredSources:[...deferredHeads],expectedSources:expected};
 }
-export async function stopCrossrefSlot(db:any,at=new Date()){
+export async function stopCrossrefSlot(db:any,at=new Date(),batchKey:string|null=null){
  const row=await db.prepare("SELECT value FROM research_settings WHERE key='crossref_http_cooldown'").first();
  const control={stop:true,scope:'slot',reason:'crossref_rate_limit',retryAt:row?.value||null,nextAction:'finish_batch'};
- await db.prepare('INSERT OR IGNORE INTO research_settings(key,value) VALUES(?,?)').bind('collection-stop:'+collectionCycle(at.toISOString(),null),JSON.stringify(control)).run();
+ await db.prepare('INSERT OR IGNORE INTO research_settings(key,value) VALUES(?,?)').bind('collection-stop:'+collectionCycle(at.toISOString(),batchKey),JSON.stringify(control)).run();
  return control;
 }

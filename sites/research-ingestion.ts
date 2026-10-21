@@ -5,6 +5,7 @@ import {normalizeDoi,normalizedTitle} from './research-domain.ts';
 import {digest} from './research-pipeline.ts';
 import {checkCollectionCancellation} from './research-lifecycle.ts';
 import {assertStoredRecoveryEligible} from './research-recovery.ts';
+import {isManualBatchKey} from './research-attribution.ts';
 import type {OperationTrace} from './research-operations.ts';
 export const INGEST_LIMITS={records:20,payloadBytes:131072,rows:512,statements:600,requestMs:20000,finishReserveMs:3000};
 const parse=(s:any)=>JSON.parse(s),stamp=()=>new Date().toISOString();
@@ -12,7 +13,7 @@ const bytes=(s:string)=>new TextEncoder().encode(s).length;
 const rawHash=async(s:string)=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)))].map(n=>n.toString(16).padStart(2,'0')).join('').slice(0,32);
 const key=async(p:any)=>normalizeDoi(p.doi)||'id:'+await digest({source:p.sourceId,url:p.url,title:normalizedTitle(p.title)});
 const expectation=(row:any,key:any)=>({exists:row?1:0,key,row:row?{...row}:null});
-export async function captureIngestion(db:any,sourceId:string,channel:'crossref'|'rss',entries:any[],runId:string,batchKey:string|null,checkpoint:any={}){
+export async function captureIngestion(db:any,sourceId:string,channel:'crossref'|'rss',entries:any[],runId:string,batchKey:string|null,checkpoint:any={},cohortKey?:string|null){
  const unique=new Map<string,any>();for(const e of entries){const k=normalizeDoi(e.paper.doi)||e.paper.sourceId+':'+e.paper.url,previous=unique.get(k);unique.set(k,previous?{paper:mergeCandidate(e.paper,previous.paper),store:e.store||previous.store,scope:e.scope&&previous.scope}:e);}entries=[...unique.values()];
  const chunks:any[][]=[];let chunk:any[]=[],size=2;
  for(const entry of entries){const n=bytes(JSON.stringify(entry))+1;if(n>INGEST_LIMITS.payloadBytes)throw Object.assign(Error('capture_too_large'),{ingestionDeferred:'capture_too_large'});if(chunk.length&&(chunk.length>=INGEST_LIMITS.records||size+n>INGEST_LIMITS.payloadBytes)){chunks.push(chunk);chunk=[];size=2;}chunk.push(entry);size+=n;}if(chunk.length||!chunks.length)chunks.push(chunk);
@@ -20,7 +21,7 @@ export async function captureIngestion(db:any,sourceId:string,channel:'crossref'
  // Pending evidence is never evicted. A completed group's root checkpoint is
  // kept until every child has committed, even when recovery spans days.
  await db.prepare("DELETE FROM research_ingestion_work WHERE id IN (SELECT w.id FROM research_ingestion_work w WHERE w.status='done' AND NOT EXISTS(SELECT 1 FROM research_ingestion_work p WHERE p.group_id=w.group_id AND p.status='pending') AND (w.observed_at<? OR (SELECT count(*) FROM research_ingestion_work)>384) ORDER BY w.observed_at,w.ordinal LIMIT 128)").bind(new Date(Date.now()-86400000).toISOString()).run();
- const id=crypto.randomUUID(),at=stamp(),cohort=dailyCohortKey(at),writes=chunks.map((c,i)=>db.prepare('INSERT INTO research_ingestion_work(id,group_id,ordinal,source_id,channel,origin_run_id,origin_batch_key,daily_cohort_key,observed_at,status,payload_json,checkpoint_json,records) VALUES(?,?,?,?,?,?,?,?,?,\'pending\',?,?,?)').bind(id+':'+i,id,i,sourceId,channel,runId,batchKey,cohort,at,JSON.stringify(c),i===0?JSON.stringify(checkpoint):'{}',c.length));
+ const id=crypto.randomUUID(),at=stamp(),cohort=isManualBatchKey(batchKey)?null:(cohortKey===undefined?dailyCohortKey(at):cohortKey),writes=chunks.map((c,i)=>db.prepare('INSERT INTO research_ingestion_work(id,group_id,ordinal,source_id,channel,origin_run_id,origin_batch_key,daily_cohort_key,observed_at,status,payload_json,checkpoint_json,records) VALUES(?,?,?,?,?,?,?,?,?,\'pending\',?,?,?)').bind(id+':'+i,id,i,sourceId,channel,runId,batchKey,cohort,at,JSON.stringify(c),i===0?JSON.stringify(checkpoint):'{}',c.length));
  try{await db.batch(writes);}catch(e){if(String(e).includes('research_ingestion_capacity'))throw Object.assign(Error('capture_capacity'),{ingestionDeferred:'capture_capacity'});throw e;}return id;
 }
 function match(rows:any[],p:any){const doi=normalizeDoi(p.doi),title=normalizedTitle(p.title);return rows.filter(r=>doi&&r.doi===doi||r.source_id===p.sourceId&&(r.url===p.url||r.normalized_title===title&&[...title].length>24)&&(!r.doi||!doi||r.doi===doi)).sort((a,b)=>(a.doi===doi?0:1)-(b.doi===doi?0:1)||(a.id<b.id?-1:a.id>b.id?1:0))[0]||null;}

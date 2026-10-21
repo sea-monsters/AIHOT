@@ -5,7 +5,7 @@ export function dailyCohortKey(firstSeen:string){
  if(!Number.isFinite(local.getTime()))throw Error('Invalid first-seen timestamp');
  return local.toISOString().slice(0,10)+'/'+(local.getUTCHours()<20?'08':'20');
 }
-export type CollectionEntryPoint='owner_web'|'owner_api'|'service'|'internal';
+export type CollectionEntryPoint='owner_web'|'owner_api'|'service'|'internal'|'manual';
 export function collectionEntryPoint(request:Request):CollectionEntryPoint{
  // Sites dispatch owns identity headers. This describes an entry path, not a human actor.
  const identity=request.headers.has('oai-authenticated-user-id')||request.headers.has('oai-authenticated-user-email');
@@ -13,3 +13,4 @@ export function collectionEntryPoint(request:Request):CollectionEntryPoint{
 }
 // Existing scheduled membership remains readable without a bulk data backfill.
 export const cohortExpression='coalesce(daily_cohort_key,batch_key)';
+export const isManualBatchKey=(key:any):key is string=>typeof key==='string'&&/^manual\/[0-9a-f-]{36}$/.test(key);

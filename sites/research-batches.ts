@@ -3,13 +3,13 @@ import {collectionControl} from './research-collection-control.ts';
 import {intervalPlan} from './research-intervals.ts';
 import {prepareBrief} from './research-briefs.ts';
 import {collectionCycle} from './research-crossref.ts';
-import {cohortExpression} from './research-attribution.ts';
+import {cohortExpression,isManualBatchKey} from './research-attribution.ts';
 import {RESEARCH_SOURCES} from './research-config.ts';
 import {collectedDay} from './research-views.ts';
 import {dailyWindow,localHour} from './daily-domain.ts';
 import {AIError} from './ai/security.ts';
 import {batchScheduleContract} from './research-schedule.ts';
-import {batchLifecycle,databaseNowSql,noActiveBatchWorkAt,reconcileBatches,metadataIdle,processingIdle} from './research-lifecycle.ts';
+import {batchLifecycle,databaseNowSql,noActiveBatchWorkAt,reconcileBatches,metadataIdle,processingIdle,collectionIdle} from './research-lifecycle.ts';
 const parse=(s:any,f:any)=>{try{return JSON.parse(s)}catch{return f}};
 
 // Brief tracking starts with the first shared evening slot that the verified
@@ -184,11 +184,27 @@ export async function startBatch(db:any,slot:number,at=new Date()){
  await reconcileBatches(db,at);
  const date=collectedDay(at.toISOString())!,key=date+'/'+String(slot).padStart(2,'0');
  const plan=await intervalPlan(db,at);if(!plan.value.verified)throw new AIError('interval_owner_ambiguous',409,'无法确认采集间隔所属账户，请由所有者保存配置');
- await db.prepare(`INSERT OR IGNORE INTO research_batches(key,date,slot,status,sources_json,started_at) SELECT ?,?,?,'running',?,? WHERE ${metadataIdle} AND ${processingIdle}`).bind(key,date,slot,JSON.stringify(plan.sources.filter(s=>s.due).sort((a,b)=>String(a.lastAttempt||'').localeCompare(String(b.lastAttempt||''))||a.id.localeCompare(b.id)).map(s=>s.id)),at.toISOString()).run();
- const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();if(!row)return {status:'deferred',reason:'metadata_in_progress',batchKey:null};return {collectionContract:'bounded-v1',batchKey:key,status:row.status,startedAt:row.started_at,...batchLifecycle(row,at),collectionControl:await collectionControl(db,key,at)};
+ await db.prepare(`INSERT OR IGNORE INTO research_batches(key,date,slot,mode,status,sources_json,started_at) SELECT ?,?,?, 'scheduled','running',?,? WHERE ${metadataIdle} AND ${processingIdle} AND ${collectionIdle}`).bind(key,date,slot,JSON.stringify(plan.sources.filter(s=>s.due).sort((a,b)=>String(a.lastAttempt||'').localeCompare(String(b.lastAttempt||''))||a.id.localeCompare(b.id)).map(s=>s.id)),at.toISOString()).run();
+ const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();if(!row)return {status:'deferred',reason:'collection_in_progress',batchKey:null};return {collectionContract:'bounded-v1',batchKey:key,mode:row.mode||'scheduled',status:row.status,startedAt:row.started_at,...batchLifecycle(row,at),collectionControl:await collectionControl(db,key,at)};
+}
+/** Explicit owner-requested test batch. The key and null daily cohort keep it
+ * out of scheduled slot accounting; the same SQL admission gate prevents a
+ * manual batch from racing a scheduled batch. */
+export async function startManualBatch(db:any,at=new Date()){
+ await reconcileBatches(db,at);
+ const plan=await intervalPlan(db,at);if(!plan.value.verified)throw new AIError('interval_owner_ambiguous',409,'�޷�ȷ�ϲɼ���������˻������������߱�������');
+ const key='manual/'+crypto.randomUUID(),date=collectedDay(at.toISOString())!,sources=JSON.stringify(RESEARCH_SOURCES.map(s=>s.id));
+ const result=await db.prepare(`INSERT INTO research_batches(key,date,slot,mode,status,sources_json,started_at) SELECT ?,?,0,'manual','running',?,? WHERE ${metadataIdle} AND ${processingIdle} AND ${collectionIdle}`).bind(key,date,sources,at.toISOString()).run();
+ if(!result.meta?.changes)return {status:'deferred',reason:'collection_in_progress',batchKey:null,mode:'manual'};
+ const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();return {collectionContract:'bounded-v1',batchKey:key,mode:'manual',status:row.status,startedAt:row.started_at,...batchLifecycle(row,at),collectionControl:await collectionControl(db,key,at)};
 }
 export async function validateBatch(db:any,key:any,at=new Date()){
  if(key===undefined||key===null)return null;
+ if(typeof key==='string'&&/^manual\/[0-9a-f-]{36}$/.test(key)){
+  const manual=await db.prepare("SELECT mode,status FROM research_batches WHERE key=?").bind(key).first();
+  if(manual?.mode!=='manual'||manual.status!=='running')throw new AIError('batch_closed',409,'�ɼ����β����ڡ��ѽ������ѹ���');
+  return key;
+ }
  if(typeof key!=='string'||!/^\d{4}-\d{2}-\d{2}\/(08|20)$/.test(key))throw new AIError('invalid_batch',400,'无效采集批次');
  const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();if(!row||row.date!==collectedDay(at.toISOString())||row.status!=='running'||key!==collectionCycle(at.toISOString(),null))throw new AIError('batch_closed',409,'采集批次不存在、已结束或已过期');return key;
 }
@@ -209,7 +225,7 @@ export async function finishBatch(db:any,key:any,at=new Date(),options:any={}){
  }
  if(current.status!=='running')await db.prepare('DELETE FROM research_settings WHERE key=?').bind(finalizingKey(key)).run();
  const cutoff=new Date(Date.parse(current.finished_at||current.closed_at||at.toISOString())+1).toISOString();
- return {batchKey:key,...(recovery?{recovery}:{}),...await batchCoverage(db,key,cutoff),brief:current.status==='finished'?await prepareBrief(db,key):null};
+ return {batchKey:key,mode:current.mode||'scheduled',...(recovery?{recovery}:{}),...await batchCoverage(db,key,cutoff),brief:current.status==='finished'&&current.mode!=='manual'?await prepareBrief(db,key):null};
 }
 export async function batchCoverage(db:any,key:string,cutoff:string){
  const batch=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();const expected=parse(batch?.sources_json,RESEARCH_SOURCES.map(s=>s.id));

@@ -1,7 +1,7 @@
 import {AIError} from './ai/security.ts';
 export const SOURCE_LEASE_MS=10*60*1000;
 export const BATCH_CLOSE_AFTER_MS=540000;
-export const batchBudgetMs=(batch:any)=>batch.slot===8?260000:330000;
+export const batchBudgetMs=(batch:any)=>batch?.mode==='manual'?540000:batch.slot===8?260000:330000;
 // No read-side mutation. Deadline exhaustion says nothing about completion.
 export function batchLifecycle(batch:any,at=new Date()){
  if(!batch)return null;

@@ -176,6 +176,13 @@
       "when": 1792246870669,
       "tag": "0024_previous_terror",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1792547311323,
+      "tag": "0025_manual_batches",
+      "breakpoints": true
     }
   ]
 }

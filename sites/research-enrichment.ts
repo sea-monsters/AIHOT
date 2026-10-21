@@ -2,7 +2,7 @@ import {pendingWorkCounts,recoverIngestion} from './research-recovery.ts';
 import {OperationTrace} from './research-operations.ts';
 import {AIError} from './ai/security.ts';
 import {admitRun,fencedRunDatabase} from './research-lifecycle.ts';
-import {dailyCohortKey} from './research-attribution.ts';
+import {dailyCohortKey,isManualBatchKey} from './research-attribution.ts';
 import {preparationCohort} from './research-cohorts.ts';
 import {analysisFields,metadataFields,digest,monthWindow,inUpdateWindow} from './research-pipeline.ts';
 import {RESEARCH_SOURCES} from './research-config.ts';
@@ -46,7 +46,7 @@ async function localSourceEvidence(db:any,p:any){
 }
 
 /** Every candidate is retained. Read/transport limits never become deletion limits. */
-export async function planMetadataQueue(db:any,incoming:Paper,scopePending=false,run?:{runId:string;batchKey:string|null;firstSeen?:string},now=stamp()){
+export async function planMetadataQueue(db:any,incoming:Paper,scopePending=false,run?:{runId:string;batchKey:string|null;firstSeen?:string;cohortKey?:string|null},now=stamp()){
   const lookupKey=normalizeDoi(incoming.doi)||'id:'+await digest({source:incoming.sourceId,url:incoming.url,title:normalizedTitle(incoming.title)});
   const previous=await db.prepare('SELECT * FROM research_enrichment_queue WHERE doi=? AND source_id=?').bind(lookupKey,incoming.sourceId).first();
   const priorPaper=previous?parse(previous.paper_json,null):null;const p=priorPaper?mergeCandidate(incoming,priorPaper):incoming;
@@ -54,7 +54,7 @@ export async function planMetadataQueue(db:any,incoming:Paper,scopePending=false
   const key=normalizeDoi(p.doi)||'id:'+await digest({source:p.sourceId,url:p.url,title:normalizedTitle(p.title)}),hash=await digest(metadataFields(p));
   const stored=p.doi?await db.prepare('SELECT * FROM research_papers WHERE doi=?').bind(p.doi).first():null;
   const member=stored?await db.prepare('SELECT run_id,batch_key,daily_cohort_key,first_seen FROM research_batch_members WHERE paper_id=?').bind(stored.id).first():null;
-  const firstSeen=member?.first_seen||stored?.first_seen||run?.firstSeen||now,cohort=member?.daily_cohort_key||dailyCohortKey(firstSeen);
+  const firstSeen=member?.first_seen||stored?.first_seen||run?.firstSeen||now,originBatchKey=member?.batch_key??run?.batchKey??null,manual=isManualBatchKey(originBatchKey),cohort=manual?null:(member?.daily_cohort_key??run?.cohortKey??dailyCohortKey(firstSeen));
   const freshCrossref=p.discovery==='crossref'||stored?.metadata_checked_at&&Date.parse(stored.metadata_checked_at)>Date.now()-6*3600000;
   const providers=freshCrossref?{crossref:{status:'done',at:now,reason:'fresh_discovery'}}:{};
   const statement=db.prepare(`INSERT INTO research_enrichment_queue(doi,source_id,paper_json,input_hash,scope_pending,status,next_attempt_at,updated_at,first_seen,origin_run_id,origin_batch_key,daily_cohort_key,provider_json)
@@ -63,10 +63,10 @@ export async function planMetadataQueue(db:any,incoming:Paper,scopePending=false
    status=CASE WHEN ? THEN research_enrichment_queue.status WHEN research_enrichment_queue.status IN ('pending','deferred','blocked') THEN 'pending' ELSE excluded.status END,
    next_attempt_at=CASE WHEN ? THEN research_enrichment_queue.next_attempt_at ELSE excluded.next_attempt_at END,
    provider_json=CASE WHEN ? THEN research_enrichment_queue.provider_json ELSE excluded.provider_json END,
-   updated_at=excluded.updated_at,input_hash=excluded.input_hash`).bind(key,p.sourceId,JSON.stringify(p),hash,scopePending?1:0,now,now,firstSeen,member?.run_id||run?.runId||null,member?member.batch_key:run?.batchKey||null,cohort,JSON.stringify(providers),unchanged?1:0,unchanged?1:0,unchanged?1:0);
+  updated_at=excluded.updated_at,input_hash=excluded.input_hash`).bind(key,p.sourceId,JSON.stringify(p),hash,scopePending?1:0,now,now,firstSeen,member?.run_id||run?.runId||null,originBatchKey,cohort,JSON.stringify(providers),unchanged?1:0,unchanged?1:0,unchanged?1:0);
  return {statement,key,paper:p,previous,unchanged,noop:unchanged&&previous.input_hash===hash&&previous.scope_pending<=(scopePending?1:0)};
 }
-export async function queueMetadata(db:any,papers:Paper[],scopePending=false,run?:{runId:string;batchKey:string|null;firstSeen?:string}){
+export async function queueMetadata(db:any,papers:Paper[],scopePending=false,run?:{runId:string;batchKey:string|null;firstSeen?:string;cohortKey?:string|null}){
  const now=stamp();for(const incoming of papers)await (await planMetadataQueue(db,incoming,scopePending,run,now)).statement.run();return 0;
 }
 
@@ -92,7 +92,7 @@ export function metadataRequest(service:string,keys:string[]):{url:string;body?:
 
 /** Separate run/lease; never carries a finished batch's fence or updates a frozen snapshot. */
 export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace?:OperationTrace){
- if(body.batchKey!=null&&(typeof body.batchKey!=='string'||!/^\d{4}-\d{2}-\d{2}\/(08|20)$/.test(body.batchKey)))throw new AIError('invalid_batch',400,'补全批次无效');
+ if(body.batchKey!=null&&(typeof body.batchKey!=='string'||(!/^\d{4}-\d{2}-\d{2}\/(08|20)$/.test(body.batchKey)&&!isManualBatchKey(body.batchKey))))throw new AIError('invalid_batch',400,'补全批次无效');
  if(body.cohort!=null&&!['previous_day','current','pending'].includes(body.cohort))throw new AIError('invalid_cohort',400,'补全归属无效');
  if(body.maxMs!=null&&(!Number.isInteger(body.maxMs)||body.maxMs<1||body.maxMs>75000))throw new AIError('invalid_deadline',400,'补全时限应在 1–75000 毫秒');
  const active=await rawDb.prepare("SELECT key FROM research_batches WHERE status='running' LIMIT 1").first();
@@ -133,10 +133,13 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace
    if(Date.now()+5000>=deadline){row.deadlineDeferred=true;continue;}
    if(!await localSourceEvidence(db,row.p))continue;
    if(Date.now()+5000>=deadline){row.deadlineDeferred=true;continue;}
-   const saved=await savePaper(db,row.p,stamp(),{runId:row.origin_run_id||lease.id,batchKey:row.origin_batch_key,firstSeen:row.first_seen,cohortKey:row.daily_cohort_key||dailyCohortKey(row.first_seen),deferScoring:false});
+    const manual=isManualBatchKey(row.origin_batch_key),cohortKey=manual?null:(row.daily_cohort_key??dailyCohortKey(row.first_seen));
+    const saved=await savePaper(db,row.p,stamp(),{runId:row.origin_run_id||lease.id,batchKey:row.origin_batch_key,firstSeen:row.first_seen,cohortKey:cohortKey||undefined,deferScoring:false});
    if(saved.skipped){row.providers.crossref={status:'blocked',at:stamp(),runId:lease.id,reason:'identity_ambiguous'};continue;}
    const stored=await db.prepare('SELECT * FROM research_papers WHERE id=?').bind(saved.id).first(),paper={...rowPaper(stored),metadataStatus:'ready'},readyReason='sufficient_source_evidence';
-   await db.batch([db.prepare("UPDATE research_papers SET metadata_status='ready' WHERE id=?").bind(saved.id),db.prepare(`INSERT INTO research_ready_evidence(paper_id,daily_cohort_key,origin_batch_key,first_seen,ready_at,content_hash,evidence_json,reason) SELECT ?,?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM research_daily WHERE source_date=?) ON CONFLICT(paper_id) DO UPDATE SET ready_at=excluded.ready_at,content_hash=excluded.content_hash,evidence_json=excluded.evidence_json,reason=excluded.reason WHERE NOT EXISTS(SELECT 1 FROM research_daily WHERE source_date=substr(research_ready_evidence.daily_cohort_key,1,10))`).bind(saved.id,row.daily_cohort_key||dailyCohortKey(row.first_seen),row.origin_batch_key,row.first_seen,stamp(),stored.content_hash,JSON.stringify(paper),readyReason,(row.daily_cohort_key||dailyCohortKey(row.first_seen)).slice(0,10))]);
+    const writes=[db.prepare("UPDATE research_papers SET metadata_status='ready' WHERE id=?").bind(saved.id)];
+    if(cohortKey)writes.push(db.prepare(`INSERT INTO research_ready_evidence(paper_id,daily_cohort_key,origin_batch_key,first_seen,ready_at,content_hash,evidence_json,reason) SELECT ?,?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM research_daily WHERE source_date=?) ON CONFLICT(paper_id) DO UPDATE SET ready_at=excluded.ready_at,content_hash=excluded.content_hash,evidence_json=excluded.evidence_json,reason=excluded.reason WHERE NOT EXISTS(SELECT 1 FROM research_daily WHERE source_date=substr(research_ready_evidence.daily_cohort_key,1,10))`).bind(saved.id,cohortKey,row.origin_batch_key,row.first_seen,stamp(),stored.content_hash,JSON.stringify(paper),readyReason,cohortKey.slice(0,10)));
+    await db.batch(writes);
    row.p=paper;row.scope_pending=0;row.localReady=true;row.input_hash=await digest(metadataFields(paper));result.ready++;result.localReady++;
   }
   for(const service of SERVICES){
@@ -225,10 +228,13 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace
     if(row.p.abstract&&terminal){status='filtered';reason='scope_rejected_with_evidence'}else if(terminal){status='abstain';reason='providers_terminal_scope_unresolved';result.abstained=(result.abstained||0)+1;}else{status='pending';reason='scope_pending';result.scopePending++;}
    }else if(sufficient||terminal){
     status=sufficient?'done':'abstain';reason=sufficient?'sufficient_evidence':'providers_terminal_missing_fields';if(!sufficient)result.abstained=(result.abstained||0)+1;
-    const saved=await savePaper(db,row.p,stamp(),{runId:row.origin_run_id||lease.id,batchKey:row.origin_batch_key,firstSeen:row.first_seen,cohortKey:row.daily_cohort_key||dailyCohortKey(row.first_seen),deferScoring:!sufficient});
+     const manual=isManualBatchKey(row.origin_batch_key),cohortKey=manual?null:(row.daily_cohort_key??dailyCohortKey(row.first_seen));
+     const saved=await savePaper(db,row.p,stamp(),{runId:row.origin_run_id||lease.id,batchKey:row.origin_batch_key,firstSeen:row.first_seen,cohortKey:cohortKey||undefined,deferScoring:!sufficient});
     if(saved.skipped){result.deferred++;await db.prepare("UPDATE research_enrichment_queue SET status='blocked',ready_reason='identity_ambiguous',provider_json=?,updated_at=? WHERE doi=? AND source_id=?").bind(JSON.stringify(row.providers),stamp(),row.doi,row.source_id).run();continue;}
     const stored=await db.prepare('SELECT * FROM research_papers WHERE id=?').bind(saved.id).first(),paper={...rowPaper(stored),metadataStatus:sufficient?'ready':'abstain'};
-    await db.batch([db.prepare('UPDATE research_papers SET metadata_status=? WHERE id=?').bind(sufficient?'ready':'abstain',saved.id),db.prepare(`INSERT INTO research_ready_evidence(paper_id,daily_cohort_key,origin_batch_key,first_seen,ready_at,content_hash,evidence_json,reason) SELECT ?,?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM research_daily WHERE source_date=?) ON CONFLICT(paper_id) DO UPDATE SET ready_at=excluded.ready_at,content_hash=excluded.content_hash,evidence_json=excluded.evidence_json,reason=excluded.reason WHERE NOT EXISTS(SELECT 1 FROM research_daily WHERE source_date=substr(research_ready_evidence.daily_cohort_key,1,10))`).bind(saved.id,row.daily_cohort_key||dailyCohortKey(row.first_seen),row.origin_batch_key,row.first_seen,stamp(),stored.content_hash,JSON.stringify(paper),reason,(row.daily_cohort_key||dailyCohortKey(row.first_seen)).slice(0,10))]);
+     const writes=[db.prepare('UPDATE research_papers SET metadata_status=? WHERE id=?').bind(sufficient?'ready':'abstain',saved.id)];
+     if(sufficient&&cohortKey)writes.push(db.prepare(`INSERT INTO research_ready_evidence(paper_id,daily_cohort_key,origin_batch_key,first_seen,ready_at,content_hash,evidence_json,reason) SELECT ?,?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM research_daily WHERE source_date=?) ON CONFLICT(paper_id) DO UPDATE SET ready_at=excluded.ready_at,content_hash=excluded.content_hash,evidence_json=excluded.evidence_json,reason=excluded.reason WHERE NOT EXISTS(SELECT 1 FROM research_daily WHERE source_date=substr(research_ready_evidence.daily_cohort_key,1,10))`).bind(saved.id,cohortKey,row.origin_batch_key,row.first_seen,stamp(),stored.content_hash,JSON.stringify(paper),reason,cohortKey.slice(0,10)));
+     await db.batch(writes);
     row.p=paper;row.input_hash=await digest(metadataFields(paper));if(sufficient)result.ready++;
    }else result.deferred++;
    row.input_hash=await digest(metadataFields(row.p));
