@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-21T00:00:00Z",
+  "latestVersion": "2026-10-22T13:10:05Z",
   "releases": [
+    {
+      "id": "hkis-execution-diagnostics-20261022",
+      "at": "2026-10-22T13:10:05Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "补齐采集运行器与站点入口诊断",
+      "body": [
+        "采集运行器在启动、预检和每次请求输出安全关联标识、方法与固定路径、版本及阶段结果，区分未派发、传输未知和有应用回显的拒绝；修复时窗、间隔归属和来源拒绝码丢失，不自动重放未知请求。",
+        "增强现有操作与脱敏日志，支持按自动化和请求标识核对真实到达应用的请求；新增有限预检仅回读执行契约，不把GET成功视作POST授权。",
+        "保留原采集、模型预算、只读MCP和所有者权限；源码提交不代表已部署、原自动任务已更新或平台执行能力已恢复。"
+      ],
+      "sources": [
+        {
+          "label": "采集执行诊断及验收边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-execution-diagnostics.md"
+        }
+      ]
+    },
     {
       "id": "hkis-manual-batches-20261021",
       "at": "2026-10-21T00:00:00Z",

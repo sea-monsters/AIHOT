@@ -1,8 +1,9 @@
+import {EXECUTION_CONTRACT,executionRoutes,sourceRevision,diagnosticCode,diagnosticId} from './research-diagnostics.ts';
 import {AIError,owner} from './ai/security.ts';
 // No free text, request bodies, headers, URLs, model output or credentials enter this table.
 export const LOG_RETENTION_DAYS=30, LOG_ROW_CAP=10000, LOG_CLEANUP_BATCH=200;
 const components=['research','feed','ai','provider','scholarly','anysearch','settings','server'];
-const events=['network_probe','collection_started','collection_finished','collection_failed','request_finished','request_failed','config_saved','tool_failed','unexpected_exception'];
+const events=['request_started','network_probe','collection_started','collection_finished','collection_failed','request_finished','request_failed','config_saved','tool_failed','unexpected_exception'];
 const phases=['connect','read_response','parse_response','validate_response'];
 const outcomes=['started','ok','partial','failed','unknown','backfill_pending','blocked'];
 const errorCodes=new Set(['anysearch_receipt_limit','anysearch_not_configured','anysearch_disabled','anysearch_auth','anysearch_quota','anysearch_rate_limit','anysearch_http','anysearch_network','anysearch_timeout','anysearch_format','anysearch_too_large','anysearch_redirect','anysearch_budget','anysearch_throttle','anysearch_unavailable','scholarly_unavailable','scholarly_format','scholarly_auth','scholarly_budget','scholarly_throttle','scholarly_not_found','scholarly_rate_limit','scholarly_http','scholarly_network','scholarly_timeout','scholarly_redirect','scholarly_too_large','scholarly_conflict','identifier_provider_mismatch','identity_conflict','record_expired','record_conflict','doi_required','invalid_record','invalid_service','invalid_query','invalid_page','diagnostic_limited','provider_redirect','unexpected_error','collection_failed','partial_collection','ai_unavailable',
@@ -16,9 +17,14 @@ export async function logReference(value:unknown){if(typeof value!=='string'||!v
 export async function safeLogEntry(input:any){
  const metadata:Record<string,string|number|boolean>={};
  for(const key of ['added','updated','fetched','registryReceived','filteredOut','enriched','rssCount','warnings','providerCalls','round','revision','toolCalls','toolExecutions','cacheHits','latestPages','historyPages','latestPending','historyPending','expiredIncomplete']){const n=count(input.metadata?.[key]);if(n!==null)metadata[key]=n;}
- for(const key of ['pending','rssOk','manualAnalysis','cloudflareChallenge','cloudflareServer'])if(typeof input.metadata?.[key]==='boolean')metadata[key]=input.metadata[key];
+ for(const key of ['applicationReached','pending','rssOk','manualAnalysis','cloudflareChallenge','cloudflareServer'])if(typeof input.metadata?.[key]==='boolean')metadata[key]=input.metadata[key];
  for(const [key,values] of Object.entries({service:['semanticscholar','openalex'],purpose:['paper_assessment','daily_digest','network','test','chat','settings','preferences/propose','preferences/resolve'],contentKind:['json','html','text','other'],bodyClass:['json','html','empty','other','truncated','read_failed'],transport:['timeout','connection_failed'],errorName:['TypeError','Error','TimeoutError','AbortError','NetworkError','Other'],transportCode:[...transportCodes]}))if(values.includes(input.metadata?.[key]))metadata[key]=input.metadata[key];
- return {severity:enumValue(input.severity,['info','warning','error'],'error'),component:enumValue(input.component,components,'server'),event:enumValue(input.event,events,'unexpected_exception'),outcome:enumValue(input.outcome,outcomes,'unknown'),errorCode:errorCodes.has(input.errorCode)?input.errorCode:null,httpStatus:typeof input.httpStatus==='number'&&Number.isInteger(input.httpStatus)&&input.httpStatus>=100&&input.httpStatus<=599?input.httpStatus:null,phase:phases.includes(input.phase)?input.phase:null,correlationId:await logReference(input.correlationId),taskId:await logReference(input.taskId),requestId:await logReference(input.requestId),sourceId:await logReference(input.sourceId),durationMs:count(input.durationMs,86400000),metadata};
+ if(Object.hasOwn(executionRoutes,input.metadata?.route||''))metadata.route=input.metadata.route;
+ if(['GET','POST','HEAD','OTHER'].includes(input.metadata?.httpMethod))metadata.httpMethod=input.metadata.httpMethod;
+ if(Object.values(executionRoutes).includes(input.metadata?.executionPhase))metadata.executionPhase=input.metadata.executionPhase;
+ if(input.metadata?.diagnosticContract===EXECUTION_CONTRACT)metadata.diagnosticContract=EXECUTION_CONTRACT;
+ const revision=sourceRevision(input.metadata?.sourceRevision);if(revision)metadata.sourceRevision=revision;
+ return {severity:enumValue(input.severity,['info','warning','error'],'error'),component:enumValue(input.component,components,'server'),event:enumValue(input.event,events,'unexpected_exception'),outcome:enumValue(input.outcome,outcomes,'unknown'),errorCode:errorCodes.has(input.errorCode)||diagnosticCode(input.errorCode)!=='other'?input.errorCode:null,httpStatus:typeof input.httpStatus==='number'&&Number.isInteger(input.httpStatus)&&input.httpStatus>=100&&input.httpStatus<=599?input.httpStatus:null,phase:phases.includes(input.phase)?input.phase:null,correlationId:await logReference(input.correlationId),taskId:await logReference(input.taskId),requestId:await logReference(input.requestId),sourceId:await logReference(input.sourceId),durationMs:count(input.durationMs,86400000),metadata};
 }
 export async function cleanupLogs(db:any,now=Date.now(),reserve=0){
  const cutoff=new Date(now-LOG_RETENTION_DAYS*86400000).toISOString();
@@ -43,6 +49,7 @@ export async function logsApi(request:Request,env:any){
  try{await cleanupLogs(env.DB)}catch{}
  const u=new URL(request.url),severity=u.searchParams.get('severity')||'issues',component=u.searchParams.get('component')||'all',before=Number(u.searchParams.get('before'));
  const where=['created_at>=?'],binds:any[]=[new Date(Date.now()-LOG_RETENTION_DAYS*86400000).toISOString()];
+ for(const [param,column] of [['automationId','correlation_id'],['requestId','request_id']]){const value=u.searchParams.get(param);if(value){const id=diagnosticId(value);if(!id)throw new AIError('invalid_action',400,'无效日志关联标识');where.push(column+'=?');binds.push(await logReference(id));}}
  if(severity==='issues')where.push("severity IN ('warning','error')");else if(['info','warning','error'].includes(severity)){where.push('severity=?');binds.push(severity)}else if(severity!=='all')throw new AIError('invalid_action',400,'无效日志级别');
  if(component!=='all'){if(!components.includes(component))throw new AIError('invalid_action',400,'无效日志组件');where.push('component=?');binds.push(component)}
  if(Number.isSafeInteger(before)&&before>0){where.push('id<?');binds.push(before)}

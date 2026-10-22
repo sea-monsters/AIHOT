@@ -11,7 +11,7 @@ const origin='https://research-fixture.owner-fixture.chatgpt.site',token='SYNTHE
 async function cli(kind:'slot'|'selection',baseUrl:any,allowedOrigins:any,redirect=false){
  const previous={fetch:globalThis.fetch,now:Date.now,write:process.stdout.write,exit:process.exitCode},calls:any[]=[],logs:string[]=[];
  Date.now=()=>Date.parse('2026-10-13T12:00:00Z');process.stdout.write=((s:any)=>{logs.push(String(s));return true}) as any;
- globalThis.fetch=async(url,options:any)=>{assert.equal(options.redirect,'error');assert.equal(options.headers['OAI-Sites-Authorization'],'Bearer '+token);calls.push({url:String(url),method:options.method});return redirect?new Response('synthetic redirect',{status:302,headers:{location:'https://outside.example/collect'}}):Response.json({status:'unknown'});};
+ globalThis.fetch=async(url,options:any)=>{assert.equal(options.redirect,'error');assert.equal(options.headers['OAI-Sites-Authorization'],'Bearer '+token);if(String(url).endsWith('/execution')&&!redirect){calls.push({url:String(url),method:options.method});return Response.json({status:'ok',diagnosticContract:'hkis-execution-v1'},{headers:{'x-hkis-execution-contract':'hkis-execution-v1','x-hkis-operation-id':options.headers['x-hkis-operation-id'],'x-hkis-automation-id':options.headers['x-hkis-automation-id']}});}calls.push({url:String(url),method:options.method});return redirect?new Response('synthetic redirect',{status:302,headers:{location:'https://outside.example/collect'}}):Response.json({status:'unknown'});};
  try{const pending=kind==='slot'?privateSlotMain():selectedScoringMain();process.stdin.emit('data',JSON.stringify({baseUrl,allowedOrigins,token,slot:20,paperIds:['synthetic-paper']})+'\n');await pending;assert.ok(!logs.join('').includes(token));return {error:null,result:JSON.parse(logs.find(s=>s.startsWith('{'))!),calls};}
  catch(error){assert.ok(!logs.join('').includes(token));return {error,result:null,calls};}
  finally{globalThis.fetch=previous.fetch;Date.now=previous.now;process.stdout.write=previous.write;process.exitCode=previous.exit;}
@@ -21,10 +21,10 @@ test('selection CLI accepts the canonical two-label official Sites shape and rem
  const r=await cli('selection',origin,[origin]);assert.equal(r.error,null);assert.equal(r.result.status,'unknown');assert.equal(r.calls.length,1);assert.equal(new URL(r.calls[0].url).origin,origin);assert.equal(r.calls[0].method,'GET');assert.equal(r.result.steps[0].phase,'inspect');
 });
 test('slot CLI accepts the canonical two-label official Sites shape without changing its pipeline',async()=>{
- const r=await cli('slot',origin,[origin]);assert.equal(r.error,null);assert.equal(r.result.status,'unknown');assert.equal(r.calls.length,1);assert.equal(r.calls[0].url,origin+'/api/site/research/batch/start');assert.equal(r.calls[0].method,'POST');
+ const r=await cli('slot',origin,[origin]);assert.equal(r.error,null);assert.equal(r.result.status,'unknown');assert.equal(r.calls.length,2);assert.equal(r.calls[0].url,origin+'/api/site/research/execution');assert.equal(r.calls[0].method,'GET');assert.equal(r.calls[1].url,origin+'/api/site/research/batch/start');assert.equal(r.calls[1].method,'POST');
 });
 test('both CLIs accept canonical single/nested legal labels and only an optional root slash',async()=>{
- for(const target of ['https://fixture.chatgpt.site',origin,'https://a.b.owner-fixture.chatgpt.site','https://'+'a'.repeat(63)+'.owner-fixture.chatgpt.site'])for(const kind of ['slot','selection'] as const)for(const ending of ['','/']){const r=await cli(kind,target+ending,[target]);assert.equal(r.error,null);assert.equal(r.calls.length,1);assert.equal(new URL(r.calls[0].url).origin,target);}
+ for(const target of ['https://fixture.chatgpt.site',origin,'https://a.b.owner-fixture.chatgpt.site','https://'+'a'.repeat(63)+'.owner-fixture.chatgpt.site'])for(const kind of ['slot','selection'] as const)for(const ending of ['','/']){const r=await cli(kind,target+ending,[target]);assert.equal(r.error,null);assert.equal(r.calls.length,kind==='slot'?2:1);assert.equal(new URL(r.calls[0].url).origin,target);}
 });
 test('both CLIs reject malformed origins, userinfo, paths, ports, suffix attacks and nonexact allowlists before fetch',async()=>{
  const host=new URL(origin).hostname;
@@ -34,7 +34,7 @@ test('both CLIs reject malformed origins, userinfo, paths, ports, suffix attacks
  }
 });
 test('both CLI adapters prohibit redirects and stop after one unconfirmed redirect response',async()=>{
- for(const kind of ['slot','selection'] as const){const r=await cli(kind,origin,[origin],true);assert.equal(r.error,null);assert.equal(r.result.status,'unknown');assert.equal(r.calls.length,1);assert.equal(new URL(r.calls[0].url).origin,origin);}
+ for(const kind of ['slot','selection'] as const){const r=await cli(kind,origin,[origin],true);if(kind==='slot')assert.equal((r.error as any)?.code,'server_contract_unconfirmed');else{assert.equal(r.error,null);assert.equal(r.result.status,'unknown');}assert.equal(r.calls.length,1);assert.equal(new URL(r.calls[0].url).origin,origin);}
 });
 test('actual CLI entry points label invalid origins as local unsent validation, without provider failure or secrets',()=>{
  mkdirSync('.sites-runtime',{recursive:true});const preload=resolve('.sites-runtime/research-origin-unsent-fixture.mjs');writeFileSync(preload,"let requests=0;globalThis.fetch=async()=>{requests++;throw Error('external requests disabled')};process.on('exit',()=>process.stdout.write(JSON.stringify({fixtureRequests:requests})+'\\n'));");
