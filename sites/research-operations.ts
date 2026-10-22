@@ -88,7 +88,7 @@ export async function operationsApi(request:Request,env:any){
  }catch(e){return Response.json({code:e instanceof AIError?e.code:'logs_unavailable',error:e instanceof AIError?e.message:'操作日志暂不可用'},{status:e instanceof AIError?e.status:503,headers});}
 }
 
-function operationOutcome(result:any,phase:string){
+export function operationOutcome(result:any,phase:string){
  const status=result?.status,unknown=status==='unknown'||result?.known===false||result?.recovery?.known===false;
  const failed=['error','failed'].includes(status)||!!result?.error;
  const coveragePending=status==='backfill_pending'||result?.crossref?.pending===true||Number(result?.crossref?.latestPending)>0||Number(result?.crossref?.historyPending)>0;
@@ -99,6 +99,13 @@ function operationOutcome(result:any,phase:string){
  if(!reason&&failed)reason=reasons.has(result?.error)?result.error:['crossref_cooldown','crossref_rate_limit'].includes(result?.collectionControl?.reason)?result.collectionControl.reason:phase==='sync'||phase==='batch_collect'?'collection_failed':'operation_failed';
  reason||=result?.collectionControl?.reason||(coveragePending?(Number(result?.crossref?.latestPending)>0?'latest_pending':Number(result?.crossref?.historyPending)>0?'history_pending':'coverage_incomplete'):null)||(state==='unknown'?'database_unknown':state==='deferred'?(reasons.has(status)?status:'work_pending'):null);
  return {state,reason};
+}
+
+/** HTTP ingress uses the same semantic outcome as the durable operation journal. */
+export function requestOutcome(result:any,phase:string,httpStatus:number){
+ const operation=operationOutcome(result,phase),unknown=operation.state==='unknown'||httpStatus>=500;
+ const outcome=unknown?'unknown':operation.state==='failed'?'failed':httpStatus>=400?'blocked':operation.state==='deferred'?['partial','backfill_pending'].includes(result?.status)?'partial':'blocked':'ok';
+ return {unknown,outcome,reason:result?.reason||result?.deferredReason||result?.blocked||result?.code||operation.reason};
 }
 
 export async function operationCall(db:any,phase:string,body:any,action:(trace:OperationTrace)=>Promise<any>,httpRequest?:Request){

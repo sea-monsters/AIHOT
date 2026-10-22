@@ -7,6 +7,7 @@ import {pathToFileURL} from 'node:url';
 // and unreadable bodies cannot tell us whether a POST already committed.
 const safeOperationId=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)?v.toLowerCase():null;
 const rejected={batch_window:[409],interval_owner_ambiguous:[409],origin_rejected:[403],request_marker_required:[403],request_rejected:[403],invalid_request:[400],invalid_json:[400],request_too_large:[413],method_not_allowed:[405],ingestion_pending:[409],collection_unknown:[409],batch_in_flight:[409],batch_closed:[409],collection_canceled:[409],collection_lease_lost:[409],owner_required:[403],invalid_deadline:[400],invalid_batch:[400,404],daily_window:[409]};
+// Trusted application decoder. Network callers must establish matching application evidence first.
 export async function slotOutcome(response,path=''){
  let value;try{value=await response.json()}catch{return {status:'unknown',reason:'response_unconfirmed'}}
  if(!response.ok)return response.status<500&&typeof value?.code==='string'&&Object.hasOwn(rejected,value.code)&&rejected[value.code].includes(response.status)?{status:'deferred',code:value.code,requestId:safeOperationId(value.requestId),...(value.code==='ingestion_pending'&&value.recovery?.known===true?{recovery:{known:true,confirmed:true,processedItems:Number.isInteger(value.recovery.processedItems)&&value.recovery.processedItems>=0?value.recovery.processedItems:0,remainingItems:Number.isInteger(value.recovery.remainingItems)&&value.recovery.remainingItems>=0?value.recovery.remainingItems:0}}:{})}:{status:'unknown',reason:'http_outcome_unknown',requestId:safeOperationId(value?.requestId)};
@@ -27,7 +28,11 @@ export function createResearchClient(origin,token,options={}){
   try{
    response=await fetch(origin+path,{method,redirect:'error',headers:{'OAI-Sites-Authorization':'Bearer '+token,'Content-Type':'application/json','x-hkis-operation-id':id,'x-hkis-automation-id':automationId},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(timeoutMs)});
    applicationReached=response.headers.get('x-hkis-execution-contract')===EXECUTION_CONTRACT&&response.headers.get('x-hkis-operation-id')===id&&response.headers.get('x-hkis-automation-id')===automationId;
-   const result=await slotOutcome(response,route),responseId=safeOperationId(result.requestId),code=!response.ok?(applicationReached?diagnosticCode(result.code||'application_outcome_unknown'):[401,403].includes(response.status)?'http_rejection_unattributed':response.status>=500?'gateway_outcome_unknown':'response_invalid'):result.reason==='response_unconfirmed'?'response_invalid':result.status==='unknown'?'application_outcome_unknown':result.code||result.reason||result.blocked||null;
+   // HTTP status/body alone cannot establish which layer answered. Do not let
+   // an unmatched 2xx or business-looking rejection advance any pipeline phase.
+   const result=applicationReached?await slotOutcome(response,route):{status:'unknown',reason:'response_unconfirmed'};
+   if(!applicationReached)try{await response.body?.cancel();}catch{}
+   const responseId=safeOperationId(result.requestId),code=!response.ok?(applicationReached?diagnosticCode(result.code||'application_outcome_unknown'):[401,403].includes(response.status)?'http_rejection_unattributed':response.status>=500?'gateway_outcome_unknown':'response_invalid'):!applicationReached?'application_evidence_missing':result.reason==='response_unconfirmed'?'response_invalid':result.status==='unknown'?'application_outcome_unknown':result.code||result.reason||result.blocked||null;
    const diagnostic={...base,state:result.status==='unknown'?'unknown':response.ok?'returned':'rejected',at:new Date(now()).toISOString(),durationMs:diagnosticCount(now()-started),httpStatus:response.status,applicationReached,code:code?diagnosticCode(code):null,sourceRevision:applicationReached?sourceRevision(response.headers.get('x-hkis-source-revision')):null};
    emit(diagnostic);return {...result,requestId:responseId||id,sentRequestId:id,operationIdMismatch:!!responseId&&responseId!==id,diagnostic};
   }catch(e){

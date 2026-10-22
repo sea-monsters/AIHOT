@@ -4,6 +4,8 @@ import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,readdirSync} from 'node:fs';
 import {createResearchClient,privateSlotMain,slotOutcome} from './run-research-slot.mjs';
 import {researchApi} from './research.ts';
+import {runResearchSlot} from './research-slot.ts';
+import {requestOutcome,operationCall} from './research-operations.ts';
 import {EXECUTION_CONTRACT,diagnosticCode,safeSlotResult} from './research-diagnostics.ts';
 import {safeLogEntry,logReference} from './runtime-logs.ts';
 
@@ -39,7 +41,25 @@ test('transport exceptions keep only approved timeout/DNS codes and stop without
 test('HTTP access rejection without an echo stays unattributed; matching application evidence distinguishes origin rejection',async()=>{
  const previous=globalThis.fetch;
  try{for(const matched of [false,true]){globalThis.fetch=async(_url,options:any)=>Response.json({code:matched?'origin_rejected':'owner_required',error:secret},{status:403,headers:matched?evidenceHeaders(options):{}});const value=await createResearchClient(origin,secret,{automationId})('/api/site/research/batch/start',{slot:20},1000);
-  assert.equal(value.diagnostic.applicationReached,matched);assert.equal(value.diagnostic.code,matched?'origin_rejected':'http_rejection_unattributed');if(matched)assert.equal(value.status,'deferred');}
+  assert.equal(value.diagnostic.applicationReached,matched);assert.equal(value.diagnostic.code,matched?'origin_rejected':'http_rejection_unattributed');assert.equal(value.status,matched?'deferred':'unknown');if(!matched){assert.equal(value.code,undefined);assert.equal(value.recovery,undefined);}}
+ }finally{globalThis.fetch=previous;}
+});
+
+test('unmatched successful or rejected responses never release AM recovery/metadata barriers or advance PM collection',async()=>{
+ const previous=globalThis.fetch;
+ try{
+  for(const slot of [8,20] as const)for(const failPhase of slot===8?['ingestion/recover','enrich']:['batch/start','sync'])for(const response of [()=>Response.json({code:'owner_required'},{status:403}),()=>Response.json({status:'ok',recovery:{known:true,confirmed:true,remainingItems:0,processedItems:0},ready:1}),()=>Response.json({status:'running',batchKey:'untrusted',collectionControl:{nextSourceId:'untrusted'}})]){
+   const calls:string[]=[];globalThis.fetch=async(url,options:any)=>{const path=new URL(String(url)).pathname;calls.push(path);if(path.endsWith('/'+failPhase))return response();const headers=evidenceHeaders(options);return Response.json(path.endsWith('/ingestion/recover')?{status:'ok',recovery:{known:true,remainingItems:0,processedItems:0}}:path.endsWith('/start')?{status:'running',batchKey:'fixture',collectionControl:{nextSourceId:'fixture'}}:{status:'ok',ready:0},{headers});};
+   const result=await runResearchSlot(createResearchClient(origin,secret,{automationId}),slot,()=>0);assert.equal(result.status,'unknown');assert.ok(calls.at(-1)?.endsWith('/'+failPhase));assert.equal(calls.filter(p=>p.endsWith('/'+failPhase)).length,1);assert.equal(calls.length,failPhase==='enrich'||failPhase==='sync'?2:1);assert.ok(!calls.some(p=>p.endsWith('/finish')||p.endsWith('/process')||p.endsWith('/daily/generate')));
+  }
+ }finally{globalThis.fetch=previous;}
+});
+
+test('contract, operation and automation echoes must all match; no unverified recovery or batch data escapes',async()=>{
+ const previous=globalThis.fetch;
+ try{for(const header of ['x-hkis-execution-contract','x-hkis-operation-id','x-hkis-automation-id'])for(const missing of [false,true]){globalThis.fetch=async(_url,options:any)=>{const headers:any=evidenceHeaders(options);if(missing)delete headers[header];else headers[header]=header==='x-hkis-execution-contract'?'unverified-contract':'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';return Response.json({status:'ok',batchKey:'untrusted',code:'owner_required',recovery:{known:true,confirmed:true,remainingItems:0,processedItems:1},metadataProgress:{confirmed:true,processedItems:1},requestId:'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'},{headers});};
+   const result=await createResearchClient(origin,secret,{automationId})('/api/site/research/ingestion/recover',{},1000);assert.equal(result.status,'unknown');assert.equal(result.diagnostic.state,'unknown');assert.equal(result.diagnostic.code,'application_evidence_missing');assert.equal(result.diagnostic.applicationReached,false);for(const field of ['batchKey','code','recovery','metadataProgress'])assert.equal(result[field],undefined);assert.equal(result.requestId,result.sentRequestId);assert.equal(result.operationIdMismatch,false);
+  }
  }finally{globalThis.fetch=previous;}
 });
 
@@ -85,6 +105,17 @@ test('HTTP-200 lease deferral is recorded as blocked with the actual site gate, 
   const response=await researchApi(new Request(origin+'/api/site/research/batch/start',{method:'POST',headers:{'content-type':'application/json','x-hkis-automation-id':automationId},body:JSON.stringify({slot:20})}),f.env),value=await response.json();
   assert.equal(response.status,200);assert.equal(value.status,'deferred');assert.equal(value.reason,'collection_in_progress');assert.equal(value.batchKey,null);
   const row=f.sql.prepare("SELECT * FROM runtime_logs WHERE event='request_finished' ORDER BY id DESC LIMIT 1").get()!;assert.equal(row.outcome,'blocked');assert.equal(row.error_code,'collection_in_progress');assert.equal(f.sql.prepare('SELECT count(*) n FROM research_batches').get()!.n,0);
+ }finally{f.sql.close();}
+});
+
+test('HTTP-200 failures share durable operation semantics; unknown outranks error, then blocked/partial/ok',async()=>{
+ const cases:any[]=[
+  [{status:'error'},'failed','failed'],[{status:'failed'},'failed','failed'],[{status:'ok',error:secret},'failed','failed'],
+  [{status:'unknown',error:secret},'unknown','unknown'],[{status:'failed',known:false},'unknown','unknown'],[{status:'error',recovery:{known:false}},'unknown','unknown'],
+  [{status:'blocked'},'blocked','deferred'],[{status:'partial'},'partial','deferred'],[{status:'ok',blocked:'metadata_in_progress'},'blocked','deferred'],[{status:'ok',pending:true},'blocked','deferred'],[{status:'ok'},'ok','ok'],
+ ];
+ const f=fixture();try{for(const [input,expected,state] of cases){const value=requestOutcome(input,'sync',200);assert.equal(value.outcome,expected);assert.equal(value.unknown,expected==='unknown');await operationCall(f.env.DB,'sync',{},async()=>input);const row=f.sql.prepare('SELECT * FROM research_operations ORDER BY rowid DESC LIMIT 1').get()!;assert.equal(row.state,state);}
+  assert.equal(requestOutcome({status:'error'},'sync',503).outcome,'unknown');assert.equal(requestOutcome({code:'owner_required'},'sync',403).outcome,'blocked');assert.ok(!JSON.stringify(f.sql.prepare('SELECT * FROM research_operations').all()).includes(secret));
  }finally{f.sql.close();}
 });
 

@@ -4,12 +4,14 @@
 
 ## 修复了什么
 
+- 生产客户端必须先匹配执行契约、operation UUID和automation UUID三个应用回显，才调用业务结果解码。没有完整回显的非2xx及2xx一律unknown，不采信其code、batchKey、recovery或metadataProgress，停止后续阶段。匹配回显也不把HTTP5xx变成已知拒绝。
 - 客户端保留 `batch_window`、`interval_owner_ambiguous`、来源和输入拒绝的固定码；HTTP 5xx、无法解析的响应、传输异常仍是 unknown，不自动重放 POST。
 - `run-research-slot.mjs` 在读取 stdin 之前输出 `HKIS_DIAGNOSTIC` 启动记录。无凭据、无 fetch、错误原点、错误时窗、版本不符、预算不足均输出具体阶段和固定码。stdin 30秒无输入后停止，不永久等待。
 - 每轮生成一个随机 automation UUID；每个 HTTP 请求仍有独立 `x-hkis-operation-id`。客户端逐条输出开始／返回／拒绝／未知，最后输出有界、白名单诊断报告；不输出 token、授权头、请求正文、query、原始异常或供应商响应。
+- request_finished直接复用持久operation journal的分类：unknown（含known=false/recovery.known=false）优先，随后error/failed/真值error字段为failed，再区分blocked、partial、ok。HTTP200不改变业务失败。
 - 服务端增强现有 `HKIS_OPERATION`，复用现有 D1 operation journal 和 `runtime_logs`，没有新表或迁移。请求真正到达应用后，才记录 automation ID、方法、固定路径、阶段、版本及结果。原有 provider／持久化阶段日志继续按 requestId 关联。
 - runtime_logs 的 correlation/request ID 沿用原 SHA256 前24字符；owner可用原始安全UUID过滤 `GET /api/site/logs?severity=all&automationId=<UUID>`，或 `requestId=<UUID>`。读取权限未放宽，仍支持原有分页。
-- 新增固定 GET `/api/site/research/execution`，不初始化论文库、不调用供应商或模型。它只回读诊断契约和应用版本；`postCapabilityVerified:false` 明确表示**GET成功不是POST授权证明**。查询本身只留下诊断日志。
+- 新增固定 GET `/api/site/research/execution`，不初始化论文库、不调用供应商或模型。它只回读诊断契约和应用版本；`postCapabilityVerified:false` 明确表示**GET成功不是POST授权证明**。查询本身只留下诊断日志。日志写入需要等待D1，可能增加请求延迟并消耗原有请求／540秒预算；吞错只保证日志错误不会替换主要结果，不能保证零时延。
 
 `sites/build.mjs` 仅在 Git 工作树干净时将实际 HEAD 注入 bundle 的 sourceRevision；脏工作树、无Git信息时为 null。runner 同样只把干净 checkout 的 HEAD 作为本地源码证据。该SHA是构建源码来源，不冒充平台 Worker scriptVersion、部署ID或GitHub与托管仓库的同一提交。
 
@@ -34,7 +36,8 @@
 | 没有runner启动记录 | 未证明runner已启动，须查平台任务run和工具交付 | 不可说是Crossref、数据库或模型失败 |
 | preflight/not_dispatched，requestsAttempted=0 | 本地验证／能力检查前停止 | 不可说请求被平台拒绝 |
 | requestsAttempted>0，postsAttempted=0 | 曾尝试GET；仍未尝试采集POST | 不可说POST能力正常 |
-| HTTP401/403且无匹配应用回显 | 观察到HTTP访问拒绝，归因尚未确定 | 不可确定是平台层还是站点内部 |
+| HTTP401/403且无匹配应用回显 | 观察到HTTP访问拒绝，客户端结果unknown并停止 | 不可确定是平台层还是站点内部 |
+| HTTP2xx但回显缺失／错误 | 未确认来源，结果unknown并停止 | 不可用业务形状或recovery字段放行后续阶段 |
 | transport_failed/request_timeout | 传输或等待失败；可附白名单DNS/socket码 | 不可证明POST未提交，更不能安全重放 |
 | 匹配应用回显，origin_rejected/request_marker_required/owner_required | 该请求确实到达应用并被相应检查拒绝 | 不代表整轮其他请求的权限 |
 | batch_window/interval_owner_ambiguous/metadata_in_progress等 | 结合HTTP码、operation记录确认具体站内门控 | 不可把HTTP200 deferred叫成功 |

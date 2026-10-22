@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-22T13:10:05Z",
+  "latestVersion": "2026-10-22T13:28:54Z",
   "releases": [
+    {
+      "id": "hkis-execution-evidence-gates-20261022",
+      "at": "2026-10-22T13:28:54Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "收紧采集响应证据与失败日志分类",
+      "body": [
+        "生产客户端只在执行契约、请求标识和自动化标识全部匹配应用回显后解析业务结果；无回显的拒绝和成功响应均保留为未知，停止后续阶段，不重放POST。",
+        "入口日志复用持久操作日志的结果语义，未知优先，错误和失败不再因HTTP200而记为成功；保留已有门控、预算、权限和脱敏边界。",
+        "增加早间准备和晚间采集停止、缺失或错误回显、已知失败及未知优先的合成回归；源码推送不代表已部署或原自动任务已更新。"
+      ],
+      "sources": [
+        {
+          "label": "执行响应证据与验收边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-execution-diagnostics.md"
+        }
+      ]
+    },
     {
       "id": "hkis-execution-diagnostics-20261022",
       "at": "2026-10-22T13:10:05Z",
