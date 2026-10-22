@@ -8,11 +8,11 @@
       "at": "2026-10-23T12:18:44Z",
       "kind": "upstream",
       "basis": "record",
-      "title": "择取上游构建依赖更新，保留 HKIS 定制运行边界",
+      "title": "择取上游依赖安全修复与构建更新",
       "body": [
-        "本轮核对真实上游 KKKKhazix/AIHOT 在 84a7abb 之后至 b3998dc 的 23 项提交；先择取 Vite 8.3.3，并将锁文件中的声明统一为清单的精确版本。",
-        "原 Node/PostgreSQL 引擎、全文、新闻搜索、后台与部署更新逐项审查，适用性和最终依赖安全适配结果见本轮审查记录；未整体合并上游。",
-        "仅更新仓库源码与维护记录，不代表 Sites 已部署或自动任务已更新；保留所有者权限、MCP只读、批次预算、租约、冻结证据和现有界面。"
+        "本轮核对真实上游 KKKKhazix/AIHOT 在 84a7abb 之后至 b3998dc 的 23 项提交，分别择取 Vite 8.3.3 和最终依赖安全补丁；sanitize-html 更新至2.18.1、Fastify至5.12.7、后端Undici至8.12.3，Node最低版本随上游提高至24.22.1。",
+        "保留 HKIS workspace、Sites构建与其余依赖，解决清单/锁文件冲突并统一Vite精确版本；2项采用、2项延期、19项跳过，原Node/PostgreSQL引擎和未启用业务未整体合并，详情见逐项审查记录。",
+        "仅更新仓库源码与维护记录，不部署Sites或修改自动任务pin，不代表生产已具备main中的manual功能；保留所有者权限、MCP只读、批次预算、租约、冻结证据、安全诊断和现有界面。"
       ],
       "sources": [
         {
@@ -21,7 +21,7 @@
         },
         {
           "label": "HKIS逐项审查与验证",
-          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/hkis-selective-adaptation-2026-10-23.md"
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/upstream-sync.md"
         }
       ]
     },

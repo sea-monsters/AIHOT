@@ -3,7 +3,9 @@
 ## 当前同步索引
 
 - 最后完整 merge：`cf8f8d07d68dfa9079becc72b0717a45b33485f3`，由 fork `ed0cf9a24790602902b6350bb2d2d18a6168a4e7` 合入；未把后续审查 head 记成已完整合并。
-- 最近一次选择性审查与适配：`9cf2a3c261d3e4d8f4350ece98d1f9e197a71a8b` → `791a6f56b2ef5e69b6f1b37e2115804f6eafd22d`，8 项审查、1 项局部择取、7 项跳过；见 [2026-10-14 适配及合入记录](hkis-selective-adaptation-2026-10-14.md)。上游 head 原始 committer 时间为 **2026-10-13T18:13:12Z**。候选 `8b795250d9cc7770fa6d5e79272516e5cbcf9115` 已独立复核，正常合入维护时间为 `2026-10-14T05:13:30Z`；远端 main 回读与生产发布分别核实，不把审查 head 记为完整上游 merge。
+- 最近一次选择性审查与适配：`84a7abb1d00a43a41e3ddcc26c45e1a23785e075` → `b3998dc6fc138eb9659f33f55eb38c1c716f0d57`，23 项审查，2 项择取/适配、2 项延期、19 项跳过；见 [2026-10-23 逐项记录](hkis-selective-adaptation-2026-10-23.md)。只更新仓库，不部署 Sites 或更改自动任务 pin。
+- 2026-10-17 选择性审查：`791a6f56b2ef5e69b6f1b37e2115804f6eafd22d` → `84a7abb1d00a43a41e3ddcc26c45e1a23785e075`，16 项审查，已由 `3976cad` 合入 main；见 [逐项记录](hkis-selective-adaptation-2026-10-17.md)。本次补正此前未更新的索引，原文 review 时态为当时记录。
+- 2026-10-14 选择性审查与适配：`9cf2a3c261d3e4d8f4350ece98d1f9e197a71a8b` → `791a6f56b2ef5e69b6f1b37e2115804f6eafd22d`，8 项审查、1 项局部择取、7 项跳过；见 [适配及合入记录](hkis-selective-adaptation-2026-10-14.md)。正常合入维护时间为 `2026-10-14T05:13:30Z`，不是生产上线时间。
 - 前次选择性审查：`8ef28ebcd167b311ffab8c0308181e2912262ae2` → `9cf2a3c261d3e4d8f4350ece98d1f9e197a71a8b`，13 项，见下节。上游 head 原始 committer 时间为 **2026-10-10T13:32:05Z**。
 - 上次选择性审查：`8e34e05feb161cb5838e592ee22715f791c7f814` → `8ef28ebcd167b311ffab8c0308181e2912262ae2`，共 18 项；详见 [2026-10-09 适配记录](hkis-selective-adaptation-2026-10-09.md)。原第四轮的 `8e34e05` 是历史节点，不能继续当作当前索引。
 

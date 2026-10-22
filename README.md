@@ -53,7 +53,7 @@ Sites 使用自己的 Workers / D1 运行层。保留的 Node / PostgreSQL / pg-
 
 ## 开发与验证
 
-需要 **Node.js 24.11+** 和 npm。先安装依赖，再运行静态检查与不访问外部服务的测试：
+需要 **Node.js 24.22.1+** 和 npm。先安装依赖，再运行静态检查与不访问外部服务的测试：
 
 ```bash
 npm ci
