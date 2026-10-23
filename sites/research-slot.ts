@@ -1,6 +1,7 @@
 export const SLOT_LIMITS={totalMs:540000,collection8Ms:260000,collection20Ms:330000,longRequestReserveMs:110000,collectionSliceMs:75000,collectionCalls:35,collectionConcurrency:3,localScoringMinMs:30000,paidScoringMinMs:120000};
 const safeOperationId=(v:any)=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)?v.toLowerCase():null;
 type Call=(path:string,body?:any,timeoutMs?:number)=>Promise<any>;
+const rejected=(value:any)=>!!value?.code||!!value?.error;
 const blocked=(value:any)=>!value||!!value.error||!!value.code||['busy','blocked','deferred','error','failed','interrupted','unknown'].includes(value.status);
 const preparationBlocked=(value:any)=>blocked(value)||value.status==='partial'||Number(value.deferred)>0||Number(value.scopePending)>0;
 // A metadata provider cooldown is not a scoring barrier once an item has
@@ -32,11 +33,11 @@ export async function runResearchSlot(call:Call,slot:8|20,now=Date.now,started=n
  if(slot===8){
   const recovery=await recover();if(!recovery)return outcome('unknown');if(blocked(recovery))return outcome('deferred',{reason:recovery.reason});
   let prepare=true,canScore=false;
-  if(remaining()>=110000){const value=await metadata('previous_day');if(!value)return outcome('unknown');prepare=!preparationBlocked(value);canScore=!scoringBlocked(value);}
+  if(remaining()>=110000){const value=await metadata('previous_day');if(!value)return outcome('unknown');if(rejected(value))return outcome('blocked',{reason:value.code||'metadata_rejected'});prepare=!preparationBlocked(value);canScore=!scoringBlocked(value);}
   else prepare=false;
-  if(canScore&&remaining()>=110000){const value=await invoke('scoring','/api/site/research/process',{maxPapers:1,cohort:'previous_day',maxMs:Math.min(120000,remaining()),deadlineAt:new Date(deadline-2000).toISOString()},120000);if(!value)return outcome('unknown');prepare=prepare&&!preparationBlocked(value);}
+  if(canScore&&remaining()>=110000){const value=await invoke('scoring','/api/site/research/process',{maxPapers:1,cohort:'previous_day',maxMs:Math.min(120000,remaining()),deadlineAt:new Date(deadline-2000).toISOString()},120000);if(!value)return outcome('unknown');if(rejected(value))return outcome('blocked',{reason:value.code||'scoring_rejected'});prepare=prepare&&!preparationBlocked(value);}
   else prepare=false;
-  if(prepare&&remaining()>=190000){if(!await invoke('daily','/api/site/research/daily/generate',{maxCalls:2},190000))return outcome('unknown');}
+  if(prepare&&remaining()>=190000){const daily=await invoke('daily','/api/site/research/daily/generate',{maxCalls:2},190000);if(!daily)return outcome('unknown');if(rejected(daily)||blocked(daily))return outcome('blocked',{reason:daily.code||daily.reason||'daily_rejected'});}
   else steps.push({phase:'daily',status:'deferred',reason:prepare?'deadline':'preparation_deferred'});
  }
  if(remaining()<15000)return outcome('partial',{reason:'deadline'});
@@ -87,7 +88,7 @@ export async function runResearchSlot(call:Call,slot:8|20,now=Date.now,started=n
  let metadataReady=true;
  if(slot===20&&remaining()>=110000){
   const enriched=await metadata('pending');
-  if(!enriched)return outcome('unknown');
+  if(!enriched)return outcome('unknown');if(rejected(enriched))return outcome('blocked',{reason:enriched.code||'metadata_rejected'});
   metadataReady=!scoringBlocked(enriched);
  }else if(slot===20){metadataReady=false;steps.push({phase:'metadata',status:'deferred',reason:'deadline'});}
  if(slot===20&&metadataReady&&remaining()>=SLOT_LIMITS.localScoringMinMs){
@@ -96,12 +97,13 @@ export async function runResearchSlot(call:Call,slot:8|20,now=Date.now,started=n
   // can still finish local promotion safely.
   const local=await invoke('local_scoring','/api/site/research/process',{maxPapers:0,cohort:'current',maxMs:Math.min(SLOT_LIMITS.localScoringMinMs,remaining()),deadlineAt:new Date(deadline-2000).toISOString()},SLOT_LIMITS.localScoringMinMs);
   if(!local)return outcome('unknown');
+  if(rejected(local)||blocked(local)||local.status==='partial')return outcome('deferred',{reason:local.code||local.reason||local.blocked||'local_scoring_deferred'});
   const paidBudget=remaining();
   // Paid/model scoring is optional work. Its threshold is separate from the
   // local pass and never expands SLOT_LIMITS.totalMs.
   if(paidBudget>=SLOT_LIMITS.paidScoringMinMs){
    const processed=await invoke('scoring','/api/site/research/process',{maxPapers:2,cohort:'current',maxMs:Math.min(210000,paidBudget),deadlineAt:new Date(deadline-2000).toISOString()},Math.min(210000,paidBudget));
-   if(!processed)return outcome('unknown');
+   if(!processed)return outcome('unknown');if(rejected(processed))return outcome('blocked',{reason:processed.code||'scoring_rejected'});
   }else steps.push({phase:'scoring',status:'deferred',reason:'paid_scoring_budget'});
  }else if(slot===20)steps.push({phase:'scoring',status:'deferred',reason:metadataReady?'local_scoring_budget':'metadata_deferred'});
  return outcome(coverage.status!=='complete'||steps.some(s=>!(s.phase==='collection'&&s.status==='partial')&&['deferred','partial','blocked','busy','error','interrupted','budget_deferred','backfill_pending','scope_pending','coverage_incomplete','identity_ambiguous'].includes(s.status))?'partial':'ok',steps.some(s=>s.phase==='collection'&&s.reason==='provider_cooldown')?{reason:'provider_cooldown'}:{});

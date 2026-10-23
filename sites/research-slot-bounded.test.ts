@@ -96,3 +96,10 @@ test('advertised batches already requiring reconciliation never open a collector
   assert.deepEqual(paths,['/api/site/research/batch/start']);assert.equal(result.collectionCalls,0);assert.equal(result.coverageStatus,'unknown');assert.ok(['unknown','deferred'].includes(result.status));
  }
 });
+
+test('a known local scoring barrier prevents the optional paid pass in the same slot',async()=>{
+ for(const local of [{status:'deferred',reason:'ingestion_pending'},{status:'blocked',blocked:'ai_disabled'},{status:'partial',blocked:'scoring_state_changed'}]){
+  const bodies:any[]=[];const result=await runResearchSlot(async(path,body)=>{if(path.endsWith('/start'))return start();if(path.endsWith('/collect'))return settled(1,{collectionControl:{stop:true,reason:'sources_exhausted'},stopReason:'sources_exhausted'});if(path.endsWith('/process')){bodies.push(body);return local;}return maintenance(path);},20,()=>0);
+  assert.equal(bodies.length,1);assert.equal(bodies[0].maxPapers,0);assert.equal(result.status,'deferred');
+ }
+});

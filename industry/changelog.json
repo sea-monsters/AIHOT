@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-23T13:41:15Z",
+  "latestVersion": "2026-10-23T13:43:04Z",
   "releases": [
+    {
+      "id": "hkis-browser-update-gates-20261023",
+      "at": "2026-10-23T13:43:04Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "修复浏览器采集安全标记与阶段停止",
+      "body": [
+        "统一浏览器采集、恢复、补全、处理请求的同源凭据、安全标记和请求回显验证；站点拒绝、未知结果或硬门控后立即停止，不再连续32次403或跳到模型处理，不向前端加入服务凭据。",
+        "按实际结果展示新增、更新、来源检查、当前归属队列及真实模型请求数；定时调用器本地规则步骤受阻时停止可选付费步骤，保留原总预算、频率、供应商和历史范围。",
+        "本次使用隔离数据与浏览器mock验证；仅更新仓库源码，不部署Sites或修改自动任务pin，main的manual能力不代表生产已支持。"
+      ],
+      "sources": [
+        {
+          "label": "采集管线修复与部署边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/ingestion-pipeline-review.md"
+        }
+      ]
+    },
     {
       "id": "hkis-pipeline-evidence-20261023",
       "at": "2026-10-23T13:41:15Z",
