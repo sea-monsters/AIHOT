@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-23T13:57:14Z",
+  "latestVersion": "2026-10-23T14:14:33Z",
   "releases": [
+    {
+      "id": "hkis-batch-admission-readback-20261023",
+      "at": "2026-10-23T14:14:33Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "恢复批次准入受阻的精准诊断",
+      "body": [
+        "批次未插入时，以一次只读查询区分当前元数据、处理和采集门控，按此顺序返回明确延期原因；标明 admission_readback，避免把后验观察当作原子拒绝的确定原因。",
+        "读回全部空闲或没有结果时保持 database_unknown，不重试插入；scheduled 与仓库中的 manual 使用相同诊断，原子准入、配置冻结、预算与权限不变。",
+        "仅更新仓库修复和隔离回归，不部署Sites、不更改自动任务pin，不代表生产已支持manual。"
+      ],
+      "sources": [
+        {
+          "label": "采集管线审查与v99兼容边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/ingestion-pipeline-review.md"
+        }
+      ]
+    },
     {
       "id": "hkis-pipeline-cancellation-validation-20261023",
       "at": "2026-10-23T13:57:14Z",

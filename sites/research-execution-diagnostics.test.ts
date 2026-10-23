@@ -103,8 +103,8 @@ test('HTTP-200 lease deferral is recorded as blocked with the actual site gate, 
  t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-23T12:00:00Z')});const f=fixture();try{
   f.sql.prepare('INSERT INTO research_settings(key,value) VALUES(?,?)').run('lock:__metadata__','2999-01-01T00:00:00Z|fixture');
   const response=await researchApi(new Request(origin+'/api/site/research/batch/start',{method:'POST',headers:{'content-type':'application/json','x-hkis-automation-id':automationId},body:JSON.stringify({slot:20})}),f.env),value=await response.json();
-  assert.equal(response.status,200);assert.equal(value.status,'deferred');assert.equal(value.reason,'collection_in_progress');assert.equal(value.batchKey,null);
-  const row=f.sql.prepare("SELECT * FROM runtime_logs WHERE event='request_finished' ORDER BY id DESC LIMIT 1").get()!;assert.equal(row.outcome,'blocked');assert.equal(row.error_code,'collection_in_progress');assert.equal(f.sql.prepare('SELECT count(*) n FROM research_batches').get()!.n,0);
+  assert.equal(response.status,200);assert.equal(value.status,'deferred');assert.equal(value.reason,'metadata_in_progress');assert.equal(value.batchKey,null);assert.equal(value.gateEvidence,'admission_readback');
+  const row=f.sql.prepare("SELECT * FROM runtime_logs WHERE event='request_finished' ORDER BY id DESC LIMIT 1").get()!;assert.equal(row.outcome,'blocked');assert.equal(row.error_code,'metadata_in_progress');assert.equal(f.sql.prepare('SELECT count(*) n FROM research_batches').get()!.n,0);
  }finally{f.sql.close();}
 });
 

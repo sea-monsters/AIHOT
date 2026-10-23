@@ -186,13 +186,21 @@ export async function briefMissingness(db:any,at=new Date(),options:BriefTrackin
  return {trackingStart:BRIEF_TRACKING_START_KEY,timezone:'Asia/Singapore',graceMs:BRIEF_MISSING_GRACE_MS,schedule,slots,gaps,counts,cursor, nextCursor,hasMore:pageHasMore,pageLimit:limit};
 }
 
+// A later observation explains a current gate; it cannot prove why the atomic
+// admission did not insert. An idle/missing readback stays unknown, without retry.
+async function batchAdmissionReadback(db:any){
+ const gate=await db.prepare(`SELECT (${metadataIdle}) metadata_idle,(${processingIdle}) processing_idle,(${collectionIdle}) collection_idle`).first();
+ const reason=gate?.metadata_idle===0?'metadata_in_progress':gate?.processing_idle===0?'processing_in_progress':gate?.collection_idle===0?'collection_in_progress':null;
+ return {status:reason?'deferred':'unknown',reason:reason||'database_unknown',batchKey:null,gateEvidence:'admission_readback'};
+}
+
 export async function startBatch(db:any,slot:number,at=new Date()){
  if(![8,20].includes(slot)||localHour(at)!==slot)throw new AIError('batch_window',409,'只可在 UTC+08 的 08 点或 20 点窗口开始对应采集批次');
  await reconcileBatches(db,at);
  const date=collectedDay(at.toISOString())!,key=date+'/'+String(slot).padStart(2,'0');
  const plan=await intervalPlan(db,at);if(!plan.value.verified)throw new AIError('interval_owner_ambiguous',409,'无法确认采集间隔所属账户，请由所有者保存配置');
  await db.batch([db.prepare(`INSERT OR IGNORE INTO research_batches(key,date,slot,mode,status,sources_json,started_at) SELECT ?,?,?, 'scheduled','running',?,? WHERE ${metadataIdle} AND ${processingIdle} AND ${collectionIdle}`).bind(key,date,slot,JSON.stringify(plan.sources.filter(s=>s.due).sort((a,b)=>String(a.lastAttempt||'').localeCompare(String(b.lastAttempt||''))||a.id.localeCompare(b.id)).map(s=>s.id)),at.toISOString()),db.prepare("INSERT OR IGNORE INTO research_settings(key,value) SELECT ?,? WHERE changes()=1 AND EXISTS(SELECT 1 FROM research_batches WHERE key=? AND started_at=?)").bind('batch-configured:'+key,JSON.stringify({sourceIds:RESEARCH_SOURCES.map(s=>s.id),recordedAt:at.toISOString()}),key,at.toISOString())]);
- const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();if(!row)return {status:'deferred',reason:'collection_in_progress',batchKey:null};return {collectionContract:'bounded-v1',batchKey:key,mode:row.mode||'scheduled',status:row.status,startedAt:row.started_at,...batchLifecycle(row,at),collectionControl:await collectionControl(db,key,at)};
+ const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();if(!row)return batchAdmissionReadback(db);return {collectionContract:'bounded-v1',batchKey:key,mode:row.mode||'scheduled',status:row.status,startedAt:row.started_at,...batchLifecycle(row,at),collectionControl:await collectionControl(db,key,at)};
 }
 /** Explicit owner-requested test batch. The key and null daily cohort keep it
  * out of scheduled slot accounting; the same SQL admission gate prevents a
@@ -202,7 +210,7 @@ export async function startManualBatch(db:any,at=new Date()){
  const plan=await intervalPlan(db,at);if(!plan.value.verified)throw new AIError('interval_owner_ambiguous',409,'无法确认采集间隔所属账户，请由所有者保存配置');
  const key='manual/'+crypto.randomUUID(),date=collectedDay(at.toISOString())!,sources=JSON.stringify(RESEARCH_SOURCES.map(s=>s.id));
  const writes=await db.batch([db.prepare(`INSERT INTO research_batches(key,date,slot,mode,status,sources_json,started_at) SELECT ?,?,0,'manual','running',?,? WHERE ${metadataIdle} AND ${processingIdle} AND ${collectionIdle}`).bind(key,date,sources,at.toISOString()),db.prepare("INSERT OR IGNORE INTO research_settings(key,value) SELECT ?,? WHERE changes()=1 AND EXISTS(SELECT 1 FROM research_batches WHERE key=? AND started_at=?)").bind('batch-configured:'+key,JSON.stringify({sourceIds:RESEARCH_SOURCES.map(s=>s.id),recordedAt:at.toISOString()}),key,at.toISOString())]);const result=writes[0];
- if(!result.meta?.changes)return {status:'deferred',reason:'collection_in_progress',batchKey:null,mode:'manual'};
+ if(!result.meta?.changes)return {...await batchAdmissionReadback(db),mode:'manual'};
  const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();return {collectionContract:'bounded-v1',batchKey:key,mode:'manual',status:row.status,startedAt:row.started_at,...batchLifecycle(row,at),collectionControl:await collectionControl(db,key,at)};
 }
 export async function validateBatch(db:any,key:any,at=new Date()){

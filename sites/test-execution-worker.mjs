@@ -3,6 +3,7 @@ import {readFile,readdir} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {createResearchClient} from './run-research-slot.mjs';
 import {EXECUTION_CONTRACT} from './research-diagnostics.ts';
+import {startBatch} from './research-batches.ts';
 
 let outbound=0;
 const mf=new Miniflare(convertV4MiniflareOptions({modules:true,scriptPath:'dist/server/index.js',compatibilityDate:'2026-09-01',compatibilityFlags:['nodejs_compat'],d1Databases:['DB'],bindings:{HKIS_OWNER_EMAIL:'owner@example.invalid'},outboundService:async()=>{outbound++;throw Error('No external I/O allowed');}}));
@@ -22,6 +23,12 @@ try{
  const logs=await(await mf.dispatchFetch('https://local.test/api/site/logs?severity=all&automationId='+automationId,{headers:identity})).json();
  assert.equal(logs.entries.length,4);assert.ok(logs.entries.some(e=>e.error_code==='origin_rejected'));assert.ok(!JSON.stringify(logs).includes(secret));assert.ok(logs.entries.every(e=>e.metadata.applicationReached===true));
  assert.equal((await mf.dispatchFetch('https://local.test/api/site/logs?automationId='+automationId)).status,403);
- assert.equal((await db.prepare('SELECT count(*) n FROM research_batches').first()).n,0);assert.equal((await db.prepare('SELECT count(*) n FROM ai_receipts').first()).n,0);assert.equal(outbound,0);
- console.log('EXECUTION WORKER OK: real bundle/D1, correlation, version evidence, fixed ingress rejection, owner-only filtered readback, zero provider/model calls');
+ for(const [key,reason] of [['lock:__metadata__','metadata_in_progress'],['processing_lock','processing_in_progress'],['lock:ieee-ted','collection_in_progress']]){
+  await db.prepare('INSERT INTO research_settings(key,value) VALUES(?,?)').bind(key,'2999-01-01T00:00:00Z|fixture').run();
+  const result=await startBatch(db,8,new Date('2026-10-24T00:00:00Z'));
+  assert.equal(result.status,'deferred');assert.equal(result.reason,reason);assert.equal(result.batchKey,null);assert.equal(result.gateEvidence,'admission_readback');
+  await db.prepare('DELETE FROM research_settings WHERE key=?').bind(key).run();
+ }
+ assert.equal((await db.prepare('SELECT count(*) n FROM research_batches').first()).n,0);assert.equal((await db.prepare("SELECT count(*) n FROM research_settings WHERE key LIKE 'batch-configured:%'").first()).n,0);assert.equal((await db.prepare('SELECT count(*) n FROM ai_receipts').first()).n,0);assert.equal(outbound,0);
+ console.log('EXECUTION WORKER OK: real bundle/D1, precise metadata/processing/collection admission readback, correlation, version evidence, fixed ingress rejection, owner-only filtered readback, zero provider/model calls');
 }finally{globalThis.fetch=oldFetch;await mf.dispose();}

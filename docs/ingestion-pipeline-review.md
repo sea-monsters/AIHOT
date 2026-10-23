@@ -86,3 +86,16 @@
 - 历史批次没有配置来源快照时分母unknown；新字段不能补造当时配置。已发布简报缺失的作者也不追写，本轮只完善未来冻结。
 - 旧 Node 27项编排测试的关闭阀契约仍需另行维护，它们不属于现役Sites研究管线；当前Sites/浏览器/原生D1适用检查均通过。
 - 当前生产版本和任务pin仍为父端提供的固定基线。精确v99增量移植、独立部署审查、源码SHA/pin协调和生产回读由父端处理；本任务的成功仅表示仓库修复与隔离验证完成。
+
+
+## 2026-10-23 追加：准入门控诊断读回
+
+父端精确 v99 移植复核发现：scheduled admission 增加 collectionIdle 后，无批次行统一返回 collection_in_progress，掩盖真实 metadata/processing 门控。这是诊断回归，不应通过删掉 collectionIdle 修复。
+
+- scheduled 与 main 的 manual 共用只读诊断：原 admission `db.batch` 语句逐字保持，未插入时一次 SELECT 观察 metadataIdle、processingIdle、collectionIdle，按 metadata → processing → collection 返回对应 deferred reason。
+- 返回 `gateEvidence: admission_readback`，明确这是后验观察，不证明原子 INSERT 未成功的确定原因。锁在 admission 后释放导致全空闲，或读回没有结果时，返回 `status: unknown / reason: database_unknown`；不重试 INSERT，不创建配置冻结或付费回执。
+- 真实 SQLite 的 scheduled/manual 两入口覆盖三类独立锁、多锁优先级、释放锁竞态及无读回结果，共14项新增回归；修正 HTTP-200 诊断测试，精确核验 metadata_in_progress 的响应及持久 blocked 日志，未把预期笼统改为 collection。
+- v99 仅需移植 `sites/research-batches.ts` 的 `batchAdmissionReadback` 和 scheduled `!row` 返回分支，同时保留已审查的原子 collectionIdle；不因此导入 manual 功能。相应测试、这一说明和新增日志条目可一起纳入审查。
+- 所有既有127条 changelog 逐项保持，新增一条 fix。没有部署 Sites、调整 runner/task pin、访问生产采集或真实模型；runner 请求契约及安全门控不变，托管SHA固定检查仍须父端独立协调。
+
+追加修复验证：Node24.22.1 下，定向69项、Sites 全部80个文件合计761项（主集合755 + anysearch UI 6）、typecheck、完整build与changelog检查均通过，零失败/跳过。原生 `test-worker`、`test-execution-worker`、`test-cancellation-worker` 三项通过；真实D1验证三类锁的精确读回、无批次/配置快照/模型回执，outbound=0。既有 Node/PG 引擎未修改，本小修未重复该旧套件；前述156/183与27个原基线失败的限制继续保留。
