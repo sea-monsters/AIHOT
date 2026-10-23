@@ -49,4 +49,39 @@
 
 ## 验证与交付
 
-待最终候选验证后补录；此处不把未执行或失败的检查记为通过。
+已验证代码候选为 `4f69cff4b507bac03eaad67a1ea44eed941b52da`；后续维护提交只补本记录，不更改运行时代码或依赖。
+
+- Vite 上游 `f36a83a20f6f8433862b8a98206e2afcfbb657df` → fork [`17a7e07e230d81d18a08eeddc219e4471c68ad96`](https://github.com/sea-monsters/AIHOT/commit/17a7e07e230d81d18a08eeddc219e4471c68ad96)。无运行时代码冲突；`npm install --package-lock-only --ignore-scripts` 只将锁中的 `^8.3.3` 统一为精确 `8.3.3`。
+- 安全补丁上游 `b3998dc6fc138eb9659f33f55eb38c1c716f0d57` → fork [`4f69cff4b507bac03eaad67a1ea44eed941b52da`](https://github.com/sea-monsters/AIHOT/commit/4f69cff4b507bac03eaad67a1ea44eed941b52da)。冲突在 `apps/api/package.json`、`packages/backend/package.json`、根锁文件；从 HKIS 清单保留 MCP 2.1.0、sharp 0.35.4、原 workspace 和 Sites 依赖，只移植目标安全版本及必要的 launder 1.7.2，移除 sanitize-html 已不再使用的 deepmerge。没有导入上游 `@aihot/site`/modules 目录或未择取 SDK/native 升级。
+- 使用临时 `/tmp` 安装的 Node **24.22.1**（原环境 24.19.0），npm **11.9.0**；没有全局替换 Node、创建凭证或调整持久访问。`npm ci --no-audit --no-fund` 成功；`npm ls vite fastify sanitize-html undici` 无 invalid，精确版本与清单/锁一致。其它用途的 Undici 7.x 沿用，不宣称全依赖树都升级到 8.x。
+- `npm run typecheck`、`npm run check:changelog`、`npm run build` 通过；Web client/SSR 与 Worker 均构建成功。日志 **124 条**（44 feature / 70 fix / 10 upstream），新增 1 条 upstream；原 **123 条历史记录逐项深比较完全保留**。
+- 初次构建及部分测试发现新日志来源的数字文件名不在现有链接白名单；已把来源改为既有 `docs/upstream-sync.md` 索引，没有放宽校验器；修正后重跑完整 Sites 套件与构建。
+- `node --test --test-concurrency=1 <rg列出的sites下全部78个.test.ts/.test.mjs>`：**737/737 通过**，0 失败、取消、跳过或 todo。包含 owner/MCP、manual 隔离、预算/租约/冻结证据、执行响应标识及安全诊断等现有回归。
+- `node --test --test-concurrency=1 apps/web/tests/*.test.ts`：**61/61 通过**。
+- 真实 Chromium 共享控件：**78/78 通过**（390/640/1440、键盘、减弱动画、Tabs 清理与无运行异常）；AI 用量界面：**13/13 通过**（1440/390、有界本地模拟接口、无生产/模型请求）。前者沿用本机 Chromium `--no-sandbox` wrapper，仅限隔离合成页面，未改应用脚本或生产设置。
+- 逐个运行全部 **28 个** `sites/**/test*worker.mjs`：**20 通过，8 失败**。主 Worker、HKIS 只读出口、执行诊断、采集、简报/日报、owner 隔离、导航、reader、元数据、scholarly/anysearch 与安全预算的适用脚本通过。不能把这 28 个写成全部通过。
+- PostgreSQL **17-alpine** 在临时、仅绑定回环端口的容器中，独立 `hkis_upstream_test` 与 `hkis_baseline_test` 空库各应用 35 个既有迁移；未改任何迁移。`COLLECT_ENABLED=false`、`MODEL_CALLS_ENABLED=false`、飞书及 IndexNow 阀关闭时完整 `npm test`：候选 **156/183 通过，27 失败**；原 `883db03`/原锁文件基线 **157/183 通过，26 失败**。27 个候选失败都能在该基线的全量或同名专项重现：额外的 history/signals 用例在基线专项也抛 `MODEL_CALLS_ENABLED=false`，候选专项反而通过该分支；它受测试数据/时序分支影响。未为旧模型编排测试开启全局模型阀或调用真实付费模型；这些原 Node 测试不能记为全部通过。
+- Markdown/HTML 白名单、RSS/Atom、逐跳请求、Fastify/原后台等不依赖付费模型的相关 Node 回归已通过；Sites AI 模拟供应商测试包含在 737 项中。上述旧 Node 编排失败不代表本轮实际验证过模型联网。
+- `git -c core.whitespace=cr-at-eol diff --check 883db03` 通过；沿用原 JSON 的 CRLF，不重排历史。除依赖清单/锁、README、同步审计及日志之外，`sites/`、`apps/web/app/`、schema、行业分类/主题、AGENTS、托管 manifest、工作流、调度和执行 runner 均无差异。
+- 推送前第二次只读核对：fork main 仍为 `883db03`，上游 main 仍为 `b3998dc`。最终使用普通快进集成并推送 `main`，不加假的上游第二父节点，不 force；远端 SHA 在交付回执独立核对。
+
+### 已复现的旧 Worker 脚本问题
+
+以下 **8 个全部在未改动的 `883db03` 与其原始依赖安装上复现同样失败**，与本轮候选使用同一 Node 24.22.1。保留现有安全契约，不为陈旧断言修改产品：
+
+| 脚本 | 原 main 与候选一致的失败 |
+| --- | --- |
+| `sites/ai/test-worker.mjs` | 200 tool calls 场景预期 `partial=false`，实际为 true。 |
+| `sites/test-attribution-worker.mjs` | lock busy 预期旧 `busy`，实际安全状态为 `deferred`。 |
+| `sites/test-cancellation-worker.mjs` | 测试封装把含函数的 D1 statement 交给 Miniflare batch，无法序列化。 |
+| `sites/test-checkpoint-cost-worker.mjs` | 缺本机历史 `.sites-runtime/baseline7eb/sites/research.ts` fixture；未伪造性能基线。 |
+| `sites/test-checkpoints-worker.mjs` | ingestion origin review 门控实际 `deferred`，旧断言预期 `partial`。 |
+| `sites/test-page-layout-worker.mjs` | 重定向为同源绝对 URL，旧断言只接受相对 `/research?`。 |
+| `sites/test-recovery-worker.mjs` | 既有安全收尾拒绝仍有租约的批次（`batch_in_flight`）。 |
+| `sites/test-response-defaults-worker.mjs` | 既有数据库错误响应新增固定 `code`，旧断言仅接受 `error`。 |
+
+本轮适用的完整 Sites/Web 套件、类型检查、构建及关键隔离 Worker 验证通过；扩展旧脚本和关闭模型阀的 Node 编排套件存在上述明确限制，**未声称所有测试全绿**。没有未解释的本轮新增失败。旧脚本修订与关闭阀时的旧 Node 测试安排留作独立维护，不借此修改刚恢复的生产链路。父端另行调查的 `request_marker_required` 403 也未在本轮修复或部署。
+
+## 提交邮箱隐私修正
+
+首次普通 push 被 GitHub **GH007** 拒绝（提交者邮箱受隐私保护），回读 main 仍为 `883db03`，明确未执行。通过现有 GitHub connector 只读核实当前连接账户是 `sea-monsters` / ID `11735454`，据此使用**同一账户**的 GitHub noreply 地址修正本轮未发布提交的 author/committer 元数据；两项择取仍保留原上游作者，逐一代码树比较完全相同。没有修改账号邮箱可见性、GitHub 权限、认证通道或持久配置，没有 force。此为同一身份的邮箱隐私修复，基于新增的账户核实与未执行证据，仅重试一次推送；最终结果和远端 SHA 由交付回执报告。上方 fork SHA 已指向邮箱修正后的同代码树提交；不把旧的未发布 SHA 当作远端证据。
