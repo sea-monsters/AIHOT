@@ -1,3 +1,4 @@
+import {runtimeDeadline,assertRuntimeBudget,type RuntimeBudget} from './research-runtime-budget.ts';
 import {phaseTiming,phaseEvent} from './research-telemetry.ts';
 import {batchLifecycle} from './research-lifecycle.ts';
 import {paperInstitutionEvidence} from './paper-metadata.ts';
@@ -93,10 +94,12 @@ async function recoverInterrupted(db:any){
   for(const date of new Set(group.map((r:any)=>r.date)))await refreshStatus(db,String(date));
  }
 }
-export async function generateDaily(db:any,env:any,body:any={},request?:Request,at=new Date()){
+export async function generateDaily(db:any,env:any,body:any={},request?:Request,at=new Date(),runtimeBudget?:RuntimeBudget){
+ const deadline=runtimeDeadline(Date.now()+DAILY_LIMITS.requestMs,runtimeBudget);assertRuntimeBudget(runtimeBudget);
  if(localHour(at)!==8)throw new AIError('daily_window',409,'日报只在 UTC+08 08:00–08:59 开始生成；20 点采集不生成日报');
  // The same private-service configuration boundary as selective processing; no client-selected owner or credentials.
  let config:any=null,blocked:string|null=null;try{config=await processingConfig(db,env,request);blocked=block(config,env)}catch(e){if(e instanceof AIError&&e.code==='owner_required')throw e;blocked=e instanceof AIError?e.code:'not_configured'}
+ assertRuntimeBudget(runtimeBudget);
  const executionDate=collectedDay(at.toISOString())!,started=stamp(),expires=new Date(Date.now()+4*60000).toISOString();
  const sourceDay=await preparationCohort(db,executionDate),targetDate=reportDay(sourceDay);
  await db.batch([...new Set([executionDate,targetDate])].map(day=>db.prepare("INSERT OR IGNORE INTO research_daily_work(date,source_date,status,created_at,updated_at) SELECT ?,?,'pending',?,? WHERE NOT EXISTS(SELECT 1 FROM research_daily WHERE date=?)").bind(day,dailyWindow(at,day).sourceDate,started,started,day)));
@@ -107,7 +110,7 @@ export async function generateDaily(db:any,env:any,body:any={},request?:Request,
   await recoverInterrupted(db);const preparation=await prepareDaily(db,date,at);if(preparation?.deferred){result.status='deferred';return {...result,reason:preparation.status,metadataPending:preparation.metadataPending,scoringPending:preparation.scoringPending,attempted:0};}
   const max=Math.min(DAILY_LIMITS.callsPerRun,Math.max(0,Number(body.maxCalls??2)));
   if(!blocked)for(let call=0;call<max;call++){
-   if(Date.now()-Date.parse(started)>DAILY_LIMITS.requestMs-95000){result.blocked='time_budget';break}
+   if(Date.now()>deadline-95000){result.blocked='time_budget';break}
    const charged=await db.prepare("SELECT count(*) n FROM ai_receipts WHERE purpose='daily_digest' AND request_id LIKE ?").bind('daily:'+executionDate+':%').first();if(Number(charged?.n||0)>=DAILY_LIMITS.callsPerRun){result.blocked='daily_call_cap';break}
    const candidates=(await db.prepare("SELECT * FROM research_daily_groups WHERE status='queued' AND date<=? ORDER BY date,ordinal LIMIT ?").bind(date,DAILY_LIMITS.groupsPerCall).all()).results;if(!candidates.length)break;
    const rows:any[]=[];for(const candidate of candidates){if(candidate.date!==candidates[0].date)break;const proposed=[...rows,candidate];if(new TextEncoder().encode(JSON.stringify({groups:proposed.map(r=>parse(r.input_json))})).length>DAILY_LIMITS.inputBytes)break;rows.push(candidate)}
@@ -115,11 +118,12 @@ export async function generateDaily(db:any,env:any,body:any={},request?:Request,
    config=await processingConfig(db,env,request);blocked=block(config,env);if(blocked){result.blocked=blocked;break}
    const requestId='daily:'+executionDate+':'+rows[0].date+':'+await digest(rows.map(r=>r.id)),safe={model:config.model,endpoint:config.endpoint,protocol:config.protocol,reasoning:config.reasoning,revision:config.revision,maxOutputTokens:Math.min(config.max_tokens,DAILY_LIMITS.outputTokens),schema:DAILY_SCHEMA,prompt:DAILY_PROMPT};
    await db.batch(rows.map(r=>db.prepare("UPDATE research_daily_groups SET status='running',request_id=?,config_json=?,error_code=NULL,updated_at=? WHERE id=? AND status='queued'").bind(requestId,JSON.stringify(safe),stamp(),r.id)));await refreshStatus(db,rows[0].date);
+   let reservedUnsent=false;
    try{
-    const dailyPaperIds=rows.flatMap((r:any)=>parse(r.input_json).papers||[]).map((p:any)=>p.id).filter((id:any):id is string=>typeof id==='string');const httpStarted=Date.now();const response=await providerCall(db,config.owner_id,config,env,requestId,0,[{role:'system',content:DAILY_SYSTEM},{role:'user',content:JSON.stringify({groups:rows.map(r=>parse(r.input_json)),evidenceScope:'abstract_only'})}],'daily_digest',{allowTools:false,maxOutputTokens:DAILY_LIMITS.outputTokens,telemetry:{phase:'daily_digest',runId:phaseId,batchKey:rows[0].date,cohortKey:sourceDay,paperIds:dailyPaperIds,configRevision:config.revision}});
+    const dailyPaperIds=rows.flatMap((r:any)=>parse(r.input_json).papers||[]).map((p:any)=>p.id).filter((id:any):id is string=>typeof id==='string');const httpStarted=Date.now();const response=await providerCall(db,config.owner_id,config,env,requestId,0,[{role:'system',content:DAILY_SYSTEM},{role:'user',content:JSON.stringify({groups:rows.map(r=>parse(r.input_json)),evidenceScope:'abstract_only'})}],'daily_digest',{allowTools:false,maxOutputTokens:DAILY_LIMITS.outputTokens,...(runtimeBudget?{dispatchGuard:async()=>({valid:Date.now()<deadline,deadlineAt:deadline,leaseUntil:new Date(Math.min(deadline,Date.parse(expires))).toISOString()})}:{}),telemetry:{phase:'daily_digest',runId:phaseId,batchKey:rows[0].date,cohortKey:sourceDay,paperIds:dailyPaperIds,configRevision:config.revision}});
     timing.httpMs+=Date.now()-httpStarted;if(response.calls.length)throw new AIError('answer_format',502,'日报不允许工具调用');await saveOutput(db,response.text,rows);
-   }catch(e){const receipt=await db.prepare('SELECT status FROM ai_receipts WHERE id=?').bind(requestId+':0').first(),code=e instanceof AIError?e.code:'invalid_daily_output';const status=!receipt?'queued':['unknown','pending'].includes(receipt.status)?'unknown':'failed';await db.batch(rows.map(r=>db.prepare('UPDATE research_daily_groups SET status=?,error_code=?,updated_at=? WHERE id=?').bind(status,code,stamp(),r.id)));result.blocked=code;result.status='partial';}
-   if(await db.prepare('SELECT id FROM ai_receipts WHERE id=?').bind(requestId+':0').first())result.attempted++;
+   }catch(e){const receipt=await db.prepare('SELECT status FROM ai_receipts WHERE id=?').bind(requestId+':0').first(),code=e instanceof AIError?e.code:'invalid_daily_output';reservedUnsent=code==='dispatch_not_sent';if(reservedUnsent)result.reservedUnsent=(result.reservedUnsent||0)+1;const status=!receipt?'queued':['unknown','pending'].includes(receipt.status)?'unknown':'failed';await db.batch(rows.map(r=>db.prepare('UPDATE research_daily_groups SET status=?,error_code=?,updated_at=? WHERE id=?').bind(status,code,stamp(),r.id)));result.blocked=code;result.status='partial';}
+   if(!reservedUnsent&&await db.prepare('SELECT id FROM ai_receipts WHERE id=?').bind(requestId+':0').first())result.attempted++;
    result.processedDates.push(rows[0].date);await refreshStatus(db,rows[0].date);if(result.blocked)break;
   }
   await refreshStatus(db,date);

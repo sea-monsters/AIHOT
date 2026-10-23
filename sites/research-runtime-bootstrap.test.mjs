@@ -21,6 +21,8 @@ if(scenario==='major')description.manifest.protocolMajor=2;
 if(scenario==='capability')description.manifest.requiredCapabilities.push('execute-remote-code');
 if(scenario==='extra')description.manifest.runnerUrl='https://evil.invalid/payload.mjs';
 if(scenario==='budget')description.manifest.limits.collectionCalls=36;
+if(scenario==='lowbudget')description.manifest.limits.collectionCalls=2;
+if(scenario==='lowtime')description.manifest.limits.totalMs=300000;
 if(scenario==='hash')description.configHash='0'.repeat(64);
 globalThis.fetch=async(url,options)=>{
  attempts++;if(options.method==='POST')posts++;
@@ -49,12 +51,12 @@ test('pinned clean dependency-free bootstrap freezes the server manifest and car
  const r=await run('normal');assert.equal(r.code,0);assert.equal(r.stats.posts,5);assert.equal(r.stats.frozenWrites,5);assert.ok(r.events.some(v=>v.state==='frozen'&&v.bootstrapSource===sha));assert.ok(!r.out.includes('expectedSiteSource'));
 });
 test('old servers, unknown major/capabilities/fields, excessive budgets and bad hashes stop before POST',async()=>{
- for(const [scenario,code] of [['old','server_contract_unconfirmed'],['major','runtime_protocol_unsupported'],['capability','runtime_capability_unsupported'],['extra','runtime_manifest_invalid'],['budget','runtime_budget_invalid'],['hash','runtime_manifest_invalid']]){const r=await run(scenario);assert.equal(r.code,2,scenario);assert.equal(r.stats.posts,0,scenario);assert.equal(r.events.at(-1).code,code,scenario)}
+ for(const [scenario,code] of [['old','server_contract_unconfirmed'],['major','runtime_protocol_unsupported'],['capability','runtime_capability_unsupported'],['extra','runtime_manifest_invalid'],['budget','runtime_budget_invalid'],['lowbudget','runtime_budget_invalid'],['lowtime','runtime_budget_invalid'],['hash','runtime_manifest_invalid']]){const r=await run(scenario);assert.equal(r.code,2,scenario);assert.equal(r.stats.posts,0,scenario);assert.equal(r.events.at(-1).code,code,scenario)}
 });
 test('changed deployment or unknown POST ends immediately without replay, finish or new manifest fetch',async()=>{
  for(const scenario of ['changed','unknown']){const r=await run(scenario);assert.equal(r.code,2);assert.deepEqual(r.stats,{attempts:2,posts:1,frozenWrites:1})}
 });
 test('foreign origins, missing credentials, unpinned bootstrap and task budget increases never dispatch HTTP',async()=>{
- for(const [input,code] of [[{baseUrl:'https://evil.invalid'},'invalid_site_origin'],[{token:''},'service_access_missing'],[{expectedBootstrapSource:'0'.repeat(40)},'runner_source_mismatch'],[{budgetMs:540001},'runtime_budget_invalid'],[{collectionCalls:36},'runtime_budget_invalid'],[{expectedSiteSource:'a'.repeat(40)},'invalid_input']]){const r=await run('normal',input);assert.equal(r.code,2);assert.equal(r.stats.attempts,0);assert.equal(r.events.at(-1).code,code)}
+ for(const [input,code] of [[{baseUrl:'https://evil.invalid'},'invalid_site_origin'],[{token:''},'service_access_missing'],[{expectedBootstrapSource:'0'.repeat(40)},'runner_source_mismatch'],[{budgetMs:540001},'runtime_budget_invalid'],[{collectionCalls:36},'runtime_budget_invalid'],[{collectionCalls:2},'runtime_budget_invalid'],[{budgetMs:300000},'runtime_budget_invalid'],[{expectedSiteSource:'a'.repeat(40)},'invalid_input']]){const r=await run('normal',input);assert.equal(r.code,2);assert.equal(r.stats.attempts,0);assert.equal(r.events.at(-1).code,code)}
 });
 test('diagnostic-only bootstrap performs exactly one authenticated GET and never probes write capability',async()=>{const r=await run('normal',{diagnosticOnly:true});assert.equal(r.code,0);assert.deepEqual(r.stats,{attempts:1,posts:0,frozenWrites:0});assert.ok(r.out.includes('"postCapabilityVerified":false'))});

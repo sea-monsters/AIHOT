@@ -17,6 +17,18 @@ async function member(f:any,id='a',batch='2026-10-02/08',first='2026-10-02T00:05
 function output(input:any){return JSON.stringify({groups:input.groups.map((g:any)=>({id:g.id,status:'complete',sentences:parts.map((text,i)=>({text,paperId:g.papers[i%g.papers.length].id,quote:i===0?quote:i===1?'Methods and comparisons are explicitly described':'independent reproducibility is not established by this abstract.'}))}))})}
 function response(input:any){return Response.json({output:[{type:'message',content:[{type:'output_text',text:output(input)}]}],usage:{input_tokens:100,output_tokens:400,total_tokens:500}})}
 const at=new Date('2026-10-03T00:01:00Z');
+
+test('trusted absolute daily deadline survives slow configuration and receipt commits; no late model call or refunded reservation',async(t)=>{
+ const start=at.getTime();t.mock.timers.enable({apis:['Date'],now:start});
+ for(const stage of ['config','receipt']){t.mock.timers.setTime(start);const f=fixture(),original=globalThis.fetch;let calls=0,delayed=false;try{
+  await settings(f);await member(f);await prepareDaily(f.db,'2026-10-03',at);const before=f.sql.prepare('SELECT id,first_seen,content_hash,priority FROM research_papers').all(),frozen=f.sql.prepare('SELECT input_json FROM research_daily_groups').all();
+  const prepare=f.db.prepare.bind(f.db);f.db.prepare=(q:string)=>{const s=prepare(q);if(stage==='config'&&q==='SELECT * FROM ai_settings LIMIT 2'){const all=s.all.bind(s);s.all=async()=>{const r=await all();if(!delayed){delayed=true;t.mock.timers.setTime(start+120000)}return r}}if(stage==='receipt'&&q.startsWith('INSERT OR IGNORE INTO ai_receipts')){const run=s.runSync.bind(s);s.runSync=()=>{const r=run();delayed=true;t.mock.timers.setTime(start+200000);return r}}return s};
+  globalThis.fetch=async()=>{calls++;throw Error('No late provider dispatch')};const result=await generateDaily(f.db,f.env,{maxCalls:2},undefined,at,{deadlineAt:start+190000});
+  assert.equal(delayed,true,stage);assert.equal(calls,0,stage);assert.equal(result.attempted,0);if(stage==='receipt')assert.equal(result.reservedUnsent,1);assert.deepEqual(f.sql.prepare('SELECT id,first_seen,content_hash,priority FROM research_papers').all(),before);assert.deepEqual(f.sql.prepare('SELECT input_json FROM research_daily_groups').all(),frozen);
+  assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,stage==='receipt'?1:0);
+  if(stage==='receipt'){await generateDaily(f.db,f.env,{maxCalls:2},undefined,at,{deadlineAt:start+400000});assert.equal(calls,0);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,1);assert.equal(f.sql.prepare('SELECT status FROM ai_receipts').get()!.status,'pending');assert.equal(f.sql.prepare('SELECT status FROM research_daily_groups').get()!.status,'unknown');}
+ }finally{globalThis.fetch=original;f.sql.close()}}
+});
 test('drawer reads full frozen input by group and ID without current-paper substitution or writes',async()=>{const f=fixture();try{
  const saved=await member(f);await prepareDaily(f.db,'2026-10-03',at);
  const group=await f.db.prepare('SELECT id FROM research_daily_groups LIMIT 1').first();

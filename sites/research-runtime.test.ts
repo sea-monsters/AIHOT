@@ -38,7 +38,7 @@ test('strict manifest rejects unknown major, capabilities, executable fields, te
 test('config hash excludes build evidence, preserves canonical key order and permits smaller limits or disabled steps only',async()=>{
  const a=await runtimeDescription(source),b=await runtimeDescription(other);assert.equal(a.configHash,b.configHash);assert.notEqual(a.sourceRevision,b.sourceRevision);
  assert.equal(await runtimeConfigHash({...clone(),slots:{'20':clone().slots['20'],'8':clone().slots['8']}}),a.configHash);
- const smaller=clone();smaller.limits.collectionCalls=4;smaller.slots['20'].assessmentMaxPapers=0;assert.notEqual(await runtimeConfigHash(smaller),a.configHash);
+ const smaller=clone();smaller.limits.collectionSliceMs=12000;smaller.slots['20'].assessmentMaxPapers=0;assert.notEqual(await runtimeConfigHash(smaller),a.configHash);
  smaller.slots['20'].enabled=false;await assert.rejects(freezeRuntime(await runtimeDescription(source,smaller),bootstrap,startedAt,20),(e:any)=>e.code==='runtime_disabled');
  await assert.rejects(runtimeDescription(null),(e:any)=>e.code==='runtime_source_unavailable');
 });
@@ -46,7 +46,7 @@ test('frozen writes reject deployment/config drift, incomplete fields, expired b
  const f=await frozen(),h=frozenRuntimeHeaders(f),r=request(RUNTIME_ROOT+'/start',{slot:20},h),now=Date.parse(startedAt);
  assert.equal((await validateFrozenRuntime(r,source,now)).configHash,f.configHash);
  await assert.rejects(validateFrozenRuntime(r,other,now),(e:any)=>e.code==='runtime_changed');
- const m=clone();m.limits.collectionCalls=34;await assert.rejects(validateFrozenRuntime(r,source,now,m),(e:any)=>e.code==='runtime_changed');
+ const m=clone();m.limits.collectionSliceMs=70000;await assert.rejects(validateFrozenRuntime(r,source,now,m),(e:any)=>e.code==='runtime_changed');
  const missing={...h};delete missing[RUNTIME_HEADERS.bootstrapSource];await assert.rejects(validateFrozenRuntime(request(RUNTIME_ROOT+'/start',{slot:20},missing),source,now),(e:any)=>e.code==='runtime_freeze_required');
  await assert.rejects(validateFrozenRuntime(r,source,now+540000),(e:any)=>e.code==='runtime_expired');
  assert.throws(()=>runtimeOperationBody('/api/site/research/batch/start',{mode:'manual'},f,now));
@@ -83,8 +83,25 @@ test('stable transport uses only fixed new endpoints, sends frozen evidence, rej
   assert.equal(result.status,'unknown');assert.equal(calls.length,1);assert.equal(calls[0].url,origin+RUNTIME_PATHS['/api/site/research/batch/start']);assert.equal(calls.some(v=>v.url.includes('/api/site/research/')),false);
  }finally{globalThis.fetch=old}
 });
-test('runtime manifests only reduce the fixed slot budgets and can disable paid steps without broadening prior-day scope',async()=>{
- const m=clone();m.limits.collectionCalls=2;m.limits.collectionConcurrency=1;m.slots['20'].assessmentMaxPapers=0;const seen:any[]=[];
+test('runtime manifests reduce only per-slice work and disable paid steps without broadening prior-day scope',async()=>{
+ const m=clone();m.limits.collectionSliceMs=12000;m.limits.collectionConcurrency=1;m.slots['20'].assessmentMaxPapers=0;const seen:any[]=[];
  const result=await runResearchSlot(async(path,body)=>{seen.push({path,body});if(path.endsWith('/start'))return {status:'running',batchKey:'2026-10-24/20',collectionContract:'bounded-v1',collectionControl:{stop:false,nextSourceId:'fixture'}};if(path.endsWith('/collect'))return {status:'partial',batchKey:'2026-10-24/20',calls:2,results:[{status:'ok'},{status:'ok'}],collectionControl:{stop:true},stopReason:'call_budget'};if(path.endsWith('/finish'))return {status:'complete',batchStatus:'finished',expectedSources:1,attemptedSources:1,completeSources:1,missingSources:[]};if(path.endsWith('/ingestion/recover'))return {status:'ok',recovery:{known:true,confirmed:true,remainingItems:0}};return {status:'ok'}},20,()=>0,0,m);
- assert.equal(seen.find(v=>v.path.endsWith('/collect')).body.maxCalls,2);assert.equal(seen.find(v=>v.path.endsWith('/collect')).body.concurrency,1);assert.deepEqual(seen.filter(v=>v.path.endsWith('/process')).map(v=>v.body.maxPapers),[0]);assert.equal(result.collectionCalls,2);
+ assert.equal(seen.find(v=>v.path.endsWith('/collect')).body.maxCalls,35);assert.equal(seen.find(v=>v.path.endsWith('/collect')).body.maxMs,12000);assert.equal(seen.find(v=>v.path.endsWith('/collect')).body.concurrency,1);assert.deepEqual(seen.filter(v=>v.path.endsWith('/process')).map(v=>v.body.maxPapers),[0]);assert.equal(result.collectionCalls,2);
+});
+
+test('whole-run budgets are fixed: low totals, source counts and cross-slice windows reject sequential and concurrent proposals before any write',async()=>{
+ for(const [key,value] of [['totalMs',300000],['collectionCalls',2],['collection8Ms',1000],['collection20Ms',1000]] as const){
+  const attempt=async()=>{const m=clone();m.limits[key]=value;return runtimeDescription(source,m)};
+  for(let n=0;n<2;n++)await assert.rejects(attempt(),(e:any)=>e.code==='runtime_budget_invalid');
+  const concurrent=await Promise.allSettled([attempt(),attempt(),attempt()]);assert.ok(concurrent.every(r=>r.status==='rejected'&&r.reason.code==='runtime_budget_invalid'));
+ }
+});
+
+test('slow diagnostic logging cannot grant a fresh handler budget or mutate existing history',async(t)=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse(startedAt)});const f=fixture(),previous=process.env.HKIS_BUILD_SHA,oldFetch=globalThis.fetch;let outbound=0,delayed=false;
+ try{process.env.HKIS_BUILD_SHA=source;await history(f);const before=snapshot(f),prepare=f.db.prepare.bind(f.db);globalThis.fetch=async()=>{outbound++;throw Error('No provider dispatch')};
+  f.db.prepare=(q:string)=>{const statement=prepare(q),run=statement.runSync.bind(statement);statement.runSync=()=>{const r=run();if(!delayed&&q.includes('INSERT INTO runtime_logs')){delayed=true;t.mock.timers.setTime(Date.parse(startedAt)+540001)}return r};return statement};
+  const r=await researchRuntimeApi(request(RUNTIME_ROOT+'/metadata',{cohort:'pending',maxMs:75000},frozenRuntimeHeaders(await frozen())),f.env);
+  assert.equal(delayed,true);assert.equal(r.status,409);assert.equal((await r.json()).code,'runtime_expired');assert.equal(outbound,0);assert.deepEqual(snapshot(f),before);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
+ }finally{globalThis.fetch=oldFetch;if(previous===undefined)delete process.env.HKIS_BUILD_SHA;else process.env.HKIS_BUILD_SHA=previous;f.sql.close()}
 });

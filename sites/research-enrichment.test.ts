@@ -24,6 +24,19 @@ const env={HKIS_AI_ENCRYPTION_KEY:'a'.repeat(64)},abstract='TCAD transistor simu
 async function configured(db:any,service:'openalex'|'semanticscholar'){const endpoint=SERVICES[service].endpoint,cipher=await seal('synthetic-test-key',env,credentialContext('fixture',service,endpoint));await db.prepare("INSERT INTO scholarly_settings(id,owner_id,service,endpoint,key_ciphertext,revision,updated_at,test_status) VALUES(?,?,?,?,?,1,?,'ok')").bind('fixture|'+service,'fixture',service,endpoint,cipher,new Date().toISOString()).run();}
 const clearSpacing=(sql:any)=>sql.prepare("DELETE FROM research_settings WHERE key='crossref_http_next'").run();
 
+test('trusted absolute budget survives slow database reads and provider reservations without late metadata dispatch or quota refund',async(t)=>{
+ const start=Date.parse('2026-10-24T12:00:00Z');t.mock.timers.enable({apis:['Date'],now:start});
+ for(const stage of ['entry','reserved']){t.mock.timers.setTime(start);const {sql,db}=fixture(),old=globalThis.fetch;let calls=0,delayed=false;try{
+  await initResearch(db);await configured(db,'openalex');const p=fromCrossref(record('10.9999/absolute-'+stage),source)!;await savePaper(db,p,new Date().toISOString(),{runId:'original',batchKey:null,deferScoring:true});await queueMetadata(db,[p]);
+  sql.prepare("INSERT INTO research_settings(key,value) VALUES('collection-budget:prior','34')").run();const before=sql.prepare('SELECT id,first_seen,title,abstract,content_hash,priority FROM research_papers').all();
+  const prepare=db.prepare.bind(db);db.prepare=(q:string)=>{const s=prepare(q);if(stage==='entry'&&q.includes("SELECT key FROM research_batches")){const first=s.first.bind(s);s.first=async()=>{const r=await first();delayed=true;t.mock.timers.setTime(start+31000);return r}}if(stage==='reserved'&&q.startsWith('UPDATE scholarly_usage SET day=')){const run=s.runSync.bind(s);s.runSync=()=>{const r=run();delayed=true;t.mock.timers.setTime(start+31000);return r}}return s};
+  globalThis.fetch=async()=>{calls++;return new Response('',{status:429})};
+  try{await enrichMetadata(db,env,{maxMs:75000},undefined,{deadlineAt:start+30000})}catch(e){assert.equal((e as any).code,'runtime_expired')}
+  assert.equal(delayed,true,stage);assert.equal(calls,0,stage);assert.deepEqual(sql.prepare('SELECT id,first_seen,title,abstract,content_hash,priority FROM research_papers').all(),before);assert.equal(sql.prepare("SELECT value FROM research_settings WHERE key='collection-budget:prior'").get()!.value,'34');assert.equal(sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
+  if(stage==='reserved')assert.equal(sql.prepare("SELECT sum(used) n FROM scholarly_usage WHERE service='openalex'").get()!.n,1);
+ }finally{globalThis.fetch=old;sql.close()}}
+});
+
 test('32 successful heads precede at most 3 fair continuations; discovery sends zero enrichment calls',async()=>{
  const {sql,db}=fixture(),old=globalThis.fetch;let heads=0,extras=0;try{await initResearch(db);const started=new Date().toISOString(),key=collectionCycle(started,null),ids=RESEARCH_SOURCES.map(s=>s.id);sql.prepare("INSERT INTO research_batches(key,date,slot,status,sources_json,started_at) VALUES(?,?,20,'running',?,?)").run(key,key.slice(0,10),JSON.stringify(ids),started);
  globalThis.fetch=async(input:any)=>{const u=new URL(String(input));if(u.hostname==='api.crossref.org'&&u.pathname.endsWith('/works')&&u.searchParams.get('cursor')){heads++;return Response.json({message:{items:Array.from({length:100},(_,i)=>record('10.9999/'+heads+'-'+i)),'next-cursor':'cursor-'+heads}});}if(u.hostname==='api.crossref.org'||u.hostname==='api.openalex.org'||u.hostname==='api.semanticscholar.org'){extras++;throw Error('unexpected enrichment');}return new Response('<rss><channel/></rss>');};

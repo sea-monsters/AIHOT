@@ -1,3 +1,4 @@
+import {runtimeDeadline,assertRuntimeBudget,type RuntimeBudget} from './research-runtime-budget.ts';
 import {pendingWorkCounts,recoverIngestion} from './research-recovery.ts';
 import {OperationTrace} from './research-operations.ts';
 import {AIError} from './ai/security.ts';
@@ -91,15 +92,17 @@ export function metadataRequest(service:string,keys:string[]):{url:string;body?:
 }
 
 /** Separate run/lease; never carries a finished batch's fence or updates a frozen snapshot. */
-export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace?:OperationTrace){
+export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace?:OperationTrace,runtimeBudget?:RuntimeBudget){
+ const requestDeadline=runtimeDeadline(Date.now()+Math.min(75000,body.maxMs??75000),runtimeBudget);assertRuntimeBudget(runtimeBudget);
  if(body.batchKey!=null&&(typeof body.batchKey!=='string'||(!/^\d{4}-\d{2}-\d{2}\/(08|20)$/.test(body.batchKey)&&!isManualBatchKey(body.batchKey))))throw new AIError('invalid_batch',400,'补全批次无效');
  if(body.cohort!=null&&!['previous_day','current','pending'].includes(body.cohort))throw new AIError('invalid_cohort',400,'补全归属无效');
  if(body.maxMs!=null&&(!Number.isInteger(body.maxMs)||body.maxMs<1||body.maxMs>75000))throw new AIError('invalid_deadline',400,'补全时限应在 1–75000 毫秒');
  const active=await rawDb.prepare("SELECT key FROM research_batches WHERE status='running' LIMIT 1").first();
  if(active)return {status:'deferred',reason:'collection_in_progress',attempted:0};
  if(body.batchKey){const batch=await rawDb.prepare('SELECT status FROM research_batches WHERE key=?').bind(body.batchKey).first();if(!batch||batch.status==='running')throw new AIError('batch_not_finished',409,'须先保存并释放采集租约');}
- const pending=await pendingWorkCounts(rawDb);if(pending.items){const recovered=await recoverIngestion(rawDb,{maxMs:Math.min(6000,body.maxMs??6000),trace:existingTrace});return {...recovered,status:recovered.status==='ok'?'partial':recovered.status,reason:recovered.status==='ok'?'pending_metadata':recovered.reason,ingestionProcessed:recovered.recovery.processed};}
- const started=stamp(),deadline=Date.now()+Math.min(75000,body.maxMs??75000),lease=await admitRun(rawDb,'__metadata__',null,'maintenance',started);
+ const pending=await pendingWorkCounts(rawDb);if(pending.items){const recovered=await recoverIngestion(rawDb,{maxMs:Math.min(6000,body.maxMs??6000),trace:existingTrace,...(runtimeBudget?{deadlineAt:new Date(requestDeadline).toISOString()}:{})});return {...recovered,status:recovered.status==='ok'?'partial':recovered.status,reason:recovered.status==='ok'?'pending_metadata':recovered.reason,ingestionProcessed:recovered.recovery.processed};}
+ assertRuntimeBudget(runtimeBudget);
+ const started=stamp(),deadline=requestDeadline,lease=await admitRun(rawDb,'__metadata__',null,'maintenance',started);
  if(!lease){await phaseEvent(rawDb,{batchKey:body.batchKey,phase:'metadata'},phaseTiming(started),'lock_busy');return {status:'deferred',reason:'lock_busy',attempted:0};}
  const db=fencedRunDatabase(rawDb,lease.id),result:any={status:'ok',runId:lease.id,batchKey:body.batchKey||null,attempted:0,ready:0,localReady:0,abstained:0,scopePending:0,deferred:0,providers:{},metadataProgress:{confirmed:false,processedItems:0,candidateItems:0,readyItems:0,abstainedItems:0,deferredItems:0,remainingItems:null}};
  try{
@@ -159,8 +162,8 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace
     try{
      let data:any;
      if(req.url.length>1800)throw new AIError('metadata_request_bounds',413,'补全请求超过编码长度上限');
-     if(service==='crossref'){data=await readURL(req.url,'json',deadline,db,async()=>{dispatched=true},timing);}
-     else{const httpStart=Date.now();try{const fetched=await providerRequest(db,env,service as Service,req.url,AbortSignal.timeout(Math.max(1,deadline-Date.now())),{body:req.body,expectedRevision,onReserved:async()=>{dispatched=true;timing.gateMs+=Date.now()-httpStart;}});data=fetched.data;cached=fetched.cached;}finally{if(dispatched)timing.httpMs+=Math.max(0,Date.now()-httpStart-timing.gateMs);else timing.gateMs+=Date.now()-httpStart;}}
+     if(service==='crossref'){data=await readURL(req.url,'json',deadline,db,async()=>{assertRuntimeBudget(runtimeBudget?{deadlineAt:deadline}:undefined);dispatched=true},timing);}
+     else{const httpStart=Date.now();try{const fetched=await providerRequest(db,env,service as Service,req.url,AbortSignal.timeout(Math.max(1,deadline-Date.now())),{body:req.body,expectedRevision,onReserved:async()=>{assertRuntimeBudget(runtimeBudget?{deadlineAt:deadline}:undefined);dispatched=true;timing.gateMs+=Date.now()-httpStart;}});data=fetched.data;cached=fetched.cached;}finally{if(dispatched)timing.httpMs+=Math.max(0,Date.now()-httpStart-timing.gateMs);else timing.gateMs+=Date.now()-httpStart;}}
      const values=service==='crossref'?req.single?[data.message]:data.message?.items:service==='openalex'?data.results:data;
      if(!Array.isArray(values)||values.length>100||(service==='semanticscholar'&&values.length!==keys.length))throw new AIError('metadata_format',502,'补全返回数量无效');
      const byDoi=new Map<string,any>(),conflicts=new Set<string>(),stableIds=new Map<string,string>(),explicitNulls=new Set<string>();let invalidIdentity=false,duplicate=false;
@@ -193,7 +196,7 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace
      if(conflicts.size)outcome='identity_warning';
     }catch(e){
      if(e instanceof AIError&&e.code==='collection_lease_lost')throw e;
-     const code=e instanceof AIError?e.code:(e as any).httpStatus===429?'429':(e as any).deferredReason||'metadata_network';
+     const code=e instanceof AIError?e.code:(e as any).code==='runtime_expired'?'deadline':(e as any).httpStatus===429?'429':(e as any).deferredReason||'metadata_network';
      if(service==='crossref'&&req.single&&(e as any).httpStatus===404){outcome='no_record';for(const row of chunk)row.providers[service]={status:'no_record',at:stamp(),runId:lease.id};}
      else{
      outcome=/429|rate_limit|cooldown/.test(code)?'429':/timeout/.test(code)?'timeout':/lock_busy|throttle/.test(code)?'lock_busy':code==='deadline'?'deadline':'deferred';

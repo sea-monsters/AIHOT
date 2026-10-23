@@ -1,3 +1,4 @@
+import {runtimeDeadline,assertRuntimeBudget,type RuntimeBudget} from './research-runtime-budget.ts';
 import {AIError} from './ai/security.ts';
 import {collectionControl} from './research-collection-control.ts';
 import {collectionCycle} from './research-crossref.ts';
@@ -6,8 +7,8 @@ import {checkCollectionCancellation} from './research-lifecycle.ts';
 const parse=(s:any,f:any)=>{try{return JSON.parse(s)}catch{return f}};
 /** Finite waves: independent sources overlap persistence/RSS, but all head work
  * settles before continuations. The provider gate still serializes Crossref. */
-export async function collectBatchSlice(db:any,batchKey:string,call:(sourceId:string,maxMs:number)=>Promise<any>,options:{maxMs:number;maxCalls:number;concurrency:number;signal?:AbortSignal;now?:()=>number;startedMs?:number}){
- const now=options.now||Date.now,started=options.startedMs??now(),deadline=started+Math.min(75000,options.maxMs),results:any[]=[];
+export async function collectBatchSlice(db:any,batchKey:string,call:(sourceId:string,maxMs:number)=>Promise<any>,options:{maxMs:number;maxCalls:number;concurrency:number;signal?:AbortSignal;now?:()=>number;startedMs?:number;runtimeBudget?:RuntimeBudget}){
+ const now=options.now||Date.now,started=options.startedMs??now(),deadline=runtimeDeadline(started+Math.min(75000,options.maxMs),options.runtimeBudget),results:any[]=[];
  if(deadline-now()<8000)return {batchKey,status:'partial',reason:'slice_deadline',stopReason:'slice_deadline',calls:0,attempted:0,results,collectionControl:await collectionControl(db,batchKey,new Date(now()))};
  const key='batch-collector:'+batchKey,lease=new Date(deadline+5000).toISOString()+'|'+crypto.randomUUID();
  const claimed=await db.prepare('INSERT INTO research_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE research_settings.value<?').bind(key,lease,new Date(now()).toISOString()).run();
@@ -23,7 +24,7 @@ export async function collectBatchSlice(db:any,batchKey:string,call:(sourceId:st
    const candidates=(control.dispatchableSources||[control.nextSourceId]).filter((id:string)=>id&&(tried.get(id)||0)<(control.pass==='head'?1:2));
    if(!candidates.length){stopReason='no_dispatchable_source';break;}
    const wave=candidates.slice(0,Math.min(3,Math.max(1,options.concurrency),options.maxCalls-results.length));
-   const settled=await Promise.all(wave.map(async(id:string)=>{tried.set(id,(tried.get(id)||0)+1);try{return await call(id,Math.max(1,Math.min(20000,deadline-now()-2000)))}catch{return {sourceId:id,status:'unknown',reason:'collection_unknown',pending:true}}}));
+   const settled=await Promise.all(wave.map(async(id:string)=>{tried.set(id,(tried.get(id)||0)+1);try{assertRuntimeBudget(options.runtimeBudget);return await call(id,Math.max(1,Math.min(20000,deadline-now()-2000)))}catch{return {sourceId:id,status:'unknown',reason:'collection_unknown',pending:true}}}));
    results.push(...settled);
    // Settle every dispatched worker before returning; never replay ambiguity.
    const reconciliation=settled.find(r=>r.collectionControl?.nextAction==='readback_reconcile');if(reconciliation){reconcileControl=reconciliation.collectionControl;stopReason=reconcileControl.reason||'collection_unknown';break;}

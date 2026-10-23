@@ -1,3 +1,4 @@
+import {frozenRuntimeBudget,assertRuntimeBudget} from './research-runtime-budget.ts';
 import {AIError,owner,readBody} from './ai/security.ts';
 import {researchApi} from './research.ts';
 import {builtSourceRevision,EXECUTION_CONTRACT,diagnosticId} from './research-diagnostics.ts';
@@ -37,10 +38,11 @@ export async function researchRuntimeApi(request:Request,env:any){
   // No initialization, reconciliation, D1 log or provider call precedes this.
   const frozen=await validateFrozenRuntime(request,revision);
   description=await runtimeDescription(revision);
-  const body=runtimeOperationBody(path,await readBody(request),frozen);
+  const body=runtimeOperationBody(path,await readBody(request),frozen),budget=frozenRuntimeBudget(frozen);
   const headers=new Headers(request.headers);for(const name of Object.values(RUNTIME_HEADERS))headers.delete(name);headers.set('x-hkis-operation-id',id);
   await writeLog(env.DB,{component:'research',event:'request_started',outcome:'started',requestId:id,correlationId:automationId,metadata:{route:path,runtimeContract:RUNTIME_CONTRACT,sourceRevision:revision,configHash:frozen.configHash,bootstrapSource:frozen.bootstrapSource,runStartedAt:frozen.startedAt}});
-  const response=await researchApi(new Request(new URL(path,url.origin),{method:'POST',headers,body:JSON.stringify(body),signal:request.signal}),env);
+  assertRuntimeBudget(budget);
+  const response=await researchApi(new Request(new URL(path,url.origin),{method:'POST',headers,body:JSON.stringify(body),signal:request.signal}),env,budget);
   const value=await response.json();return respond(value,response.status);
  }catch(e){
   const code=e instanceof RuntimeContractError?e.code:e instanceof AIError?e.code:'research_unavailable',status=e instanceof RuntimeContractError?(code==='runtime_source_unavailable'?503:409):e instanceof AIError?e.status:503;

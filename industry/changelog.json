@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-23T15:04:10Z",
+  "latestVersion": "2026-10-23T15:27:53Z",
   "releases": [
+    {
+      "id": "hkis-runtime-fixed-budgets-deadline-20261023",
+      "at": "2026-10-23T15:27:53Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "收紧稳定契约预算范围并防止慢数据库后移截止",
+      "body": [
+        "独立审查确认旧候选不能在服务端动态累计收紧后的整轮来源调用数；现严格固定540秒、35次来源调用及08/20采集时窗，manifest与bootstrap输入均拒绝非默认整轮值。仅保留单slice收紧、原步骤禁用等已实现配置，不重置原服务端原子分页预算。",
+        "服务端从冻结信息生成可信内部绝对deadline，跨日志、初始化、operation与handler传递；元数据供应商及日报模型在派发前再次校验，慢DB不再重获相对时长，未发送回执保留且不冒充真实调用。",
+        "固定bootstrap来源调用累计与服务端35次原子Crossref分页计数明确区分；失败或未知不返额、不重放。已提交D1证据可能晚确认，保留核对，不承诺硬撤销。仅仓库与隔离验证，未部署、改任务或写生产论文。"
+      ],
+      "sources": [
+        {
+          "label": "稳定契约预算边界与修正证据",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/stable-research-runtime.md"
+        }
+      ]
+    },
     {
       "id": "hkis-stable-runtime-contract-20261023",
       "at": "2026-10-23T15:04:10Z",

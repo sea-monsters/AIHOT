@@ -36,7 +36,7 @@ export async function privateStableSlotMain(){
   const started=Date.parse(input.automationStartedAt);
   if(!Number.isFinite(started)||new Date(started).toISOString()!==input.automationStartedAt||started>processStarted)fail('invalid_automation_start');
   const budgetMs=input.budgetMs??RUNTIME_CEILINGS.totalMs,collectionCalls=input.collectionCalls??RUNTIME_CEILINGS.collectionCalls;
-  if(!Number.isInteger(budgetMs)||budgetMs<1||budgetMs>RUNTIME_CEILINGS.totalMs||!Number.isInteger(collectionCalls)||collectionCalls<1||collectionCalls>RUNTIME_CEILINGS.collectionCalls)fail('runtime_budget_invalid');
+  if(budgetMs!==RUNTIME_CEILINGS.totalMs||collectionCalls!==RUNTIME_CEILINGS.collectionCalls)fail('runtime_budget_invalid');
   if(Date.now()-started>=budgetMs-15000)fail('automation_budget_exhausted');
   const onDiagnostic=e=>{if(e.state==='started'){requestsAttempted++;if(e.method==='POST')postsAttempted++}emit(e)};
   const probe=await createResearchClient(origin,input.token,{automationId,onDiagnostic})(RUNTIME_MANIFEST_PATH,undefined,Math.min(15000,budgetMs-(Date.now()-started)));

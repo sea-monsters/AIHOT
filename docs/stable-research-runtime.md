@@ -10,14 +10,14 @@ bootstrap 为 sites/run-stable-research-slot.mjs，从已核实的 https://githu
 
 | 随已审查站点发布可调整 | 范围 |
 | --- | --- |
-| 总时长、采集调用数 | 仅收紧至≤540000ms / ≤35，同时取任务、bootstrap、server最严限制 |
-| 08/20采集时长 | 分别≤260000 / ≤330000ms，保留既有维护预留 |
+| 整轮总时长、来源调用数 | 固定540000ms / 35，schema与bootstrap stdin拒绝任何非默认值；35次来源调用是固定bootstrap上限 |
+| 08/20跨slice采集时窗 | 固定260000 / 330000ms，不动态收紧；服务器按已有批次开始时间及lease/collectionControl约束 |
 | 采集slice / concurrency | ≤75000ms / ≤3，固定已实现bounded collector |
 | 时段暂停 | enabled:false，不尝试任何写入 |
 | 选择性评分 | 08为0–1、20为0–2；0禁用付费评分，保留本地规则步骤 |
 | 08日报模型额度 | 0–2；0禁用此步骤，20恒为0 |
 
-配置是同部署代码中的受版本控制常量，不是在线无限编辑器。普通兼容实现或上述参数更新由下一轮GET读取，无需在任务手填每版Site SHA。恢复/收尾slice数、顺序、cohort、路由、未知停止、维护预留及安全能力是固定模板。新major、新必需能力、操作、模板或更宽参数仍需审查和一次bootstrap升级，不能承诺永远不改任务。
+整轮常数仅记录与校验，不是动态配置项。配置是同部署代码中的受版本控制常量，不是在线无限编辑器。普通兼容实现或上述参数更新由下一轮GET读取，无需在任务手填每版Site SHA。恢复/收尾slice数、顺序、cohort、路由、未知停止、维护预留及安全能力是固定模板。新major、新必需能力、操作、模板或更宽参数仍需审查和一次bootstrap升级，不能承诺永远不改任务。
 
 ## 冻结与写前校验
 
@@ -31,9 +31,9 @@ bootstrap 递归冻结并记录协议、manifest/hash、实际Site sourceRevisio
 
 ## 数据保护、移植与切换
 
-无迁移、新表、清库、历史回填、评分/first_seen/归属重写，不更新reader、published brief或冻结daily。GET不初始化数据库；拒绝写入在任何D1操作前结束。正常已授权阶段仍有原业务写入和原证据门控，不因新协议取得补历史或重写冻结内容的能力。
+无迁移、新表、清库、历史回填、评分/first_seen/归属重写，不更新reader、published brief或冻结daily。GET不初始化数据库；协议/源码/hash不符在D1前拒绝。已通过校验的请求若随后遇到慢D1，保留已提交证据并在继续业务前核对绝对截止，不假装能撤销提交或硬终止D1回执。正常已授权阶段仍有原业务写入和原证据门控，不因新协议取得补历史或重写冻结内容的能力。
 
-精确v99/v100候选需一起移植：新增research-runtime-contract.ts和research-runtime.ts；worker.ts在原/api/fallback前的固定namespace；research.ts顶部新header误用拒绝；research-diagnostics.ts固定路由/码；runtime-logs.ts安全字段。不要整体覆盖main的research.ts、worker.ts或manual功能。固定GitHub bootstrap所需run-stable-research-slot.mjs、run-research-slot.mjs、research-slot.ts、research-diagnostics.ts、research-runtime-contract.ts须同一提交。服务端继续使用原bounded collector、operation/租约/预算/冻结实现，保留前轮修复包和collectionIdle，不导入未部署manual或依赖升级。
+精确v99/v100候选需一起移植：新增research-runtime-contract.ts、research-runtime-budget.ts和research-runtime.ts；worker.ts在原/api/fallback前的固定namespace；research.ts顶部新header误用拒绝；research-diagnostics.ts固定路由/码；runtime-logs.ts安全字段；research.ts内部预算参数与初始化/operation后置检查；research-collector.ts绝对截止；research-enrichment.ts及research-daily.ts内部deadline/派发前guard。不要整体覆盖main的research.ts、worker.ts或manual功能。固定GitHub bootstrap所需run-stable-research-slot.mjs、run-research-slot.mjs、research-slot.ts、research-diagnostics.ts、research-runtime-contract.ts须同一提交。服务端继续使用原bounded collector、operation/租约/预算/冻结实现，保留前轮修复包和collectionIdle，不导入未部署manual或依赖升级。
 
 父端先审查并隔离验证托管增量，确认实际构建SHA、owner-private和manifest只读，再经授权在原任务一次性固定批准bootstrap SHA。旧任务expectedSiteSource仍会阻止不匹配发布，不能假装协议兼容会解决旧pin；不允许新旧任务同时采集。diagnosticOnly只证明GET，不证明POST能力。生产写入仅在原时段、原任务和原授权下执行，不为验收额外采集。
 
@@ -47,7 +47,7 @@ bootstrap 递归冻结并记录协议、manifest/hash、实际Site sourceRevisio
 >
 > 从固定仓库https://github.com/sea-monsters/AIHOT.git获取批准完整提交<APPROVED_BOOTSTRAP_SHA>，在独立、干净的该提交checkout中运行node sites/run-stable-research-slot.mjs。无需npm，不安装依赖，不执行最新main或manifest指定代码。核实HEAD等于一次固定SHA；不可得、脏工作树或SHA不符即停止，不自动换版本。安全stdin JSON仅传baseUrl、精确allowedOrigins、原token、automationStartedAt（真实UTC ISO含毫秒）、当前实际slot 8或20、expectedBootstrapSource=<APPROVED_BOOTSTRAP_SHA>，保持budgetMs=540000、collectionCalls=35。不增加expectedSiteSource或绕过冻结。
 >
-> 由固定bootstrap只读一次严格runtime manifest，核对协议major、必需能力、hash、实际编译SHA、固定08/20模板和有界参数，冻结manifest/hash、Site SHA、bootstrap SHA和开始时间。按任务/runner/server最严预算与模板执行，每次写入携带冻结标识，服务端副作用前核对。旧server不支持、未知major/capability、危险额外字段、途中变版或回滚不兼容都停止，不换路径、不取最新版重启。普通兼容发布无需手填Site SHA，新协议/能力/操作仍需审查升级bootstrap。
+> 由固定bootstrap只读一次严格runtime manifest，核对协议major、必需能力、hash、实际编译SHA、固定08/20模板和有界参数，冻结manifest/hash、Site SHA、bootstrap SHA和开始时间。按固定540秒/35次来源调用及模板执行，保留各阶段既有更严门控，每次写入携带冻结标识，服务端副作用前核对。旧server不支持、未知major/capability、危险额外字段、途中变版或回滚不兼容都停止，不换路径、不取最新版重启。普通兼容发布无需手填Site SHA，新协议/能力/操作仍需审查升级bootstrap。
 >
 > 保留owner-only、同源检查、预算/租约、来源冷却、落库恢复、当前归属和冻结证据。仅处理模板允许的当前/前日队列，不批量补历史、不改first_seen/已有分析/收藏、不重写published brief或daily、不变更模型/供应商/费用额度。未知POST立即停止，不重放、不强制收尾、不换凭据或通道；仅按已有只读接口核对同一operation/batch已提交状态，回读也计总预算。
 >
@@ -63,3 +63,20 @@ bootstrap 递归冻结并记录协议、manifest/hash、实际Site sourceRevisio
 - 原Node/PG实现未修改，此轮不重复其已核对的156/183、27项关闭模型阀基线失败；限制仍保留，不为旧套件开启安全阀。
 
 剩余部署约束：新namespace必须先于旧/api/fallback路由；新增server模块与共享schema/诊断字段须同部署；构建须能提供非空真实clean源码SHA。原任务在新协议切换前仍受旧expectedSiteSource约束，发布/固定bootstrap pin需父端统一协调。服务访问继续依赖owner-private官方dispatcher，新endpoint也验证原service header或owner身份；只读GET成功不构成真实POST能力证明。未发现需要新权限、长期key或数据迁移的阻碍。
+
+
+## 安全审查追加：整轮常数与服务端绝对截止
+
+独立审查复现了旧候选缺口：manifest.collectionCalls=2时，两个slice仍可各执行2；totalMs变小也只经入场相对maxMs检查，metadata在慢DB后重新Date.now()+maxMs，daily独立requestMs会后移截止。此前“动态整轮预算三端取严”不成立，本段更正这一能力声明。
+
+本轮选择父端认可的保守范围：totalMs固定540000、collectionCalls固定35、collection8Ms固定260000、collection20Ms固定330000。manifest和bootstrap安全stdin的budgetMs/collectionCalls均严格拒绝较小或较大值，不能用单slice maxCalls冒充整轮累计限额。仍可收紧单slice时间/并发，暂停时段，减少/禁用原模板评分和日报步骤。未新增预算台账、未重置任何旧预算。
+
+预算scope区分：固定bootstrap对同一次自动化跨slice累计最多35次来源调用；服务端原collection-budget:<batch-cycle>对同批次Crossref分页尝试原子累计最多35，失败/未知已占用尝试不退款，协调lease排斥并发slice。这两者不是相同计数；本协议不声称服务端存在可动态收紧的来源调用总账。原永久35分页上限、供应商共享配额和频率保持不变。
+
+服务端由已校验freeze生成不可由payload赋值的内部RuntimeBudget，绝对截止=automationStartedAt+540000−2000。它跨writeLog、init、reconcile、operation、handler传递，metadata/day不再因进入handler较晚重获时长；metadata provider reservation后、daily持久模型回执claim后再次检查，后者保留原unsent pending回执和unknown队列，不自动重放/退款。日报另报reservedUnsent，不把该未发送保留计入真实attempted模型调用。恢复/评分/finish沿用并夹紧已有绝对截止；采集slice及子运行trace也受同一截止约束。没有给metadata/daily任意HTTP payload增加deadline字段。
+
+保证边界：到绝对截止后停止新的外部派发，HTTP timeout不越过相应绝对窗口；较早已派发且已提交的数据库事务/证据可能晚确认，仍须保留并按未知结果核对，不能保证D1进程硬中止。不能把客户端timeout当作服务端已取消或已回滚证明。
+
+验证覆盖顺序/并发低预算schema拒绝、跨slice固定截止、同批协调lease竞争、预算34并发只一分页及失败后35不返额，慢日志/metadata DB/供应商reservation/daily配置与receipt提交延迟；均使用隔离SQLite/D1和模拟供应商，既有历史对象保护测试保留。最终结果在交付说明中记录。
+
+追加完整回归：Node24.22.1下Sites全部82文件 **780/780**、Web **68/68**、typecheck及changelog检查通过，零失败/跳过；旧129条日志逐项完全保留，新增1条fix共130条。构建与真实Worker/D1使用干净提交源码证据，在交付结果中列出最终SHA。原Node/PG实现未改，前述27项基线限制继续保留。
