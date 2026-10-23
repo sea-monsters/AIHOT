@@ -1,3 +1,6 @@
+import {evaluate} from './research-domain.ts';
+import {paperCategories} from './paper-keywords.ts';
+import {ruleScoreAvailability} from './research-score-state.ts';
 import {AIError,owner,csrf,readBody} from './ai/security.ts';
 import {digest} from './research-pipeline.ts';
 import {batchCoverage,briefMissingness,briefTrackingSearchParams,briefTrackingView} from './research-batches.ts';
@@ -10,7 +13,7 @@ export async function prepareBrief(db:any,key:string,at=new Date()){
  const batch=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();if(!batch||batch.status!=='finished'||!batch.finished_at)throw new AIError('batch_not_finished',409,'采集尚未结束，不能保存进展简报');
  const cutoff=new Date(Date.parse(batch.finished_at)+1).toISOString(),coverage=await batchCoverage(db,key,cutoff);
  const rows=(await db.prepare('SELECT paper_id,snapshot_json,snapshot_at,first_seen FROM research_batch_members WHERE batch_key=? AND first_seen>=? AND first_seen<=? ORDER BY paper_id').bind(key,batch.started_at,batch.finished_at).all()).results;
- const papers=rows.map((r:any)=>{const p=parse(r.snapshot_json);const raw=String(p.abstract||'');return {id:r.paper_id,title:String(p.title||''),doi:p.doi||null,url:p.doi?'https://doi.org/'+encodeURI(p.doi):p.url,journal:p.journal,publisher:p.publisher,sourceId:p.sourceId,firstSeen:r.first_seen,snapshotAt:r.snapshot_at,priority:p.priority,topics:p.topics||[],abstract:raw.slice(0,12000)||null,abstractTruncated:raw.length>12000,abstractSource:p.provenance?.abstract||null}});
+ const papers=rows.map((r:any)=>{const p=parse(r.snapshot_json);const raw=String(p.abstract||'');return {id:r.paper_id,title:String(p.title||''),doi:p.doi||null,url:p.doi?'https://doi.org/'+encodeURI(p.doi):p.url,journal:p.journal,publisher:p.publisher,sourceId:p.sourceId,firstSeen:r.first_seen,snapshotAt:r.snapshot_at,priority:p.priority,scoreAvailability:ruleScoreAvailability(p),authors:Array.isArray(p.authors)?p.authors:[],authorStatus:p.authors?.length?'provided':'missing_in_snapshot',categories:paperCategories(p),classificationStatus:paperCategories(p).length?'frozen_text_or_source_keywords':'unclassified',topics:p.topics?.length?p.topics:evaluate({...p,keywords:p.keywords||[]}).topics,topicBasis:p.topics?.length?'stored_rules':'frozen_text_rule_match',abstract:raw.slice(0,12000)||null,abstractTruncated:raw.length>12000,abstractSource:p.provenance?.abstract||null}});
  const topics=TOPICS.map(t=>({id:t.id,label:t.label,count:papers.filter((p:any)=>p.topics.some((x:any)=>(typeof x==='string'?x:x.id)===t.id)).length})).filter(t=>t.count).sort((a,b)=>b.count-a.count);
  const withAbstract=papers.filter((p:any)=>p.abstract).length;
  const evidence={batchKey:key,coverage,newPapers:papers.length,withAbstract,missingAbstract:papers.length-withAbstract,topics,paperIds:papers.map((p:any)=>p.id),citations:[],snapshotBasis:'first-added-to-recorded-batch',frozenAt:at.toISOString(),laterEnriched:papers.filter((p:any)=>p.snapshotAt>batch.finished_at).length,selectionThreshold:null,fullTextVerified:false};

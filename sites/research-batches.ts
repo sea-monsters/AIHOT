@@ -83,12 +83,13 @@ const BATCH_SUMMARY_PREFIX=`WITH latest_runs AS (
  FROM research_runs
  WHERE batch_key>=? AND batch_key<=? AND started_at<?
 ), batch_rows AS (
- SELECT b.key batch_key,b.date,b.slot,b.status batch_status,b.sources_json,b.started_at,b.finished_at,b.closed_at,b.close_reason,
+ SELECT b.key batch_key,b.date,b.slot,b.status batch_status,b.sources_json,b.started_at,b.finished_at,b.closed_at,b.close_reason,config.value configured_sources_json,
         coalesce(json_array_length(CASE WHEN json_valid(b.sources_json) THEN b.sources_json ELSE '[]' END),0) expected_sources,
         coalesce(sum(CASE WHEN lr.source_id IS NOT NULL THEN 1 ELSE 0 END),0) attempted_sources,
         coalesce(sum(CASE WHEN lr.status='ok' AND lr.finished_at IS NOT NULL AND lr.finished_at<? AND coalesce(json_extract(lr.details_json,'$.rssStatus'),'') IN ('ok','not_configured') THEN 1 ELSE 0 END),0) complete_sources,
         br.status brief_status,br.updated_at brief_updated
  FROM research_batches b
+ LEFT JOIN research_settings config ON config.key='batch-configured:'||b.key
  LEFT JOIN json_each(CASE WHEN json_valid(b.sources_json) THEN b.sources_json ELSE '[]' END) expected ON 1=1
  LEFT JOIN latest_runs lr ON lr.batch_key=b.key AND lr.source_id=cast(expected.value AS text) AND lr.rn=1
  LEFT JOIN research_briefs br ON br.batch_key=b.key
@@ -101,15 +102,21 @@ const BATCH_SUMMARY_PREFIX=`WITH latest_runs AS (
 ) `;
 
 function detailedRun(r:any){const d=parse(r.details_json,{});return {id:r.id,sourceId:r.source_id,entryPoint:r.entry_point||'legacy_unknown',status:r.status,startedAt:r.started_at,finishedAt:r.finished_at,closedAt:r.closed_at||null,closeReason:r.close_reason||null,channels:d.channels||null,crossref:d.crossref||null,stages:d.stages||null};}
-function sourceCheckEvidence(expected:string[],last:Map<string,any>){
- const checked=expected.filter(id=>{const d=parse(last.get(id)?.details_json,{});return d.crossrefPages?.length>0||['ok','failed'].includes(d.channels?.crossref)||d.rssStatus==='ok'});
- const notAttempted=expected.filter(id=>{const r=last.get(id),d=parse(r?.details_json,{});return !r||r.status==='budget_deferred'&&d.crossrefPages?.length===0});
- return {checkedSources:checked.length,checkedSourceIds:checked,notAttemptedSources:notAttempted,unconfirmedSources:expected.filter(id=>last.has(id)&&!checked.includes(id)&&!notAttempted.includes(id)),failedSources:expected.filter(id=>['error','interrupted'].includes(last.get(id)?.status))};
+function configuredEvidence(raw:any,expected:string[]){
+ const value=parse(raw,null),ids=value?.sourceIds;
+ if(!Array.isArray(ids)||!ids.every((s:any)=>typeof s==='string')||new Set(ids).size!==ids.length)return {configuredSourceIds:null,configuredSourceCount:null,notDueSourceIds:null,configurationBasis:'unknown_historical'};
+ return {configuredSourceIds:ids,configuredSourceCount:ids.length,notDueSourceIds:ids.filter((id:string)=>!expected.includes(id)),configurationBasis:'frozen_at_start'};
+}
+function sourceCheckEvidence(expected:string[],runs:any[]){
+ const bySource=new Map<string,any[]>();for(const r of runs)if(expected.includes(r.source_id))bySource.set(r.source_id,[...(bySource.get(r.source_id)||[]),r]);
+ const checked=expected.filter(id=>(bySource.get(id)||[]).some(r=>{const d=parse(r.details_json,{});return d.crossrefPages?.length>0||['ok','failed'].includes(d.channels?.crossref)||d.rssStatus==='ok'}));
+ const notAttempted=expected.filter(id=>!bySource.has(id)||(bySource.get(id)||[]).every(r=>{const d=parse(r.details_json,{});return r.status==='budget_deferred'&&!d.crossrefPages?.length&&d.rssStatus!=='ok'}));
+ return {checkedSources:checked.length,checkedSourceIds:checked,notAttemptedSources:notAttempted,unconfirmedSources:expected.filter(id=>bySource.has(id)&&!checked.includes(id)&&!notAttempted.includes(id)),failedSources:expected.filter(id=>['error','interrupted'].includes(bySource.get(id)?.at(-1)?.status))};
 }
 function coverageFromSummary(row:any,runs:any[],cutoff:string){
  const expected=parse(row.sources_json,RESEARCH_SOURCES.map(s=>s.id)),last=new Map<string,any>();for(const run of runs)last.set(run.source_id,run);
  const missing=expected.filter((id:string)=>!last.has(id)),completeSources=expected.filter((id:string)=>{const r=last.get(id),d=parse(r?.details_json,{});return r&&r.status==='ok'&&r.finished_at&&r.finished_at<cutoff&&['ok','not_configured'].includes(d.rssStatus)});
- return {key:row.batch_key,recorded:true,...batchLifecycle({...row,status:row.batch_status},new Date(cutoff)),status:Number(row.is_complete)?'complete':'partial',startedAt:row.started_at||null,finishedAt:row.finished_at||null,expectedSources:expected.length,attemptedSources:last.size,completeSources:completeSources.length,missingSources:missing,...sourceCheckEvidence(expected,last),runs:runs.map(detailedRun)};
+ return {key:row.batch_key,recorded:true,...batchLifecycle({...row,status:row.batch_status},new Date(cutoff)),status:Number(row.is_complete)?'complete':'partial',startedAt:row.started_at||null,finishedAt:row.finished_at||null,expectedSources:expected.length,attemptedSources:expected.filter((id:string)=>last.has(id)).length,completeSources:completeSources.length,missingSources:missing,...sourceCheckEvidence(expected,runs),...configuredEvidence(row.configured_sources_json,expected),runs:runs.map(detailedRun)};
 }
 function pageOptions(options:BriefTrackingOptions={}){return {limit:Math.max(1,Math.min(BRIEF_PAGE_MAX,Number.isInteger(options.limit)?options.limit!:BRIEF_PAGE_LIMIT)),cursor:options.cursor||null}}
 export function parseBriefTrackingOptions(input:any={}):BriefTrackingOptions{
@@ -184,7 +191,7 @@ export async function startBatch(db:any,slot:number,at=new Date()){
  await reconcileBatches(db,at);
  const date=collectedDay(at.toISOString())!,key=date+'/'+String(slot).padStart(2,'0');
  const plan=await intervalPlan(db,at);if(!plan.value.verified)throw new AIError('interval_owner_ambiguous',409,'无法确认采集间隔所属账户，请由所有者保存配置');
- await db.prepare(`INSERT OR IGNORE INTO research_batches(key,date,slot,mode,status,sources_json,started_at) SELECT ?,?,?, 'scheduled','running',?,? WHERE ${metadataIdle} AND ${processingIdle} AND ${collectionIdle}`).bind(key,date,slot,JSON.stringify(plan.sources.filter(s=>s.due).sort((a,b)=>String(a.lastAttempt||'').localeCompare(String(b.lastAttempt||''))||a.id.localeCompare(b.id)).map(s=>s.id)),at.toISOString()).run();
+ await db.batch([db.prepare(`INSERT OR IGNORE INTO research_batches(key,date,slot,mode,status,sources_json,started_at) SELECT ?,?,?, 'scheduled','running',?,? WHERE ${metadataIdle} AND ${processingIdle} AND ${collectionIdle}`).bind(key,date,slot,JSON.stringify(plan.sources.filter(s=>s.due).sort((a,b)=>String(a.lastAttempt||'').localeCompare(String(b.lastAttempt||''))||a.id.localeCompare(b.id)).map(s=>s.id)),at.toISOString()),db.prepare("INSERT OR IGNORE INTO research_settings(key,value) SELECT ?,? WHERE changes()=1 AND EXISTS(SELECT 1 FROM research_batches WHERE key=? AND started_at=?)").bind('batch-configured:'+key,JSON.stringify({sourceIds:RESEARCH_SOURCES.map(s=>s.id),recordedAt:at.toISOString()}),key,at.toISOString())]);
  const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();if(!row)return {status:'deferred',reason:'collection_in_progress',batchKey:null};return {collectionContract:'bounded-v1',batchKey:key,mode:row.mode||'scheduled',status:row.status,startedAt:row.started_at,...batchLifecycle(row,at),collectionControl:await collectionControl(db,key,at)};
 }
 /** Explicit owner-requested test batch. The key and null daily cohort keep it
@@ -194,7 +201,7 @@ export async function startManualBatch(db:any,at=new Date()){
  await reconcileBatches(db,at);
  const plan=await intervalPlan(db,at);if(!plan.value.verified)throw new AIError('interval_owner_ambiguous',409,'无法确认采集间隔所属账户，请由所有者保存配置');
  const key='manual/'+crypto.randomUUID(),date=collectedDay(at.toISOString())!,sources=JSON.stringify(RESEARCH_SOURCES.map(s=>s.id));
- const result=await db.prepare(`INSERT INTO research_batches(key,date,slot,mode,status,sources_json,started_at) SELECT ?,?,0,'manual','running',?,? WHERE ${metadataIdle} AND ${processingIdle} AND ${collectionIdle}`).bind(key,date,sources,at.toISOString()).run();
+ const writes=await db.batch([db.prepare(`INSERT INTO research_batches(key,date,slot,mode,status,sources_json,started_at) SELECT ?,?,0,'manual','running',?,? WHERE ${metadataIdle} AND ${processingIdle} AND ${collectionIdle}`).bind(key,date,sources,at.toISOString()),db.prepare("INSERT OR IGNORE INTO research_settings(key,value) SELECT ?,? WHERE changes()=1 AND EXISTS(SELECT 1 FROM research_batches WHERE key=? AND started_at=?)").bind('batch-configured:'+key,JSON.stringify({sourceIds:RESEARCH_SOURCES.map(s=>s.id),recordedAt:at.toISOString()}),key,at.toISOString())]);const result=writes[0];
  if(!result.meta?.changes)return {status:'deferred',reason:'collection_in_progress',batchKey:null,mode:'manual'};
  const row=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();return {collectionContract:'bounded-v1',batchKey:key,mode:'manual',status:row.status,startedAt:row.started_at,...batchLifecycle(row,at),collectionControl:await collectionControl(db,key,at)};
 }
@@ -233,6 +240,6 @@ export async function batchCoverage(db:any,key:string,cutoff:string){
  const last=new Map<string,any>();for(const r of rows)last.set(r.source_id,r);const missing=expected.filter((id:string)=>!last.has(id));
  const completeSources=expected.filter((id:string)=>{const r=last.get(id),d=parse(r?.details_json,{});return r&&r.status==='ok'&&r.finished_at&&r.finished_at<cutoff&&['ok','not_configured'].includes(d.rssStatus)});
  const complete=!!batch&&batch.status==='finished'&&batch.finished_at&&batch.finished_at<cutoff&&completeSources.length===expected.length;
- return {key,recorded:!!batch,status:complete?'complete':batch?'partial':'missing',...batchLifecycle(batch,new Date(cutoff)),startedAt:batch?.started_at||null,finishedAt:batch?.finished_at||null,expectedSources:expected.length,attemptedSources:expected.filter((id:string)=>last.has(id)).length,completeSources:completeSources.length,missingSources:missing,...sourceCheckEvidence(expected,last),runs:rows.map(detailedRun)};
+ return {key,recorded:!!batch,status:complete?'complete':batch?'partial':'missing',...batchLifecycle(batch,new Date(cutoff)),startedAt:batch?.started_at||null,finishedAt:batch?.finished_at||null,expectedSources:expected.length,attemptedSources:expected.filter((id:string)=>last.has(id)).length,completeSources:completeSources.length,missingSources:missing,...sourceCheckEvidence(expected,rows),...configuredEvidence((await db.prepare('SELECT value FROM research_settings WHERE key=?').bind('batch-configured:'+key).first())?.value,expected),runs:rows.map(detailedRun)};
 }
 export async function previousCoverage(db:any,date:string){const w=dailyWindow(new Date(),date),batches=[];for(const key of w.batchKeys)batches.push(await batchCoverage(db,key,w.cutoff));const untracked=await db.prepare('SELECT count(*) n FROM research_papers p WHERE p.first_seen>=? AND p.first_seen<? AND NOT EXISTS(SELECT 1 FROM research_batch_members m WHERE m.paper_id=p.id AND '+cohortExpression+' IN (?,?)) AND NOT EXISTS(SELECT 1 FROM research_batch_members mm JOIN research_batches mb ON mb.key=mm.batch_key AND coalesce(mb.mode,\'scheduled\')=\'manual\' WHERE mm.paper_id=p.id)').bind(w.start,w.cutoff,...w.batchKeys).first();return {...w,batches,complete:batches.every(b=>b.status==='complete'),untrackedNewPapers:Number(untracked?.n||0)};}

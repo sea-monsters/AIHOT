@@ -1,3 +1,4 @@
+import {ruleScoreAvailable} from './research-score-state.ts';
 import {resolveResearchTheme,matchesResearchTheme} from './research-topics.ts';
 import {paperInstitutionEvidence} from './paper-metadata.ts';
 import {PUBLISHERS,TOPICS,RULE_VERSION} from './research-config.ts';
@@ -19,7 +20,6 @@ function validTime(value?:string){return value&&Number.isFinite(Date.parse(value
 function recentTime(p:Stored,at:Date){return [p.firstSeen,p.updatedAt].map(validTime).filter((x):x is string=>!!x&&x<=at.toISOString()).sort().at(-1)||null;}
 export function statistics(values:(number|null)[]){const sorted=values.filter((x):x is number=>x!==null&&Number.isFinite(x)).sort((a,b)=>a-b),n=sorted.length;const q=(p:number)=>{if(!n)return null;const i=(n-1)*p,a=Math.floor(i);return sorted[a]!+(sorted[Math.ceil(i)]!-sorted[a]!)*(i-a);};return {scored:n,unscored:values.length-n,mean:n?sorted.reduce((a,b)=>a+b,0)/n:null,median:q(.5),q1:q(.25),q3:q(.75),min:sorted[0]??null,max:sorted.at(-1)??null};}
 const validScore=(s:unknown)=>typeof s==='number'&&Number.isFinite(s)&&s>=0&&s<=100?s:null;
-const ruleScoreAvailable=(p:Stored)=>p.metadataStatus==null||p.metadataStatus==='ready'||p.metadataStatus==='legacy_ready';
 export function buildKeywordMap(input:Stored[],params=new URLSearchParams(),at=new Date()){
  const window=mapWindow(params,at);const metric=params.get('metric')==='ai'?'ai':'rule',publisher=PUBLISHERS.includes(params.get('publisher')||'')?params.get('publisher')!:'',topic=resolveResearchTheme(params.get('topic')||'')?.id||'';
  let excludedNonResearch=0,invalidDate=0,outsideWindow=0,duplicates=0;const byIdentity=new Map<string,Stored>();

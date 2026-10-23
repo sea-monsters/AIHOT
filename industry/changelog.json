@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-23T12:18:44Z",
+  "latestVersion": "2026-10-23T13:41:15Z",
   "releases": [
+    {
+      "id": "hkis-pipeline-evidence-20261023",
+      "at": "2026-10-23T13:41:15Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "保留论文规则证据并修正采集覆盖与冻结投影",
+      "body": [
+        "语义内容未变时保留 ready/legacy_ready 论文已有规则分、分类和匹配分析；元数据状态仍独立门控。真正摘要变化保持旧分析为过期，不把占位零分当真实评分，不批量付费补历史。",
+        "收紧论文CAS和后续pending更新，修复并发失败污染；评分返回当前归属队列及零派发原因，诊断明确全库存量和可见记录口径。",
+        "覆盖统计保留本批历次已检查证据并排除finalizer，未来批次冻结配置分母；未来简报补作者和分类状态，既有冻结内容保持原样。仅更新仓库，未部署Sites或改自动任务pin。"
+      ],
+      "sources": [
+        {
+          "label": "采集管线修复与部署边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/ingestion-pipeline-review.md"
+        }
+      ]
+    },
     {
       "id": "upstream-dependency-safety-20261023",
       "at": "2026-10-23T12:18:44Z",

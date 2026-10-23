@@ -1,3 +1,4 @@
+import {TOPICS} from './research-config.ts';
 import {parseAssessment} from './research-pipeline.ts';
 import type {Paper} from './research-domain.ts';
 export type KeywordSource='author'|'publisher-index'|'openalex-keyword'|'openalex-topic'|'ai'|'derived';
@@ -58,6 +59,9 @@ export function keywordCandidates(p:Paper&{analysis?:any}){
  for(const group of ['publisher-index','openalex-keyword','openalex-topic'] as const)for(const e of evidence?.records||[])if(e.kind===group)for(const k of e.terms||[])add(typeof k==='string'?k:k.label,group);
  let assessed:any=null;if(p.analysis?.status==='completed')try{assessed=parseAssessment(JSON.stringify(p.analysis.result),p)}catch{};for(const k of assessed?.decision==='assessed'?assessed.keywords||[]:[])add(k,'ai');
  const text=[p.title,p.abstract||'',...(p.keywords||[])].join(' ');for(const [,label,,pattern] of TERMS)if(pattern.test(text))add(label,'derived');
+ // Keep the existing domain vocabulary as an explicit rule fallback when no
+ // author, index, AI or narrow keyword is available. Never infer from a journal.
+ if(!members.size)for(const topic of TOPICS)if(topic.pattern.test(text))add(topic.label,'derived');
  return [...members.values()];
 }
 export const paperCategories=(p:Paper&{analysis?:any})=>keywordCandidates(p).slice(0,3);
