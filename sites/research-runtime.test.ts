@@ -71,6 +71,7 @@ test('new namespace rejects anonymous/non-owner, foreign Origin, dangerous param
  t.mock.timers.enable({apis:['Date'],now:Date.parse(startedAt)});const f=fixture(),previous=process.env.HKIS_BUILD_SHA;
  try{process.env.HKIS_BUILD_SHA=source;
   for(const headers of [{},{'oai-authenticated-user-id':'other','oai-authenticated-user-email':'other@example.invalid'},{...ownerHeaders,origin:'https://evil.invalid'}]){const r=await researchRuntimeApi(new Request(origin+RUNTIME_MANIFEST_PATH,{headers}),f.env);assert.equal(r.status,403)}
+  const service=await researchRuntimeApi(new Request(origin+RUNTIME_MANIFEST_PATH,{headers:{'OAI-Sites-Authorization':'Bearer SYNTHETIC_EXISTING_SERVICE'}}),f.env);assert.equal(service.status,200);assert.equal(f.statements(),0);
   const h=frozenRuntimeHeaders(await frozen());assert.equal((await researchRuntimeApi(request(RUNTIME_ROOT+'/unknown',{},h),f.env)).status,404);assert.equal((await researchRuntimeApi(request(RUNTIME_ROOT+'/start',{slot:20,url:'https://evil.invalid'},h),f.env)).status,409);assert.equal(f.statements(),0);
   const legacy=await researchApi(new Request(origin+'/api/site/research/execution'),f.env);assert.equal(legacy.status,200);assert.equal((await legacy.json()).diagnosticContract,'hkis-execution-v1');
  }finally{if(previous===undefined)delete process.env.HKIS_BUILD_SHA;else process.env.HKIS_BUILD_SHA=previous;f.sql.close()}

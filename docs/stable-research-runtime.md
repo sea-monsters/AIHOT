@@ -55,4 +55,11 @@ bootstrap 递归冻结并记录协议、manifest/hash、实际Site sourceRevisio
 
 ## 验证记录
 
-由仓库最终验证补充；生产比对及正式发布由父端执行。原Node/PG的27项关闭模型阀基线失败另列，不为通过旧测试打开安全阀。
+- Node24.22.1：Sites全部82个文件 **774/774**，Web **68/68**，typecheck、完整build及changelog检查通过，零失败/跳过。33项首批定向和5项bootstrap子进程场景均包含于完整Sites结果，不重复计数。
+- bootstrap在临时独立clean Git fixture中，无node_modules/package安装，核验真实checkout SHA，实际安全stdin子进程测试未知major/capability/危险字段/超额/hash错误、旧server、跨域、缺凭据、pin错误、未知POST与途中变版、diagnosticOnly；捕获输出无服务token或原始错误。
+- 四个原生Worker/D1检查通过：test-runtime-worker、test-worker、test-execution-worker、test-cancellation-worker。clean构建实际注入297d8420efb8f2309b9c4cc5d3081ad8d8c9f410并回显；新协议首次GET、缺字段、hash/SHA/major变化在业务前拒绝，正确冻结写入可创建本轮batch，既有论文/分析/reader/published brief/daily等逐对象不变，provider/model回执为0、outbound=0。
+- 原生旧协议回滚夹具为本环境在77b3869 clean HEAD构建的真实旧bundle，仅存在忽略的.sites-runtime中；新namespace返回503，客户端一请求后unknown停止，未调用旧research或供应商。可移植脚本接受--legacy-bundle=本地旧bundle路径，不依赖伪造旧响应。
+- 旧128条日志逐项完全保留，新增1条feature，共129条。未修改迁移/schema、来源、费用/预算设置、凭据/权限、真实自动任务或托管manifest；没有生产读取/采集/模型/数据写入。生产比对与正式发布由父端执行。
+- 原Node/PG实现未修改，此轮不重复其已核对的156/183、27项关闭模型阀基线失败；限制仍保留，不为旧套件开启安全阀。
+
+剩余部署约束：新namespace必须先于旧/api/fallback路由；新增server模块与共享schema/诊断字段须同部署；构建须能提供非空真实clean源码SHA。原任务在新协议切换前仍受旧expectedSiteSource约束，发布/固定bootstrap pin需父端统一协调。服务访问继续依赖owner-private官方dispatcher，新endpoint也验证原service header或owner身份；只读GET成功不构成真实POST能力证明。未发现需要新权限、长期key或数据迁移的阻碍。
