@@ -95,3 +95,8 @@ bootstrap 递归冻结并记录协议、manifest/hash、实际Site sourceRevisio
 测试夹具privateSitesDispatch先在平台层核验合成凭据，再消费授权头，传入Worker的请求无凭据残留、无伪造身份；无/错误服务凭据在夹具层拒绝，根本不进入应用。SQLite与真实Worker/D1分别测试manifest GET、合法冻结POST、浏览器拒绝、个人reader拒绝和历史对象不变。另test-runtime-dispatch-bootstrap.mjs从本地可信Git对象克隆干净的已批准2d2d07f checkout，运行原bootstrap的diagnosticOnly，通过仅回环合成HTTP桥接到真实编译Worker；GET应用回显/冻结成功、POST=0、供应商/模型=0，输出不泄漏合成服务凭据。该夹具不是生产认证代理。
 
 固定bootstrap继续为2d2d07f903593274e801dd18307827a6f0043ae9，其入口和同提交依赖文件均不改，不需要用户再次替换固定说明。服务器修复提交SHA可以不同。父端精确移植仅需runtimeOwner这一小段及说明/回归；不要整体覆盖research、worker、manual或依赖。仍须保持owner-private部署边界；若未来改变受众，必须先独立重审共享更新授权，不能把此Worker公开裸露。
+
+
+本轮验证：Sites **781/781**、Web **68/68**、typecheck、完整build与changelog检查通过；runtime、固定历史bootstrap、execution、通用Worker四项最终通过。最初两项原生夹具失败来自Node与Miniflare的不同Request构造器，已用URL/普通参数作接口适配后重跑；未放宽产品门控或断言。空Origin由直接Request单元验证，原生HTTP会归一化空头，因此原生用浏览器opaque Origin:null验证拒绝，外域Origin仍严格403。编译候选76ee722的共享GET/冻结POST、个人reader403和历史快照均通过；固定2d2d07f bootstrap实际只读GET成功、POST=0、供应商/模型=0。最终交付使用干净HEAD重新构建并回读源码证据。
+
+既有130条changelog逐项完全保留，新增1条fix共131条。bootstrap入口及其四个同提交依赖相对2d2d07f的Git内容无差异；本轮产品代码只改runtimeOwner，不更改写前冻结、预算/频率、模型/供应商、schema、权限、reader或已冻结历史。本轮没有生产读取、采集、发布或任务修改。原Node/PG代码未变，前述27项基线限制不因此变成通过。

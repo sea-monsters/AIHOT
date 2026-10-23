@@ -15,7 +15,7 @@ const mf=new Miniflare(convertV4MiniflareOptions({modules:true,scriptPath:'dist/
 let reached=0;
 const dispatch=privateSitesDispatch(async request=>{
  reached++;assert.equal(request.method,'GET');assert.equal(request.headers.has('OAI-Sites-Authorization'),false);assert.equal(request.headers.has('oai-authenticated-user-id'),false);assert.equal(request.headers.has('oai-authenticated-user-email'),false);
- return mf.dispatchFetch(request);
+ return mf.dispatchFetch(request.url,{method:request.method,headers:Object.fromEntries(request.headers)});
 });
 // Loopback is a synthetic transport adapter, never a real service credential.
 const server=createServer(async(req,res)=>{try{
