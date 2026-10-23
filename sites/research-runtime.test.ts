@@ -53,6 +53,7 @@ test('frozen writes reject deployment/config drift, incomplete fields, expired b
  assert.throws(()=>runtimeOperationBody('/api/site/research/process',{cohort:'previous_day',maxPapers:2,maxMs:1000,deadlineAt:new Date(now+10000).toISOString()},f,now));
  assert.throws(()=>runtimeOperationBody('/api/site/research/batch/collect',{batchKey:'2026-10-01/20',maxMs:1000,maxCalls:35,concurrency:3},f,now));
  assert.throws(()=>runtimeOperationBody('/api/site/research/sync',{},f,now));
+ for(const [path,body] of [['/api/site/research/enrich',{cohort:'pending',maxMs:75000,deadlineAt:new Date(now+10000).toISOString()}],['/api/site/research/daily/generate',{maxCalls:1,deadlineAt:new Date(now+10000).toISOString()}]] as const)assert.throws(()=>runtimeOperationBody(path,body,f,now),(e:any)=>e.code==='runtime_manifest_invalid');
 });
 test('manifest GET and stale/invalid writes do not initialize, repair or change any historical object or call providers',async(t)=>{
  t.mock.timers.enable({apis:['Date'],now:Date.parse(startedAt)});const f=fixture(),previous=process.env.HKIS_BUILD_SHA,oldFetch=globalThis.fetch;let outbound=0;

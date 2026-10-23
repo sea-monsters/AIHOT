@@ -14,8 +14,8 @@ bootstrap 为 sites/run-stable-research-slot.mjs，从已核实的 https://githu
 | 08/20跨slice采集时窗 | 固定260000 / 330000ms，不动态收紧；服务器按已有批次开始时间及lease/collectionControl约束 |
 | 采集slice / concurrency | ≤75000ms / ≤3，固定已实现bounded collector |
 | 时段暂停 | enabled:false，不尝试任何写入 |
-| 选择性评分 | 08为0–1、20为0–2；0禁用付费评分，保留本地规则步骤 |
-| 08日报模型额度 | 0–2；0禁用此步骤，20恒为0 |
+| 单次评分请求 | 08为0–1、20为0–2；固定模板各一次付费步骤，0禁用，保留本地规则步骤 |
+| 08单次日报请求 | 0–2；固定模板一次日报步骤，0禁用，20恒为0；原每日shared receipt额度独立保持 |
 
 整轮常数仅记录与校验，不是动态配置项。配置是同部署代码中的受版本控制常量，不是在线无限编辑器。普通兼容实现或上述参数更新由下一轮GET读取，无需在任务手填每版Site SHA。恢复/收尾slice数、顺序、cohort、路由、未知停止、维护预留及安全能力是固定模板。新major、新必需能力、操作、模板或更宽参数仍需审查和一次bootstrap升级，不能承诺永远不改任务。
 
@@ -80,3 +80,5 @@ bootstrap 递归冻结并记录协议、manifest/hash、实际Site sourceRevisio
 验证覆盖顺序/并发低预算schema拒绝、跨slice固定截止、同批协调lease竞争、预算34并发只一分页及失败后35不返额，慢日志/metadata DB/供应商reservation/daily配置与receipt提交延迟；均使用隔离SQLite/D1和模拟供应商，既有历史对象保护测试保留。最终结果在交付说明中记录。
 
 追加完整回归：Node24.22.1下Sites全部82文件 **780/780**、Web **68/68**、typecheck及changelog检查通过，零失败/跳过；旧129条日志逐项完全保留，新增1条fix共130条。构建与真实Worker/D1使用干净提交源码证据，在交付结果中列出最终SHA。原Node/PG实现未改，前述27项基线限制继续保留。
+
+真实Worker/D1追加验收全部通过：runtime（含77b3869旧bundle回滚）、metadata、daily、execution、通用worker、cancellation，共6脚本。代码提交7e2b9b8干净构建回显真实源码，历史保护快照保持；daily脚本仅1次模拟provider、零真实付费，其他供应商也是隔离mock。metadata/daily payload额外deadline字段专项拒绝；stdin非默认预算含null也拒绝。最终源码SHA另在交付时回读，不写自身SHA常量。

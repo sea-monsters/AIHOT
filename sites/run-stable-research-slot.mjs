@@ -35,7 +35,7 @@ export async function privateStableSlotMain(){
   if(![8,20].includes(slot)||!input.diagnosticOnly&&slot!==hour)fail('batch_window');
   const started=Date.parse(input.automationStartedAt);
   if(!Number.isFinite(started)||new Date(started).toISOString()!==input.automationStartedAt||started>processStarted)fail('invalid_automation_start');
-  const budgetMs=input.budgetMs??RUNTIME_CEILINGS.totalMs,collectionCalls=input.collectionCalls??RUNTIME_CEILINGS.collectionCalls;
+  const budgetMs=input.budgetMs===undefined?RUNTIME_CEILINGS.totalMs:input.budgetMs,collectionCalls=input.collectionCalls===undefined?RUNTIME_CEILINGS.collectionCalls:input.collectionCalls;
   if(budgetMs!==RUNTIME_CEILINGS.totalMs||collectionCalls!==RUNTIME_CEILINGS.collectionCalls)fail('runtime_budget_invalid');
   if(Date.now()-started>=budgetMs-15000)fail('automation_budget_exhausted');
   const onDiagnostic=e=>{if(e.state==='started'){requestsAttempted++;if(e.method==='POST')postsAttempted++}emit(e)};
