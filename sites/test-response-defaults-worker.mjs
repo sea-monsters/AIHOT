@@ -62,7 +62,7 @@ try{
  }
  // No D1 is bound in this fixture: retain the general API's existing JSON 503 contract.
  const unavailable=await fixture.dispatchFetch('https://local.test/api/site/research/papers?limit=1');
- assert.equal(unavailable.status,503);assert.equal(unavailable.headers.get('X-Content-Type-Options'),'nosniff');assert.equal(await unavailable.text(),'{"error":"Database unavailable"}');
+ assert.equal(unavailable.status,503);assert.equal(unavailable.headers.get('X-Content-Type-Options'),'nosniff');assert.deepEqual(await unavailable.json(),{code:'database_unavailable',error:'Database unavailable'});
  assert.equal(outbound,0);console.log('RESPONSE DEFAULTS WORKER OK: redirect/204/304/JSON 503, cookies/cache/referrer/profile retained, zero outbound');
 }finally{await fixture.dispose();}
 process.exit(0);

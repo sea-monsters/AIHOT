@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-23T13:43:04Z",
+  "latestVersion": "2026-10-23T13:57:14Z",
   "releases": [
+    {
+      "id": "hkis-pipeline-cancellation-validation-20261023",
+      "at": "2026-10-23T13:57:14Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "补齐请求取消与落库恢复边界验证",
+      "body": [
+        "浏览器重复点击使用原子进行中标记，离开页面取消后续来源及维护请求；已知门控拒绝与未知请求结果分别显示，不重放POST。维护准备仍要求元数据就绪，保留规则分不授予付费派发资格。",
+        "修正原生D1暂停包装、跨用例残留租约、真实进程组硬终止、错误响应和重定向等隔离夹具；合法CAS冲突可本地恢复，未知原运行保留待审查，不改产品安全断言来强行清账。",
+        "仅记录仓库修复与隔离验证，未部署Sites、改自动任务pin、触发生产采集或真实模型调用；既有上游合并日志与全部历史保留，精确v99移植清单见审查说明。"
+      ],
+      "sources": [
+        {
+          "label": "采集管线修复与部署边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/ingestion-pipeline-review.md"
+        }
+      ]
+    },
     {
       "id": "hkis-browser-update-gates-20261023",
       "at": "2026-10-23T13:43:04Z",

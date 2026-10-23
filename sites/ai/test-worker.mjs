@@ -8,7 +8,7 @@ const outboundService=async request=>{
  assert.equal(body.model,'deepseek-flash');assert.equal(body.reasoning.effort,'max');assert.equal(body.max_output_tokens,384000);
  if(scenario==='boundary')return Response.json({output:Array.from({length:6},(_,i)=>({type:'function_call',call_id:'repeat'+i,name:'read_preferences',arguments:'{}'}))});
  if(body.tool_choice==='none'){assert.deepEqual(body.tools,[]);assert.equal(body.input.filter(x=>x.type==='function_call_output').length,200);return Response.json({output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({answer:'配置检查完成',paperIds:[],analyses:[]})}]}]})}
- return Response.json({output:Array.from({length:200},(_,i)=>({type:'function_call',call_id:'mixed'+i,name:i%2?'paper_details':'read_preferences',arguments:i%2?'{"ids":[]}':'{}'}))});
+ return Response.json({output:Array.from({length:200},(_,i)=>({type:'function_call',call_id:'mixed'+i,name:i%2?'paper_details':'search_papers',arguments:i%2?'{"ids":[]}':'{"q":"fixture-no-results","publisher":"","useKeywords":false}'}))});
 };
 const mf=new Miniflare(convertV4MiniflareOptions({outboundService,modules:true,scriptPath:'dist/server/index.js',compatibilityDate:'2026-09-01',compatibilityFlags:['nodejs_compat'],d1Databases:['DB'],bindings:{HKIS_OWNER_EMAIL:'owner@example.org',HKIS_AI_ENCRYPTION_KEY:'11'.repeat(32)}}));
 try{

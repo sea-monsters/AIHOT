@@ -33,7 +33,7 @@ try{
  const next=await prepareDaily(db,'2026-10-06',new Date('2026-10-06T00:01:00Z'));assert.ok(JSON.parse(next.paper_ids_json).includes(crossing.id));
  const source=RESEARCH_SOURCES[0],headers={'content-type':'application/json',origin:'https://local.test','x-hkis-request':'1','oai-authenticated-user-id':'owner','oai-authenticated-user-email':'owner@example.org'};
  const call=(s=source,web=true)=>mf.dispatchFetch('https://local.test/api/site/research/sync',{method:'POST',headers:web?headers:{'content-type':'application/json'},body:JSON.stringify({sourceId:s.id,maxPages:1})});
- const active=call();await Promise.race([headWait,active.then(r=>{throw Error('Sync returned before fixture head: HTTP '+r.status)})]);const busy=await(await call(source,false)).json();assert.equal(busy.status,'busy');releaseHead();const first=await(await active).json();assert.equal(first.entryPoint,'owner_web');assert.equal(first.batchKey,null);
+ const active=call();await Promise.race([headWait,active.then(r=>{throw Error('Sync returned before fixture head: HTTP '+r.status)})]);const busy=await(await call(source,false)).json();assert.equal(busy.status,'deferred');assert.equal(busy.deferredReason,'lock_busy');releaseHead();const first=await(await active).json();assert.equal(first.entryPoint,'owner_web');assert.equal(first.batchKey,null);
  const second=await(await call(source,false)).json();assert.equal(second.entryPoint,'service');assert.equal(second.crossref.cycle.pages,2);
  const before=net;const capped=await(await call()).json();assert.equal(capped.crossrefPages.length,0);assert.equal(net,before);
  await db.prepare("UPDATE research_settings SET value='34' WHERE key LIKE 'collection-budget:%'").run();

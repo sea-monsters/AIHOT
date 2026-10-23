@@ -18,7 +18,7 @@ try{
  const db=await mf.getD1Database('DB');for(const f of(await readdir('drizzle')).filter(f=>f.endsWith('.sql')).sort())for(const q of(await readFile('drizzle/'+f,'utf8')).split('--> statement-breakpoint').map(s=>s.trim()).filter(Boolean))await db.prepare(q).run();
  await initResearch(db);await db.prepare("INSERT INTO ai_settings(owner_id,endpoint,model,protocol,reasoning,enabled,updated_at) VALUES('fixture','https://api.openai.com/v1','fixture','responses','low',0,?)").bind(new Date().toISOString()).run();
  let entered,release;const committed=new Promise(r=>entered=r),resume=new Promise(r=>release=r);
- const paused={batch:s=>db.batch(s),prepare(q){const stmt=db.prepare(q);if(!q.startsWith("INSERT INTO research_settings(key,value) SELECT 'processing_lock'"))return stmt;return {bind(...args){const bound=stmt.bind(...args);return {run:async()=>{const r=await bound.run();entered();await resume;return r}}}}}};
+ const paused={prepare:q=>db.prepare(q),async batch(statements){const out=await db.batch(statements);if(!this.admitted&&(await db.prepare("SELECT count(*) n FROM research_settings WHERE key='processing_lock'").first()).n){this.admitted=true;entered();await resume;}return out;}};
  const scoring=processRecent(paused,{HKIS_OWNER_EMAIL:'fixture@example.org'},{maxPapers:0});await committed;
  assert.equal(await admitRun(db,source.id,null,'fixture',new Date().toISOString()),null);
  assert.equal(await admitRun(db,'__metadata__',null,'fixture',new Date().toISOString()),null);

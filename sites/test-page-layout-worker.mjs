@@ -19,7 +19,7 @@ try {
   if(route.route==='/daily/:key')path='/daily/2026-10-05';
   const response=await get(path),html=await response.text();
   if(route.route.startsWith('/admin')){assert.equal(response.status,503,path);assert.ok(!html.includes('page-frame'));}
-  else if(route.implementation==='redirect'){assert.ok([301,302,303,307,308].includes(response.status),path);assert.match(response.headers.get('location')||'',/^\/research\?/);}
+  else if(route.implementation==='redirect'){assert.ok([301,302,303,307,308].includes(response.status),path);const target=new URL(response.headers.get('location'),'https://local.test');assert.equal(target.origin,'https://local.test');assert.equal(target.pathname,'/research');assert.ok(target.searchParams.get('theme'));}
   else {
    assert.ok(html.includes('class="page-frame"'),path+' lacks shared frame');
    assert.equal((html.match(/id="main"/g)||[]).length,1,path+' must have one main landmark');

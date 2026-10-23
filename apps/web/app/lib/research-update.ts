@@ -4,10 +4,10 @@ export class ResearchUpdateError extends Error {
  constructor(code:string,unknown=false){super(code);this.code=code;this.unknown=unknown}
 }
 const codes=new Set(['owner_required','origin_rejected','request_marker_required','not_configured','interval_owner_ambiguous','collection_in_progress','metadata_in_progress','ingestion_pending','ingestion_origin_review_required','time_budget','ai_disabled','key_unavailable','connection_test_required','interactive_only','configuration_changed']);
-export async function postResearch(path:string,body:unknown,maxMs:number,transport:typeof fetch=fetch){
+export async function postResearch(path:string,body:unknown,maxMs:number,transport:typeof fetch=fetch,signal?:AbortSignal){
  if(!['sync','ingestion/recover','enrich','process'].includes(path))throw new ResearchUpdateError('invalid_request');
  const id=crypto.randomUUID();let response:Response,data:any;
- try{response=await transport('/api/site/research/'+path,{method:'POST',credentials:'same-origin',redirect:'error',headers:{'Content-Type':'application/json','X-HKIS-Request':'1','x-hkis-operation-id':id},body:JSON.stringify(body),signal:AbortSignal.timeout(Math.max(1,maxMs))});data=await response.json();}catch{throw new ResearchUpdateError('outcome_unknown',true)}
+ try{response=await transport('/api/site/research/'+path,{method:'POST',credentials:'same-origin',redirect:'error',headers:{'Content-Type':'application/json','X-HKIS-Request':'1','x-hkis-operation-id':id},body:JSON.stringify(body),signal:AbortSignal.any([AbortSignal.timeout(Math.max(1,maxMs)),...(signal?[signal]:[])])});data=await response.json();}catch{throw new ResearchUpdateError('outcome_unknown',true)}
  // A gateway or mismatched response is not evidence that a POST was rejected.
  if(response.status>=500||response.headers.get('x-hkis-execution-contract')!=='hkis-execution-v1'||response.headers.get('x-hkis-operation-id')!==id||!data||typeof data!=='object'||Array.isArray(data)||data.status==='unknown')throw new ResearchUpdateError('outcome_unknown',true);
  if(!response.ok||data.code||data.error&&!['error','persist_pending','interrupted'].includes(data.status))throw new ResearchUpdateError(codes.has(data.code)?data.code:'request_rejected');
@@ -17,10 +17,10 @@ const hard=(d:any)=>['error','failed','interrupted','unknown','busy','blocked','
 /** Existing owner-web source checks remain distinct from the explicit manual
  * batch API. Stop a site-level failure, uncertain POST or hard dependency gate;
  * never turn a browser click into an automatic retry or a historical AI pass. */
-export async function checkResearchUpdates(sources:{id:string;name:string}[],onProgress:(s:string)=>void,options:{now?:()=>number;post?:typeof postResearch}={}){
+export async function checkResearchUpdates(sources:{id:string;name:string}[],onProgress:(s:string)=>void,options:{now?:()=>number;post?:typeof postResearch;signal?:AbortSignal}={}){
  const now=options.now||Date.now,post=options.post||postResearch,started=now(),deadline=started+540000;
  const result={status:'ok',phase:'collection',reason:null as string|null,unknown:false,added:0,updated:0,checked:0,total:sources.length,assessmentCalls:0,completed:0,remainingQueued:null as number|null,processingReason:null as string|null};
- const invoke=async(path:string,body:any,timeout:number)=>{if(now()>=deadline)throw new ResearchUpdateError('time_budget');return post(path,body,Math.min(timeout,deadline-now()))};
+ const invoke=async(path:string,body:any,timeout:number)=>{if(options.signal?.aborted)throw new ResearchUpdateError('outcome_unknown',true);if(now()>=deadline)throw new ResearchUpdateError('time_budget');return post(path,body,Math.min(timeout,deadline-now()),undefined,options.signal)};
  const recover=async()=>{for(let n=0;n<4;n++){const r=await invoke('ingestion/recover',{maxMs:6000,deadlineAt:new Date(deadline-2000).toISOString()},15000);if(r.recovery?.known!==true)throw new ResearchUpdateError('outcome_unknown',true);if(r.status==='ok'&&r.recovery.remainingItems===0)return;if(r.status!=='partial'||r.reason!=='ingestion_pending'||!(r.recovery.processedItems>0))throw new ResearchUpdateError(codes.has(r.reason)?r.reason:'ingestion_pending');}throw new ResearchUpdateError('ingestion_pending')};
  try{
   for(const source of sources.slice(0,35)){
@@ -39,14 +39,15 @@ export async function checkResearchUpdates(sources:{id:string;name:string}[],onP
   const enriched=await invoke('enrich',{cohort:'pending',maxMs:75000},90000);
   if(hard(enriched)||enriched.recovery||['ingestion_pending','lock_busy','deadline'].includes(enriched.reason))throw new ResearchUpdateError(codes.has(enriched.reason)?enriched.reason:'metadata_in_progress');
   result.phase='rules';const local=await invoke('process',{maxPapers:0,cohort:'current',maxMs:Math.min(30000,deadline-now()),deadlineAt:new Date(deadline-2000).toISOString()},30000);
+  result.processingReason=local.reason||local.blocked||null;
+  if(hard(local)||local.status==='partial'){result.remainingQueued=Number.isInteger(local.remainingQueued)?local.remainingQueued:null;throw new ResearchUpdateError(codes.has(local.reason||local.blocked)?local.reason||local.blocked:'metadata_in_progress');}
   if(!Number.isInteger(local.remainingQueued)||local.remainingQueued<0)throw new ResearchUpdateError('outcome_unknown',true);
   result.remainingQueued=local.remainingQueued;result.processingReason=local.reason||local.blocked||null;
-  if(hard(local))throw new ResearchUpdateError(codes.has(local.blocked)?local.blocked:'metadata_in_progress');
   if(result.remainingQueued===0){result.phase='done';return result;}
   result.phase='assessment';if(deadline-now()<120000)throw new ResearchUpdateError('time_budget');
   const assessed=await invoke('process',{maxPapers:3,cohort:'current',maxMs:Math.min(240000,deadline-now()-2000),deadlineAt:new Date(deadline-2000).toISOString()},Math.min(240000,deadline-now()));
   result.assessmentCalls=Number.isInteger(assessed.attempted)?assessed.attempted:0;result.completed=Number.isInteger(assessed.completed)?assessed.completed:0;result.remainingQueued=Number.isInteger(assessed.remainingQueued)?assessed.remainingQueued:null;result.processingReason=assessed.reason||assessed.blocked||null;
-  if(hard(assessed))throw new ResearchUpdateError(codes.has(assessed.blocked)?assessed.blocked:'metadata_in_progress');
+  if(hard(assessed)||assessed.status==='partial')throw new ResearchUpdateError(codes.has(assessed.blocked)?assessed.blocked:'metadata_in_progress');
   result.phase='done';return result;
  }catch(e){const error=e instanceof ResearchUpdateError?e:new ResearchUpdateError('outcome_unknown',true);return {...result,status:error.unknown?'unknown':'stopped',reason:error.code,unknown:error.unknown};}
 }

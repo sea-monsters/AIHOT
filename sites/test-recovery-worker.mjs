@@ -40,6 +40,10 @@ try{
  const race=await Promise.allSettled([finishBatch(db,key2),admitRun(db,'ieee-ted',key2,'internal',new Date().toISOString())]);
  const terminal=await db.prepare('SELECT status FROM research_batches WHERE key=?').bind(key2).first(),live=await db.prepare("SELECT count(*) n FROM research_runs WHERE batch_key=? AND status='running'").bind(key2).first();assert.ok(terminal.status==='running'?live.n===1&&race[0].status==='rejected':live.n===0&&race[1].value===null);
  const before=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key2).first();await researchApi(new Request('https://local.test/api/site/research/daily?date=2026-10-10'),{DB:db});assert.deepEqual(await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key2).first(),before);
+ // End the preceding admission race before starting an independent batch.
+ // A live unrelated collector must keep the global finalize barrier closed.
+ const raceRuns=(await db.prepare("SELECT * FROM research_runs WHERE batch_key=? AND status='running'").bind(key2).all()).results;
+ if(raceRuns.length){await assert.rejects(finishBatch(db,key2),{code:'batch_in_flight'});for(const r of raceRuns)await db.batch([db.prepare("UPDATE research_runs SET status='ok',finished_at=? WHERE id=?").bind(new Date().toISOString(),r.id),db.prepare('DELETE FROM research_settings WHERE key=? AND value=?').bind('lock:'+r.source_id,r.lock_value)]);}
  // A finish entering before the final collector commits must use the clock
  // and lower bounds at CAS time, then read the same persistent cutoff on retry.
  const key3='2026-10-11/08',entered=new Date(),memberAt=new Date(entered.getTime()+5000).toISOString();

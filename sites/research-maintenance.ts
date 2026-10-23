@@ -28,7 +28,7 @@ async function inspect(db:any,id:string,key:string|null,window=monthWindow()){
  const analyses=(await db.prepare('SELECT * FROM research_analyses WHERE paper_id=? ORDER BY id LIMIT 33').bind(id).all()).results;
  const review=await db.prepare(`SELECT NOT (${receiptReview}) review,(${selectedReadySql()}) ready FROM research_papers p WHERE id=?`).bind(id).first();
  const valid=analyses.find((a:any)=>a.content_hash===contentHash&&a.config_hash===key&&a.schema_version===ANALYSIS_SCHEMA&&(['rules_only','insufficient'].includes(a.status)||a.status==='completed'&&parse(a.result_json)?.decision==='assessed'));
- const item:any={paperId:id,firstSeen:row.first_seen,state:'prepare_eligible',eligible:true,contentHash,scriptScoreAvailable:row.rule_version===RULE_VERSION&&ruleScoreAvailable(p),currentAnalysisId:valid?.id||null,existingMember:member.length>0,existingQueue:queues.length>0,networkRequired:false};
+ const item:any={paperId:id,firstSeen:row.first_seen,state:'prepare_eligible',eligible:true,contentHash,scriptScoreAvailable:row.rule_version===RULE_VERSION&&['ready','legacy_ready'].includes(row.metadata_status)&&ruleScoreAvailable(p),currentAnalysisId:valid?.id||null,existingMember:member.length>0,existingQueue:queues.length>0,networkRequired:false};
  const stop=(state:string,network=false)=>{item.state=state;item.eligible=false;item.networkRequired=network;return {item,plan:null}};
  if(row.priority<0)return stop('filtered');if(!inUpdateWindow(p,window))return stop('outside_update_window');if(review.review)return stop('receipt_review_required');
  if(review.ready&&row.content_hash===contentHash&&item.scriptScoreAvailable){item.state=valid?'reuse_current_analysis':'reuse_ready';return {item,plan:null}};

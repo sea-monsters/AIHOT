@@ -9,7 +9,7 @@
 | 环节 | 可复现问题或合理门控 | 本轮处理 | 证据 |
 | --- | --- | --- | --- |
 | 浏览器写请求 | sync 缺少安全 marker，32 次 403 后仍进入 process | 统一私有同源 POST，所有阶段 marker + operation ID；同源凭据、拒绝重定向、固定超时；匹配应用回显，403/未知/错误立即停，无服务凭据进入浏览器 | `apps/web/tests/research-update.test.ts`，实际 Research 页面浏览器 mock |
-| 浏览器流程 | 采集后跳过本地恢复/统一补全，UI 用 HTTP 成功冒充评分成功 | 原 owner-web 检查入口依次确认落库、补全、本地规则，再仅对当前归属的已排队任务执行既有最多3篇处理；540秒总截止，硬阻塞不继续，报告真实请求数/当前队列/停止阶段 | 客户端阶段与预算测试；不新增 scheduled/manual 调度 |
+| 浏览器流程 | 采集后跳过本地恢复/统一补全，UI 用 HTTP 成功冒充评分成功 | 原 owner-web 检查入口以原子前端latch防重复点击，离开页面取消后续写入，再依次确认落库、补全、本地规则，再仅对当前归属的已排队任务执行既有最多3篇处理；540秒总截止，硬阻塞不继续，报告真实请求数/当前队列/停止阶段 | 客户端阶段与预算测试；不新增 scheduled/manual 调度 |
 | 定时流程 | local process 返回 blocked/deferred/partial 后仍可派发可选模型步骤；08 daily 拒绝后可能继续 start | 已知失败停止依赖阶段，保留原08/20、总540秒、35次/单源2次及服务端预算/门控 | `research-slot-bounded.test.ts` |
 | 规则与分析版本 | 作者/单位/来源变化让 metadataHash 变化，即使 analysisFields 不变也清零规则分/主题；legacy_ready 连完全未变都会清零 | 以语义内容版本保留当前规则和分类，包括 ready/legacy_ready；补全状态仍独立 pending，不凭保留规则分授予 paid-ready。真实摘要变化使旧分析 stale；不删除旧分析 | `pipeline-review.test.ts` 四类版本/first_seen/分析断言 |
 | 乐观写并发 | 论文 CAS 失败后无条件 pending UPDATE 仍能污染并发胜出的 ready 版本 | 主 CAS 纳入原 metadata_status；pending 更新同时约束本次语义、元数据版本/修订/来源/原状态 | 真实 SQLite 旧 plan/并发胜出/旧 plan batch 回归 |
@@ -24,13 +24,13 @@
 | 统一补全 | provider冷却、身份冲突、缺作者/摘要/精确日期 | 保留共享cooldown、请求限额、DOI/题名身份检查和无空字段覆盖；已有完整本地证据先就绪，供应商不足不被伪装评分0 | enrichment/maintenance 全套与真实D1回归 |
 | 日报衔接 | rules_only/insufficient 与真正AI评分、当日/前日、manual/定时 | 保留严格>75、来源日期与首次归属、已有冻结内容、人工批次隔离；不为消除旧债扩大付费候选 | daily/manual/brief/cohort相关全集 |
 
-上述为本地可复现机制。父端提供的生产105新增、35calls、32检查/1完整、359等待补全和各队列数仅为调查背景；没有生产 before/after 证据，不能断言某篇历史论文已因本缺陷退化，也不声称本轮已修复生产数据。
+上述为本地可复现机制。父端提供的生产采集、覆盖与评分统计仅为调查背景；没有生产 before/after 证据，不能断言某篇历史论文已因本缺陷退化，也不声称本轮已修复生产数据。
 
 ## 既有 Worker / Node 测试审查
 
 - attribution：旧 busy 断言与当前 deferred/lock_busy 契约不同，改为同时验证状态和固定原因。
 - cancellation：旧包装将含函数的假 statement 交给原生D1 batch，改在真实原子 admission batch 完成后暂停，继续验证两个 admission 顺序、在飞排斥和迟到写拒绝。
-- recovery：前一独立竞态留下有效租约，后续用例错误地要求跨批结束。先验证该租约确实阻塞，再显式完成该合成运行，继续独立收尾竞态。产品门控不放宽。
+- recovery：前一独立竞态留下有效租约，后续用例错误地要求跨批结束。先验证该租约确实阻塞，再显式完成该合成运行，继续独立收尾竞态。产品门控不放宽。硬终止夹具在Linux独立进程组中同时结束本测试创建的Node与workerd，避免只杀Node让workerd错误收尾；没有结束其他进程。
 - response-defaults：旧503 JSON断言遗漏已存在的固定 `database_unavailable` code，改为精确字段断言。
 - page-layout：同时核验重定向同源、`/research` 路径及 theme 参数，兼容浏览器实际使用的绝对同源 Location。
 - AI Worker：200工具用例重复 read_preferences 的大返回触发 context_limit；改用与既有单元边界测试相同的两种小型合成只读工具，保持200/5边界、执行2次、缓存198次与无工具最终答案的精确断言。不提高上下文或工具限额。
@@ -46,6 +46,24 @@
 5. 不批量重算历史或付费补评分，不重写已冻结简报/日报，不重置供应商cooldown/游标/first_seen。历史配置分母未知、旧 ready 版本债务、未派发模型与缺证原因继续明示。
 6. 将 main 中 `upstream-dependency-safety-20261023` 日志条目与本轮 fix 条目按 ID 合并到 v99 当前日志，逐项保留全部既有历史。上游条目记录的是仓库已择取、明确未部署；若最小移植未包括 Vite/Node/backend 依赖，不能把依赖升级写成生产已生效。实际发布后另记真实部署回执，仓库时间不冒充上线时间。
 
+## v99 精确运行文件清单
+
+以下为函数/片段移植清单，**不是把同名 main 文件整体覆盖生产文件**。尤其 `research.ts` / `research-batches.ts` 含未部署 manual 分支，应排除与本轮修复无关的上下文。
+
+| 作用 | 文件与必须配套的修改 |
+| --- | --- |
+| 入口请求与界面 | `apps/web/app/lib/research-update.ts`（新）、`apps/web/app/routes/research.tsx` 的 sync 函数及请求生命周期 |
+| 当前规则与版本CAS | `sites/research-score-state.ts`（新）；`sites/research.ts` 的 decode/enrich/planPaperWrite 片段；`sites/research-maintenance.ts` 保留 metadata-ready 前置条件并排除占位分 |
+| 评分范围与零派发 | `sites/research-processing.ts` 的作用域/remainingQueued/状态/计数；`sites/research-scoring-debt.ts` 的 population 和独立脚本分状态 |
+| 分类及所有只读出口 | `sites/paper-keywords.ts`、`sites/keyword-map.ts`、`sites/hkis-publication.ts` 的 derived 回退与 scoreAvailability（不新增写接口） |
+| 覆盖与未来冻结 | `sites/research-batches.ts` 的 sourceCheckEvidence/coverageFromSummary/batchCoverage、scheduled start 的原子配置冻结及 collectionIdle；`sites/research-briefs.ts` 的新快照投影 |
+| 运行器可选后续择取 | `sites/research-slot.ts` 的已知拒绝和本地规则阻塞停止；只有更换受审查runner源码后才生效，不由站点发布自动切换 |
+| 日志展示 | `industry/changelog.json` 逐 ID 合并仓库上游记录与本轮 fix 记录；`docs/ingestion-pipeline-review.md` 作为可核对来源 |
+
+**旧 runner 兼容评估**：服务端仍接受 runner883db03 原有 POST body、cohort、预算与 execution-v1/operation/automation 回显；返回字段是增量，时间不足时明确 deferred 也是旧协议已有状态。没有新必传字段或schema迁移。浏览器新流程要求本次 process 的 remainingQueued 输出，必须与服务端片段一同构建部署，不能只换前端。旧runner缺少客户端本地步骤失败后的立即停止修复，服务端仍会独立拦截不合法依赖请求；若要取得新的客户端停止行为，父端应另审查并择取 slot 修复。
+
+**接口兼容不等于pin兼容**：当前任务固定 expectedSiteSource=aa038e3。任何部署产生不同托管源码SHA后，旧pin按设计可能在预检停止；不能因接口兼容忽略SHA核验。父端需在独立部署审查中协调精确托管SHA、必要的runner源码及任务pin切换和回读，本任务没有执行这些动作。无需新凭据或权限。
+
 ## 验证结果
 
-待最终全集、构建、真实D1与浏览器mock完成后补录。专项通过不等于生产已恢复；没有生产采集或付费模型验证。
+待最终构建和隔离回读结束后补录；完整 Sites 746/746 初次已通过，最终补充维护门控反例后再次运行全集。没有生产采集或付费模型验证。
