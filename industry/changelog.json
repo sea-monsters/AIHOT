@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-23T15:27:53Z",
+  "latestVersion": "2026-10-23T16:22:03Z",
   "releases": [
+    {
+      "id": "hkis-runtime-consumed-service-access-20261023",
+      "at": "2026-10-23T16:22:03Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "修复共享采集入口对已消耗服务授权头的误判",
+      "body": [
+        "按官方Sites服务边界修正runtime入口：dispatcher验证后会消耗服务授权头，并不提供访客身份；已确认owner-private的共享更新无需在Worker再次要求该头。",
+        "保留浏览器owner、Origin、marker和全部写前冻结/预算检查；错误或不完整身份不得退回服务通道，reader等个人数据授权不变，不伪造身份或新增凭据/权限。",
+        "补充真实消耗header的隔离夹具，固定bootstrap 2d2d07f保持不变，无需再次替换任务说明。仅更新仓库与验证，未访问或发布生产，正式移植复核由父端负责。"
+      ],
+      "sources": [
+        {
+          "label": "服务边界修正、隔离回归与固定bootstrap兼容",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/stable-research-runtime.md"
+        }
+      ]
+    },
     {
       "id": "hkis-runtime-fixed-budgets-deadline-20261023",
       "at": "2026-10-23T15:27:53Z",

@@ -6,14 +6,15 @@ import {writeLog} from './runtime-logs.ts';
 import {RUNTIME_CONTRACT,RUNTIME_MANIFEST_PATH,RUNTIME_PATHS,RUNTIME_HEADERS,RuntimeContractError,runtimeDescription,validateFrozenRuntime,runtimeOperationBody} from './research-runtime-contract.ts';
 
 // Service access is authenticated by the private Sites dispatcher, exactly as
-// for the existing scheduled API. This Worker must not be exposed standalone.
+// for the existing scheduled API. Dispatch consumes the service header and
+// supplies no visitor identity. This shared endpoint is owner-private only;
+// it must not be exposed standalone or made public without separate auth.
 function runtimeOwner(request:Request,env:any){
  if(!env.HKIS_OWNER_EMAIL)throw new AIError('owner_setup_required',503,'Owner unavailable');
- const origin=request.headers.get('origin');
- if(origin&&origin!==new URL(request.url).origin)throw new AIError('origin_rejected',403,'Origin rejected');
- if(origin||request.headers.has('oai-authenticated-user-id')||request.headers.has('oai-authenticated-user-email'))owner(request,env);
- else if(!/^Bearer [^\s]{1,16384}$/.test(request.headers.get('oai-sites-authorization')||''))throw new AIError('owner_required',403,'Owner required');
- if(request.method==='POST'&&origin&&request.headers.get('x-hkis-request')!=='1')throw new AIError('request_marker_required',403,'Marker required');
+ const hasOrigin=request.headers.has('origin'),origin=request.headers.get('origin');
+ if(hasOrigin&&origin!==new URL(request.url).origin)throw new AIError('origin_rejected',403,'Origin rejected');
+ if(hasOrigin||request.headers.has('oai-authenticated-user-id')||request.headers.has('oai-authenticated-user-email'))owner(request,env);
+ if(request.method==='POST'&&hasOrigin&&request.headers.get('x-hkis-request')!=='1')throw new AIError('request_marker_required',403,'Marker required');
 }
 export async function researchRuntimeApi(request:Request,env:any){
  const url=new URL(request.url),id=diagnosticId(request.headers.get('x-hkis-operation-id'))||crypto.randomUUID(),automationId=diagnosticId(request.headers.get('x-hkis-automation-id')),revision=builtSourceRevision();

@@ -1,6 +1,6 @@
 # 稳定采集运行契约
 
-2026-10-23 维护记录。本次交付仓库源码、固定 bootstrap 与隔离验证；Sites 发布和原任务切换由父端独立审查。本执行器不部署、不改任务、不读取或写入生产论文。生产仍为父端核实的 v99；既有 v100 候选不自动取得此新能力。
+2026-10-23 维护记录。本次交付仓库源码、固定 bootstrap 与隔离验证；Sites 发布和原任务切换由父端独立审查。本执行器不部署、不改任务、不读取或写入生产论文。初次实现时生产基线为 v99；本轮父端已报告精确 v101（f90a79b0683634f4bb826574ad97e9464c930cb4）已发布，正式复核由父端负责。本执行器未访问该生产版本。
 
 ## 固定与可变内容
 
@@ -25,7 +25,7 @@ bootstrap 递归冻结并记录协议、manifest/hash、实际Site sourceRevisio
 
 固定新路径为 /api/hkis/runtime/v1/{recover,metadata,scoring,daily,start,collect,finish}，在源码中映射到既有已实现函数，不按header选路。服务端先校验同源/所有者访问、冻结字段、编译SHA/hash、时间预算、固定操作schema及cohort/参数，再执行初始化、reconciliation、D1日志或供应商调用；拒绝仅输出固定码。有效请求才进入原operation journal、租约、预算及冻结流程，并在既有runtime_logs记录hash、Site/bootstrap源码和开始时间。版本标记不是权限凭据。
 
-仍只允许原owner-private Sites官方dispatcher和现有service access；带浏览器身份/Origin时执行原owner/Origin/marker检查。无身份服务通道要求原OAI-Sites-Authorization，由私有平台验证；不能把Worker裸露到未经认证的公开托管，不生成或验证新长期key。原浏览器、execution-v1与原runner调用体保持兼容。新runtime header若误发到旧research写入口会拒绝。
+仍只允许原owner-private Sites官方dispatcher和现有service access；带浏览器身份/Origin时执行原owner/Origin/marker检查。官方dispatcher验证并消耗OAI-Sites-Authorization，服务请求到Worker时既无该头也无访客身份；共享runtime更新在已确认owner-private的Site依赖这一平台访问边界，不在Worker重复要求已消耗的服务头。不能把Worker裸露到未经认证的公开托管，不生成或验证新长期key。原浏览器、execution-v1与原runner调用体保持兼容。新runtime header若误发到旧research写入口会拒绝。
 
 独立路径防止旧服务回滚误执行：不认识新协议的旧Worker在/api/未迁移分支返回503，不进入旧research初始化/采集。新bootstrap不降级到旧POST、不执行站点给出的URL。兼容发布或回滚在下一轮取得新冻结版本；当轮源码/hash变化、未知major/capability、缺字段、超额或未知结果立即停止。响应检查只是附加证据，不能替代服务端写前校验。未知POST不重放、不强制finish。
 
@@ -62,7 +62,7 @@ bootstrap 递归冻结并记录协议、manifest/hash、实际Site sourceRevisio
 - 旧128条日志逐项完全保留，新增1条feature，共129条。未修改迁移/schema、来源、费用/预算设置、凭据/权限、真实自动任务或托管manifest；没有生产读取/采集/模型/数据写入。生产比对与正式发布由父端执行。
 - 原Node/PG实现未修改，此轮不重复其已核对的156/183、27项关闭模型阀基线失败；限制仍保留，不为旧套件开启安全阀。
 
-剩余部署约束：新namespace必须先于旧/api/fallback路由；新增server模块与共享schema/诊断字段须同部署；构建须能提供非空真实clean源码SHA。原任务在新协议切换前仍受旧expectedSiteSource约束，发布/固定bootstrap pin需父端统一协调。服务访问继续依赖owner-private官方dispatcher，新endpoint也验证原service header或owner身份；只读GET成功不构成真实POST能力证明。未发现需要新权限、长期key或数据迁移的阻碍。
+剩余部署约束：新namespace必须先于旧/api/fallback路由；新增server模块与共享schema/诊断字段须同部署；构建须能提供非空真实clean源码SHA。原任务在新协议切换前仍受旧expectedSiteSource约束，发布/固定bootstrap pin需父端统一协调。服务访问依赖已确认owner-private的官方dispatcher，Worker不重复验证已消耗的service header；带Origin或身份时继续执行owner/Origin/marker检查，个人记录仍需原身份授权；只读GET成功不构成真实POST能力证明。未发现需要新权限、长期key或数据迁移的阻碍。
 
 
 ## 安全审查追加：整轮常数与服务端绝对截止
@@ -82,3 +82,16 @@ bootstrap 递归冻结并记录协议、manifest/hash、实际Site sourceRevisio
 追加完整回归：Node24.22.1下Sites全部82文件 **780/780**、Web **68/68**、typecheck及changelog检查通过，零失败/跳过；旧129条日志逐项完全保留，新增1条fix共130条。构建与真实Worker/D1使用干净提交源码证据，在交付结果中列出最终SHA。原Node/PG实现未改，前述27项基线限制继续保留。
 
 真实Worker/D1追加验收全部通过：runtime（含77b3869旧bundle回滚）、metadata、daily、execution、通用worker、cancellation，共6脚本。代码提交7e2b9b8干净构建回显真实源码，历史保护快照保持；daily脚本仅1次模拟provider、零真实付费，其他供应商也是隔离mock。metadata/daily payload额外deadline字段专项拒绝；stdin非默认预算含null也拒绝。最终源码SHA另在交付时回读，不写自身SHA常量。
+
+
+## v101 验收追加：dispatcher 消耗 Service Access
+
+父端生产只读诊断报告：v101的manifest GET得到owner_required，applicationReached=true、POST=0；官方get_site已确认active、owner、唯一owner allowlist，无group或外部访客，access revision1未变。本执行器不访问生产，只据此在隔离环境复现并修正。
+
+官方Sites技能的[Identity and Secrets / Service Access](skill://plugin_connector_1p_689987207de08191979cf68eca2941c6/sites/references/identity-and-secrets.md)明确服务头由dispatcher验证后消耗，不产生访客身份或connected-app consent。已确认owner-private的共享更新端点可依赖平台边界，用户个人记录和更窄操作继续要求各自授权。此前测试直接把Bearer传到Worker以及据此要求匿名403，误建模了这一边界；该旧验证结论在此更正。
+
+最小产品差异仅research-runtime.ts的runtimeOwner：保留owner配置、Origin、所有者身份与浏览器POST marker；有Origin（含空值）或任一身份头时严格校验，错误/不完整身份不能退回服务通道。无Origin且无访客身份的共享请求依赖平台已经完成的owner-private访问检查，不要求消耗后的header、不伪造身份。冻结协议/hash/SHA/时间/预算检查及固定路由保持原样；reader、AI设置和其他用户个人记录授权没有改动，不能用服务调用获取connected-app consent。
+
+测试夹具privateSitesDispatch先在平台层核验合成凭据，再消费授权头，传入Worker的请求无凭据残留、无伪造身份；无/错误服务凭据在夹具层拒绝，根本不进入应用。SQLite与真实Worker/D1分别测试manifest GET、合法冻结POST、浏览器拒绝、个人reader拒绝和历史对象不变。另test-runtime-dispatch-bootstrap.mjs从本地可信Git对象克隆干净的已批准2d2d07f checkout，运行原bootstrap的diagnosticOnly，通过仅回环合成HTTP桥接到真实编译Worker；GET应用回显/冻结成功、POST=0、供应商/模型=0，输出不泄漏合成服务凭据。该夹具不是生产认证代理。
+
+固定bootstrap继续为2d2d07f903593274e801dd18307827a6f0043ae9，其入口和同提交依赖文件均不改，不需要用户再次替换固定说明。服务器修复提交SHA可以不同。父端精确移植仅需runtimeOwner这一小段及说明/回归；不要整体覆盖research、worker、manual或依赖。仍须保持owner-private部署边界；若未来改变受众，必须先独立重审共享更新授权，不能把此Worker公开裸露。

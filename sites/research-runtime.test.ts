@@ -1,3 +1,5 @@
+import {privateSitesDispatch,PRIVATE_SITES_TEST_TOKEN} from './fixtures/private-sites-dispatch.ts';
+import {paperReaderApi} from './paper-reader.ts';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
@@ -68,11 +70,12 @@ test('same-major deployments and a compatible rollback accept newly frozen runs,
  t.mock.timers.enable({apis:['Date'],now:Date.parse(startedAt)});const f=fixture(),previous=process.env.HKIS_BUILD_SHA;
  try{await history(f);const before=snapshot(f);for(const revision of [source,other,source]){process.env.HKIS_BUILD_SHA=revision;const d=await(await researchRuntimeApi(request(RUNTIME_MANIFEST_PATH),f.env)).json(),freeze=await freezeRuntime(d,bootstrap,startedAt,20),r=await researchRuntimeApi(request(RUNTIME_ROOT+'/start',{slot:20},frozenRuntimeHeaders(freeze)),f.env);assert.equal(r.status,200);assert.equal((await r.json()).batchKey,'2026-10-24/20');assert.deepEqual(snapshot(f),before)}assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0)}finally{if(previous===undefined)delete process.env.HKIS_BUILD_SHA;else process.env.HKIS_BUILD_SHA=previous;f.sql.close()}
 });
-test('new namespace rejects anonymous/non-owner, foreign Origin, dangerous params and unknown operations before database access; legacy execution remains readable',async(t)=>{
+test('private shared namespace rejects non-owner identity, browser Origin errors, dangerous params and unknown operations before database access; legacy execution remains readable',async(t)=>{
  t.mock.timers.enable({apis:['Date'],now:Date.parse(startedAt)});const f=fixture(),previous=process.env.HKIS_BUILD_SHA;
  try{process.env.HKIS_BUILD_SHA=source;
-  for(const headers of [{},{'oai-authenticated-user-id':'other','oai-authenticated-user-email':'other@example.invalid'},{...ownerHeaders,origin:'https://evil.invalid'}]){const r=await researchRuntimeApi(new Request(origin+RUNTIME_MANIFEST_PATH,{headers}),f.env);assert.equal(r.status,403)}
-  const service=await researchRuntimeApi(new Request(origin+RUNTIME_MANIFEST_PATH,{headers:{'OAI-Sites-Authorization':'Bearer SYNTHETIC_EXISTING_SERVICE'}}),f.env);assert.equal(service.status,200);assert.equal(f.statements(),0);
+  for(const headers of [{'oai-authenticated-user-id':'other','oai-authenticated-user-email':'other@example.invalid'},{'oai-authenticated-user-id':'fixture-owner'},{'oai-authenticated-user-email':'owner@example.invalid'},{...ownerHeaders,origin:'https://evil.invalid'},{...ownerHeaders,origin:''}]){const r=await researchRuntimeApi(new Request(origin+RUNTIME_MANIFEST_PATH,{headers}),f.env);assert.equal(r.status,403)}
+  const service=await researchRuntimeApi(new Request(origin+RUNTIME_MANIFEST_PATH),f.env);assert.equal(service.status,200);assert.equal(f.statements(),0);
+  for(const headers of [{...ownerHeaders,origin},{origin,'x-hkis-request':'1'}]){const r=await researchRuntimeApi(new Request(origin+RUNTIME_ROOT+'/start',{method:'POST',headers:{...headers,'content-type':'application/json'},body:'{"slot":20}'}),f.env);assert.equal(r.status,403)}
   const h=frozenRuntimeHeaders(await frozen());assert.equal((await researchRuntimeApi(request(RUNTIME_ROOT+'/unknown',{},h),f.env)).status,404);assert.equal((await researchRuntimeApi(request(RUNTIME_ROOT+'/start',{slot:20,url:'https://evil.invalid'},h),f.env)).status,409);assert.equal(f.statements(),0);
   const legacy=await researchApi(new Request(origin+'/api/site/research/execution'),f.env);assert.equal(legacy.status,200);assert.equal((await legacy.json()).diagnosticContract,'hkis-execution-v1');
  }finally{if(previous===undefined)delete process.env.HKIS_BUILD_SHA;else process.env.HKIS_BUILD_SHA=previous;f.sql.close()}
@@ -104,5 +107,16 @@ test('slow diagnostic logging cannot grant a fresh handler budget or mutate exis
   f.db.prepare=(q:string)=>{const statement=prepare(q),run=statement.runSync.bind(statement);statement.runSync=()=>{const r=run();if(!delayed&&q.includes('INSERT INTO runtime_logs')){delayed=true;t.mock.timers.setTime(Date.parse(startedAt)+540001)}return r};return statement};
   const r=await researchRuntimeApi(request(RUNTIME_ROOT+'/metadata',{cohort:'pending',maxMs:75000},frozenRuntimeHeaders(await frozen())),f.env);
   assert.equal(delayed,true);assert.equal(r.status,409);assert.equal((await r.json()).code,'runtime_expired');assert.equal(outbound,0);assert.deepEqual(snapshot(f),before);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
+ }finally{globalThis.fetch=oldFetch;if(previous===undefined)delete process.env.HKIS_BUILD_SHA;else process.env.HKIS_BUILD_SHA=previous;f.sql.close()}
+});
+
+
+test('private dispatcher consumes service access: existing client GET and frozen POST work without identity; invalid access never reaches application or personal data',async(t)=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse(startedAt)});const f=fixture(),previous=process.env.HKIS_BUILD_SHA,oldFetch=globalThis.fetch;let reached=0;
+ try{process.env.HKIS_BUILD_SHA=source;await history(f);const before=snapshot(f),dispatch=privateSitesDispatch(async r=>{reached++;assert.equal(r.headers.has('OAI-Sites-Authorization'),false);assert.equal(r.headers.has('oai-authenticated-user-id'),false);assert.equal(r.headers.has('oai-authenticated-user-email'),false);return new URL(r.url).pathname.includes('/reader-state')?paperReaderApi(r,f.env):researchRuntimeApi(r,f.env)});
+  globalThis.fetch=dispatch as typeof fetch;const call=createResearchClient(origin,PRIVATE_SITES_TEST_TOKEN),probe=await call(RUNTIME_MANIFEST_PATH,undefined,10000);assert.equal(probe.status,'ok');assert.equal(probe.diagnostic.applicationReached,true);assert.deepEqual(snapshot(f),before);
+  const frozen=await freezeRuntime({status:probe.status,runtimeContract:probe.runtimeContract,sourceRevision:probe.sourceRevision,configHash:probe.configHash,manifest:probe.manifest},bootstrap,startedAt,20),write=createResearchClient(origin,PRIVATE_SITES_TEST_TOKEN,{runtime:frozen,now:()=>Date.parse(startedAt)}),result=await write('/api/site/research/batch/start',{slot:20},10000);assert.equal(result.status,'running');assert.equal(result.diagnostic.applicationReached,true);assert.deepEqual(snapshot(f),before);
+  const count=reached,invalid=await createResearchClient(origin,'SYNTHETIC_WRONG_ACCESS')(RUNTIME_MANIFEST_PATH,undefined,10000);assert.equal(invalid.status,'unknown');assert.equal(invalid.diagnostic.applicationReached,false);assert.equal(reached,count);
+  const personal=await dispatch(origin+'/api/site/research/reader-state?id=fixture',{headers:{'OAI-Sites-Authorization':'Bearer '+PRIVATE_SITES_TEST_TOKEN}});assert.equal(personal.status,403);assert.equal((await personal.json()).code,'owner_required');assert.deepEqual(snapshot(f),before);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
  }finally{globalThis.fetch=oldFetch;if(previous===undefined)delete process.env.HKIS_BUILD_SHA;else process.env.HKIS_BUILD_SHA=previous;f.sql.close()}
 });
