@@ -1,3 +1,4 @@
+import {RUNTIME_HEADERS} from './research-runtime-contract.ts';
 import {EXECUTION_CONTRACT,RUNNER_VERSION,executionRoutes,diagnosticId,builtSourceRevision,diagnosticCode,diagnosticStatus} from './research-diagnostics.ts';
 import {collectBatchSlice,validateCollectorOptions} from './research-collector.ts';
 import {captureIngestion,drainIngestion,INGEST_LIMITS} from './research-ingestion.ts';
@@ -272,6 +273,7 @@ export async function researchStatus(db:any,initialized=false,trackingOptions:Br
 // console record attached to the official Worker trace. It is not its platform ID.
 const operationPaths:Record<string,string>={'/api/site/research/batch/collect':'batch_collect','/api/site/research/sync':'sync','/api/site/research/batch/start':'batch_start','/api/site/research/batch/finish':'batch_finish','/api/site/research/maintenance/prepare':'maintenance_prepare','/api/site/research/ingestion/recover':'local_recovery','/api/site/research/enrich':'metadata','/api/site/research/process':'scoring','/api/site/research/daily/generate':'daily'};
 export async function researchApi(request:Request,env:any){
+ if(request.method==='POST'&&Object.values(RUNTIME_HEADERS).some(name=>request.headers.has(name)))return json({code:'runtime_operation_rejected'},409);
  const path=new URL(request.url).pathname,phase=request.method==='POST'?operationPaths[path]:null,diagnosed=!!executionRoutes[path]&&(!!phase||!!diagnosticId(request.headers.get('x-hkis-automation-id'))||path==='/api/site/research/execution');if(!diagnosed)return researchApiInner(request,env);
  const id=operationRequestId(request.headers.get('x-hkis-operation-id'))||crypto.randomUUID(),automationId=diagnosticId(request.headers.get('x-hkis-automation-id')),headers=new Headers(request.headers);headers.set('x-hkis-operation-id',id);const tracked=new Request(request,{headers}),started=Date.now();
  const evidence={diagnosticContract:EXECUTION_CONTRACT,sourceRevision:builtSourceRevision(),automationId,operationRequestId:id,method:['GET','POST','HEAD'].includes(request.method)?request.method:'OTHER',path,phase:executionRoutes[path],applicationReached:true};

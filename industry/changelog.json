@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-23T14:14:33Z",
+  "latestVersion": "2026-10-23T15:04:10Z",
   "releases": [
+    {
+      "id": "hkis-stable-runtime-contract-20261023",
+      "at": "2026-10-23T15:04:10Z",
+      "kind": "feature",
+      "basis": "record",
+      "title": "新增固定执行器与站内稳定采集契约",
+      "body": [
+        "执行器每轮读取严格站内manifest，冻结协议、配置哈希、真实构建SHA、固定bootstrap版本和开始时间；兼容发布无需逐版手填Site SHA，新能力仍须审查升级执行器。",
+        "独立固定写入口在初始化、落库和供应商调用前校验冻结标识，途中变版、回滚不兼容或未知结果即停止；manifest只可收紧固定08/20模板参数或禁用步骤，不授予代码执行、跨域、权限或费用扩展。",
+        "不清库、不迁移改写旧论文、评分历史、first_seen、收藏或已发布冻结内容；仅记录仓库实现与隔离验证，Sites发布及原任务切换另行审查，未触发生产采集或付费模型。"
+      ],
+      "sources": [
+        {
+          "label": "稳定契约、数据保护与固定任务全文",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/stable-research-runtime.md"
+        }
+      ]
+    },
     {
       "id": "hkis-batch-admission-readback-20261023",
       "at": "2026-10-23T14:14:33Z",

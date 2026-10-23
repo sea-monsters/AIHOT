@@ -23,6 +23,10 @@ export async function safeLogEntry(input:any){
  if(['GET','POST','HEAD','OTHER'].includes(input.metadata?.httpMethod))metadata.httpMethod=input.metadata.httpMethod;
  if(Object.values(executionRoutes).includes(input.metadata?.executionPhase))metadata.executionPhase=input.metadata.executionPhase;
  if(input.metadata?.diagnosticContract===EXECUTION_CONTRACT)metadata.diagnosticContract=EXECUTION_CONTRACT;
+ if(input.metadata?.runtimeContract==='hkis-runtime-v1')metadata.runtimeContract='hkis-runtime-v1';
+ for(const key of ['configHash'])if(typeof input.metadata?.[key]==='string'&&/^[a-f0-9]{64}$/.test(input.metadata[key]))metadata[key]=input.metadata[key];
+ const bootstrap=sourceRevision(input.metadata?.bootstrapSource);if(bootstrap)metadata.bootstrapSource=bootstrap;
+ const at=input.metadata?.runStartedAt;if(typeof at==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(at)&&Number.isFinite(Date.parse(at)))metadata.runStartedAt=at;
  const revision=sourceRevision(input.metadata?.sourceRevision);if(revision)metadata.sourceRevision=revision;
  return {severity:enumValue(input.severity,['info','warning','error'],'error'),component:enumValue(input.component,components,'server'),event:enumValue(input.event,events,'unexpected_exception'),outcome:enumValue(input.outcome,outcomes,'unknown'),errorCode:errorCodes.has(input.errorCode)||diagnosticCode(input.errorCode)!=='other'?input.errorCode:null,httpStatus:typeof input.httpStatus==='number'&&Number.isInteger(input.httpStatus)&&input.httpStatus>=100&&input.httpStatus<=599?input.httpStatus:null,phase:phases.includes(input.phase)?input.phase:null,correlationId:await logReference(input.correlationId),taskId:await logReference(input.taskId),requestId:await logReference(input.requestId),sourceId:await logReference(input.sourceId),durationMs:count(input.durationMs,86400000),metadata};
 }
