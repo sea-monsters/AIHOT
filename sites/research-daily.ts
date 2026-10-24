@@ -93,7 +93,9 @@ async function refreshStatus(db:any,date:string,lease:DailyLease){
 }
 async function saveOutput(db:any,text:string,rows:any[],lease:DailyLease){
  const results=parseDailyOutput(text,rows.map(r=>parse(r.input_json))),writes=results.map(r=>{const row=rows.find(row=>row.id===r.id),guard=runningGroupGuard(row,lease);return db.prepare(`UPDATE research_daily_groups SET status=?,result_json=?,error_code=?,updated_at=? WHERE id=? AND ${guard.sql}`).bind(r.status,r.result?JSON.stringify(r.result):null,r.errorCode||null,stamp(),r.id,...guard.args)});
- const saved=await db.batch(writes);return saved.every((r:any)=>r.meta?.changes===1);
+ // Native D1 changes includes trigger writes; each guarded primary-key UPDATE
+ // affects at most one group, so a positive count confirms its CAS.
+ const saved=await db.batch(writes);return saved.every((r:any)=>Number(r.meta?.changes)>0);
 }
 async function recoverInterrupted(db:any,lease:DailyLease){
  const rows=(await db.prepare("SELECT * FROM research_daily_groups WHERE status='running' AND updated_at<?").bind(new Date(Date.now()-4*60000).toISOString()).all()).results;
@@ -131,7 +133,9 @@ export async function generateDaily(db:any,env:any,body:any={},request?:Request,
    // cannot dispatch after another lease owner has completed these groups.
    const claimedAt=stamp(),ids=JSON.stringify(rows.map(r=>r.id)),versions=JSON.stringify(rows.map(r=>({id:r.id,contentHash:r.content_hash,updatedAt:r.updated_at})));
    const claimed=await db.prepare(`UPDATE research_daily_groups SET status='running',request_id=?,config_json=?,error_code=NULL,updated_at=? WHERE id IN (SELECT value FROM json_each(?)) AND status='queued' AND ${leaseGuard.sql} AND ${databaseNowSql}<? AND (SELECT count(*) FROM research_daily_groups g JOIN json_each(?) v ON g.id=json_extract(v.value,'$.id') WHERE g.status='queued' AND g.content_hash=json_extract(v.value,'$.contentHash') AND g.updated_at=json_extract(v.value,'$.updatedAt'))=?`).bind(requestId,JSON.stringify(safe),claimedAt,ids,...leaseGuard.args,new Date(deadline).toISOString(),versions,rows.length).run();
-   if(claimed.meta?.changes!==rows.length){result.blocked='lock_busy';result.leaseLost=true;break;}
+   // The atomic version-count predicate admits all selected groups or none;
+   // D1 changes also counts ledger triggers, so it is not a primary-row count.
+   if(!(Number(claimed.meta?.changes)>0)){result.blocked='lock_busy';result.leaseLost=true;break;}
    for(const row of rows){row.request_id=requestId;row.updated_at=claimedAt;}
    await refreshStatus(db,rows[0].date,lease);
    const dispatchGuard=async()=>{const state=await db.prepare(`SELECT (${leaseGuard.sql} AND ${databaseNowSql}<? AND (SELECT count(*) FROM research_daily_groups WHERE id IN (SELECT value FROM json_each(?)) AND status='running' AND request_id=? AND updated_at=?)=?) valid`).bind(...leaseGuard.args,new Date(deadline).toISOString(),ids,requestId,claimedAt,rows.length).first();return {valid:state?.valid===1&&Date.now()<deadline,deadlineAt:deadline,leaseUntil:expires};};

@@ -7,7 +7,7 @@ import {prepareDaily} from './research-daily.ts';
 import {dailyCohortKey} from './research-attribution.ts';
 import {RESEARCH_SOURCES} from './research-config.ts';
 await mkdir('.sites-runtime',{recursive:true});
-await writeFile('.sites-runtime/attribution-worker-entry.ts',`import {researchApi} from '../sites/research.ts';export default{fetch:researchApi};`);
+await writeFile('.sites-runtime/attribution-worker-entry.ts',`import {researchApi} from '../sites/research.ts';export default{fetch(request,env){return researchApi(request,env)}};`);
 await build({entryPoints:['.sites-runtime/attribution-worker-entry.ts'],outfile:'.sites-runtime/attribution-worker.mjs',bundle:true,format:'esm',platform:'neutral',mainFields:['module','main'],conditions:['workerd','browser','module'],external:['node:*','cloudflare:*'],define:{'process.env.NODE_ENV':'"production"'},logLevel:'silent'});
 let net=0,releaseHead,headReached;const headWait=new Promise(r=>headReached=r),headRelease=new Promise(r=>releaseHead=r);
 const outboundService=async request=>{net++;const u=new URL(request.url);if(u.hostname==='api.crossref.org'){headReached();await headRelease;return Response.json({message:{items:[]}})}if(RESEARCH_SOURCES.some(s=>s.rss===u.href))return new Response('<rss><channel/></rss>');throw Error('Unexpected fixture network '+u.hostname)};

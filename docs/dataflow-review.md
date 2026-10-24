@@ -14,7 +14,7 @@
 | 规范落库 | research.ts combine/planPaperWrite、papers/records/members | 字段优先级、最终标题索引、DOI-less去重、first_seen、并发CAS | 3项独立回归先失败后通过；最终索引与时间单调性最小修复 |
 | 补全就绪 | enrichment、ready、maintenance、enrichment_queue/ready_evidence | 缺证、provider冷却、来源/版本、规则可用性和metadata状态独立 | 已完成代码审查，定向/完整结果见后文 |
 | 评分/分类 | processing、scoring-selection/recovery、score-state、paper-keywords | 当前归属选择、规则/AI/缺证区别、reservation与实际派发、语义变更 | 已完成代码审查，定向/完整结果见后文 |
-| 展示/过滤 | research-views、DTO、PaperItem、research-paper、关键词图 | 存储和UI口径、待评分不等于0、过滤/排序/分页/分类来源 | 详情评分、DOI及规范机构搜索已复现并修复；实际浏览器待验收 |
+| 展示/过滤 | research-views、DTO、PaperItem、research-paper、关键词图 | 存储和UI口径、待评分不等于0、过滤/排序/分页/分类来源 | 详情评分、DOI及规范机构搜索已修复；实际Chromium10场景/33检查通过 |
 | 覆盖和日志 | batches、telemetry、operations、runtime-logs | 尝试/检查/完成区别、计数scope、失败/未知、脱敏 | 已完成代码审查，定向/完整结果见后文 |
 | 冻结产物 | briefs、daily、cohorts、members/snapshots | 首次冻结、published不可改、作者/分类/评分事实、幂等和竞态 | 已完成代码审查，定向/完整结果见后文 |
 
@@ -72,4 +72,10 @@ main含尚未部署的manual和上游依赖更新，不能整包用于Sites发�
 
 已完成定向：采集/恢复/补全10文件135/135；日报新4+原16=20/20；展示新7及相关原测试44/44；规范索引3/3；Web68/68；完整typecheck通过。真实Chromium154在390/1440两宽度共10场景33检查通过，静态GET40、POST/API/外部尝试0，无控制台异常或横向溢出。截图和JSON保留于忽略目录`.sites-runtime/audit-detail-browser/`，可用`sites/test-audit-detail-browser.mjs`重验。
 
-完整Sites、构建及实际Worker/D1结果将在后续验证记录补齐，当前不作为全部通过声明。旧Node/PG新闻业务上轮156/183、27个既有模型阀关闭失败的限制继续保留；本轮未改该业务，未为测试开启安全阀。
+完整Sites **810/810通过**（包含anysearch UI，失败/取消/跳过均0，181.81秒）；Web68/68、typecheck、完整Web客户端/SSR/Worker build与changelog通过。新审计文件路径最初含数字，不符合changelog现有来源白名单；改为本文件dataflow-review.md，未放宽白名单。首轮18项载入失败据实保留，修正后整轮重新通过。
+
+实际Worker/D1共14脚本最终全部通过：generic、runtime、execution、cancellation、ingestion、local-finalize（4模式）、daily、brief、metadata、keyword、attribution、scoring-recovery、recovery、pipeline。初轮12通过/2失败：attribution旧fixture直接export fetch:researchApi，将平台ExecutionContext误传成新增RuntimeBudget第三参数，现改显式request/env包装；daily揭示本轮新增CAS错误把D1含触发器的changes当主表行数，单组实际返回2而非NodeSQLite的1。修正两处成功判断为正数，仍由原子SQL全部版本匹配与主键CAS保证全有/全无；未放宽lease、预算或已领取断言。最后daily20/20及真实D1完整重验通过（一次mock、零付费）；attribution真实D1重验也通过。D1修正后其他域代码不变，受影响20项及native已重验，最终构建会重新注入实际干净HEAD。
+
+旧Node/PG新闻业务上轮156/183、27个既有模型阀关闭失败的限制继续保留；本轮未改该业务，未重跑旧引擎或为其开启安全阀。所有模型/供应商行为仅fixture拦截，未生产采集或部署。
+
+复现与验收摘要另存[机器可读记录](fixtures/dataflow-validation.json)。本轮无生产写入，也没有拒绝或结果未知的远端推送；最终远端SHA以交付消息和git核对为准。
