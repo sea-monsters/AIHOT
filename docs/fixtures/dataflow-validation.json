@@ -65,9 +65,11 @@
     {
       "script": "sites/test-daily-worker.mjs",
       "exit": 0,
-      "seconds": 2.59,
       "rechecked": true,
-      "reason": "D1 trigger-inclusive changes; atomic version and lease checks retained"
+      "reason": "D1 trigger-inclusive changes; atomic version and lease checks retained",
+      "initialExit": 1,
+      "initialSeconds": 2.59,
+      "finalExit": 0
     },
     {
       "script": "sites/test-brief-worker.mjs",
@@ -87,9 +89,11 @@
     {
       "script": "sites/test-attribution-worker.mjs",
       "exit": 0,
-      "seconds": 2.13,
       "rechecked": true,
-      "reason": "fixture explicit request/env forwarding; prior failure recorded"
+      "reason": "fixture explicit request/env forwarding; prior failure recorded",
+      "initialExit": 1,
+      "initialSeconds": 2.13,
+      "finalExit": 0
     },
     {
       "script": "sites/test-scoring-recovery-worker.mjs",
