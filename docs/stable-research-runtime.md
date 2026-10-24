@@ -115,3 +115,5 @@ bootstrap 递归冻结并记录协议、manifest/hash、实际Site sourceRevisio
 固定bootstrap继续2d2d07f，入口/transport/调度/diagnostics不改；共享contract模块仅服务端validateFrozenRuntime导出有差异，客户端hash/freeze/schema等执行代码不变。父端只需纠正任务中“开始时间必须在该小时”的旧文字：允许提前只读准备与预算内等待，正式runner到对应小时再启动，原始开始时间不变；不需要换bootstrap pin。修复后也不补跑本次已终态08批。
 
 精确托管移植：research-runtime-contract.ts的validateFrozenRuntime；research-runtime-budget.ts的截止夹紧；research.ts中recover传递可信截止的单段；research-runtime.ts中纯description回显的顺序。不要整包覆盖主分支或混入manual/依赖升级。配套单元覆盖实际152151ms、AM/PM、过早/未来/跨日/错slot/重置deadline/未知和跨时段慢DB；原生fixture以历史2d2d07f真实bootstrap在07:58:22准备、08:00:54运行，第一recover须200，随后故意注入未匹配的503来证明停止且不重播，不派发真实采集或模型。原生PM fixture另验证19:58→20:00恢复与start，历史对象保护保持。
+
+本轮验证：原函数仅152151ms误拒绝已精确复现；Sites全部82文件 **785/785**、Web **68/68**、typecheck、完整build和changelog检查通过。5个原生脚本的6种运行通过：固定2d2d07f常规GET与early-AM、PM runtime、execution、通用Worker、scoring-recovery。early-AM真实历史bootstrap第一recover200，下一阶段由fixture故意注入未知503后停止，只有该次恢复进入应用，零批次/论文/模型回执，未发生来源采集或真实模型；该unknown是安全边界验收，不冒充整条采集已成功。PM恢复/start及旧历史快照通过。131条历史日志完全保留，新增fix共132条。共享模块除服务端校验导出外与旧源码一致，其他四个bootstrap执行文件与2d2d07f的Git内容相同。
