@@ -1,6 +1,6 @@
 # 稳定采集运行契约
 
-2026-10-23 维护记录。本次交付仓库源码、固定 bootstrap 与隔离验证；Sites 发布和原任务切换由父端独立审查。本执行器不部署、不改任务、不读取或写入生产论文。初次实现时生产基线为 v99；本轮父端已报告精确 v101（f90a79b0683634f4bb826574ad97e9464c930cb4）已发布，正式复核由父端负责。本执行器未访问该生产版本。
+2026-10-23 维护记录。本次交付仓库源码、固定 bootstrap 与隔离验证；Sites 发布和原任务切换由父端独立审查。本执行器不部署、不改任务、不读取或写入生产论文。初次实现时生产基线为 v99；此前父端报告v101已发布；当前父端报告v102已上线，实际sourceRevision为8a34c1bbfdb94b2b00e79138deee7de0fe907ef7。提前唤醒边界修正尚未部署，正式复核由父端负责。本执行器未访问该生产版本。
 
 ## 固定与可变内容
 
@@ -41,7 +41,7 @@ bootstrap 递归冻结并记录协议、manifest/hash、实际Site sourceRevisio
 
 以下仅供父端正式切换时替换原任务，尚未修改。将 <APPROVED_BOOTSTRAP_SHA> 一次替换成最终批准的完整GitHub SHA，不填每版Site SHA；该pin在任务外部，不能写成runner自身SHA常量。
 
-> 执行HKIS原有研究采集，保留同一任务Asia/Singapore每日08:00/20:00时段、总540秒、最多35次采集调用和既有供应商/模型额度。记录平台真实run ID及开始UTC时间automationStartedAt；get_site、源码准备、stdin及全部HTTP计入540秒，不重置开始时间。只操作project_id=appgprj_6abc4fd381ec8191a22761c6ba246fe2。
+> 执行HKIS原有研究采集，保留同一任务Asia/Singapore每日08:00/20:00时段、总540秒、最多35次采集调用和既有供应商/模型额度。记录平台真实run ID及开始UTC时间automationStartedAt；get_site、源码准备、stdin及全部HTTP计入540秒，不重置开始时间。平台可提前唤醒做只读准备和原预算内等待；正式bootstrap仅在当前SG08/20对应小时启动，传入原始automationStartedAt，不能重写成小时起点或runner启动时间。剩余不足或任务已终态即停止本批，不补跑。只操作project_id=appgprj_6abc4fd381ec8191a22761c6ba246fe2。
 >
 > 先确认具备官方Sites get_site、Node24、Git/fetch和受支持安全stdin/内存交付。缺项停止并报告真实平台run ID、缺项与runner_not_started/未派发；不以只读MCP、浏览器、其他身份或新凭据替代。用官方get_site核实该项目active、published、owner-private和准确current_live_url；只接受该返回的HTTPS chatgpt.site原点。仅用原官方service access。token只经安全stdin/内存传递，不进argv、临时文件、环境文件、历史、日志或其他原点，不打印敏感头、不跟随redirect、不新建/轮换凭据。
 >
@@ -73,7 +73,7 @@ bootstrap 递归冻结并记录协议、manifest/hash、实际Site sourceRevisio
 
 预算scope区分：固定bootstrap对同一次自动化跨slice累计最多35次来源调用；服务端原collection-budget:<batch-cycle>对同批次Crossref分页尝试原子累计最多35，失败/未知已占用尝试不退款，协调lease排斥并发slice。这两者不是相同计数；本协议不声称服务端存在可动态收紧的来源调用总账。原永久35分页上限、供应商共享配额和频率保持不变。
 
-服务端由已校验freeze生成不可由payload赋值的内部RuntimeBudget，绝对截止=automationStartedAt+540000−2000。它跨writeLog、init、reconcile、operation、handler传递，metadata/day不再因进入handler较晚重获时长；metadata provider reservation后、daily持久模型回执claim后再次检查，后者保留原unsent pending回执和unknown队列，不自动重放/退款。日报另报reservedUnsent，不把该未发送保留计入真实attempted模型调用。恢复/评分/finish沿用并夹紧已有绝对截止；采集slice及子运行trace也受同一截止约束。没有给metadata/daily任意HTTP payload增加deadline字段。
+服务端由已校验freeze生成不可由payload赋值的内部RuntimeBudget，绝对截止不晚于automationStartedAt+540000−2000，并夹到本slot的SG09:00/21:00结束点。它跨writeLog、init、reconcile、operation、handler传递，metadata/day不再因进入handler较晚重获时长；metadata provider reservation后、daily持久模型回执claim后再次检查，后者保留原unsent pending回执和unknown队列，不自动重放/退款。日报另报reservedUnsent，不把该未发送保留计入真实attempted模型调用。恢复/评分/finish沿用并夹紧已有绝对截止；采集slice及子运行trace也受同一截止约束。没有给metadata/daily任意HTTP payload增加deadline字段。
 
 保证边界：到绝对截止后停止新的外部派发，HTTP timeout不越过相应绝对窗口；较早已派发且已提交的数据库事务/证据可能晚确认，仍须保留并按未知结果核对，不能保证D1进程硬中止。不能把客户端timeout当作服务端已取消或已回滚证明。
 
@@ -100,3 +100,18 @@ bootstrap 递归冻结并记录协议、manifest/hash、实际Site sourceRevisio
 本轮验证：Sites **781/781**、Web **68/68**、typecheck、完整build与changelog检查通过；runtime、固定历史bootstrap、execution、通用Worker四项最终通过。最初两项原生夹具失败来自Node与Miniflare的不同Request构造器，已用URL/普通参数作接口适配后重跑；未放宽产品门控或断言。空Origin由直接Request单元验证，原生HTTP会归一化空头，因此原生用浏览器opaque Origin:null验证拒绝，外域Origin仍严格403。编译候选76ee722的共享GET/冻结POST、个人reader403和历史快照均通过；固定2d2d07f bootstrap实际只读GET成功、POST=0、供应商/模型=0。最终交付使用干净HEAD重新构建并回读源码证据。
 
 既有130条changelog逐项完全保留，新增1条fix共131条。bootstrap入口及其四个同提交依赖相对2d2d07f的Git内容无差异；本轮产品代码只改runtimeOwner，不更改写前冻结、预算/频率、模型/供应商、schema、权限、reader或已冻结历史。本轮没有生产读取、采集、发布或任务修改。原Node/PG代码未变，前述27项基线限制不因此变成通过。
+
+
+## 2026-10-24 追加：提前唤醒与正式写入时段
+
+父端给出的v102实证：平台真实开始2026-10-23T23:58:22.000Z（SG07:58:22），08:00:54.151首次recover POST因runtime_expired拒绝，实际仅152151ms，source/hash与线上一致。固定bootstrap2d2d07f并未要求开始时间的小时等于slot；错误来自服务端validateFrozenRuntime检查了started的小时。隔离执行原Git函数精确复现该拒绝，未访问生产。
+
+修正服务端每次写入入场：仍要求started<=now、now−started<540000；改用服务端now的SG小时匹配slot，并要求started与now处于同一SG本地日期。合法07:58→08:00及19:58→20:00保留原开始时间；UTC跨日但SG同日不误拒绝。过早超预算、未来、旧日期、错误slot、提前正式写入和09/21之后的新写入均拒绝，batchKey继续精确绑定SG日/slot。
+
+内部RuntimeBudget取min(原started+538000,本SG日slot结束时点)，绝不因开窗重获540秒；恢复参数也夹紧这一可信上下文。慢日志/DB跨09/21后不开始新派发；已在飞事务仍可能晚确认，按既有证据核对，不伪称撤销。纯配置回显在时段校验前准备，已知入场拒绝也带正确hash，固定客户端的request/step诊断可以识别runtime_expired或batch_window；旧recover汇总仍可能显示recovery_unconfirmed/other，不声称更改了旧客户端的汇总实现。
+
+本轮不新增持久预算、冻结或run台账，不改schema/频率/权限/供应商/额度，不重播已终态失败任务。不重置时间由固定bootstrap递归冻结和真实任务输入保证，服务端校验所收到的时间及绝对deadline，但没有新签名或持久锚点来独立识别一个已获权限调用方伪造的全新startedAt；不能把此说成新增防伪造run认证。测试验证旧冻结逾期拒绝、不能把payload deadline改成now+540续命、未知后停止，不为测试虚构服务端防重置能力。
+
+固定bootstrap继续2d2d07f，入口/transport/调度/diagnostics不改；共享contract模块仅服务端validateFrozenRuntime导出有差异，客户端hash/freeze/schema等执行代码不变。父端只需纠正任务中“开始时间必须在该小时”的旧文字：允许提前只读准备与预算内等待，正式runner到对应小时再启动，原始开始时间不变；不需要换bootstrap pin。修复后也不补跑本次已终态08批。
+
+精确托管移植：research-runtime-contract.ts的validateFrozenRuntime；research-runtime-budget.ts的截止夹紧；research.ts中recover传递可信截止的单段；research-runtime.ts中纯description回显的顺序。不要整包覆盖主分支或混入manual/依赖升级。配套单元覆盖实际152151ms、AM/PM、过早/未来/跨日/错slot/重置deadline/未知和跨时段慢DB；原生fixture以历史2d2d07f真实bootstrap在07:58:22准备、08:00:54运行，第一recover须200，随后故意注入未匹配的503来证明停止且不重播，不派发真实采集或模型。原生PM fixture另验证19:58→20:00恢复与start，历史对象保护保持。

@@ -71,7 +71,12 @@ export async function validateFrozenRuntime(request:Request,sourceRevision:any,n
  const description=await runtimeDescription(sourceRevision,manifest);
  if(values.configHash!==description.configHash||values.sourceRevision!==description.sourceRevision)fail('runtime_changed');
  const frozen=await freezeRuntime(description,values.bootstrapSource!,values.startedAt!,Number(values.slot) as 8|20),started=Date.parse(frozen.startedAt);
- if(started>now||now-started>=frozen.manifest.limits.totalMs||new Date(started+8*3600000).getUTCHours()!==frozen.slot)fail('runtime_expired');
+ // Preparation may begin before the scheduled hour; it never gets a new
+ // budget when the write window opens. Admission uses the actual write time.
+ if(started>now||now-started>=frozen.manifest.limits.totalMs)fail('runtime_expired');
+ const localNow=new Date(now+8*3600000),localStarted=new Date(started+8*3600000);
+ if(localNow.getUTCHours()!==frozen.slot)fail('batch_window');
+ if(localNow.toISOString().slice(0,10)!==localStarted.toISOString().slice(0,10))fail('runtime_expired');
  return frozen;
 }
 export function runtimeOperationBody(path:string,body:any,frozen:any,now=Date.now()){

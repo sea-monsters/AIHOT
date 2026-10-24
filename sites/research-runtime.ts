@@ -37,8 +37,10 @@ export async function researchRuntimeApi(request:Request,env:any){
   if(!path)return respond({code:'not_found'},404);
   if(request.method!=='POST')return respond({code:'method_not_allowed'},405);
   // No initialization, reconciliation, D1 log or provider call precedes this.
-  const frozen=await validateFrozenRuntime(request,revision);
+  // Pure readback evidence also accompanies known pre-write refusals, so the
+  // pinned client can distinguish expiry/window rejection from config drift.
   description=await runtimeDescription(revision);
+  const frozen=await validateFrozenRuntime(request,revision);
   const body=runtimeOperationBody(path,await readBody(request),frozen),budget=frozenRuntimeBudget(frozen);
   const headers=new Headers(request.headers);for(const name of Object.values(RUNTIME_HEADERS))headers.delete(name);headers.set('x-hkis-operation-id',id);
   await writeLog(env.DB,{component:'research',event:'request_started',outcome:'started',requestId:id,correlationId:automationId,metadata:{route:path,runtimeContract:RUNTIME_CONTRACT,sourceRevision:revision,configHash:frozen.configHash,bootstrapSource:frozen.bootstrapSource,runStartedAt:frozen.startedAt}});

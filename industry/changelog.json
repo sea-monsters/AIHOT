@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-23T16:22:03Z",
+  "latestVersion": "2026-10-24T00:15:59Z",
   "releases": [
+    {
+      "id": "hkis-runtime-early-preparation-window-20261024",
+      "at": "2026-10-24T00:15:59Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "修复提前准备跨入采集时段时的误拒绝",
+      "body": [
+        "服务端以每次正式写入的当前SG小时和日期校验08/20时段，允许原540秒预算内07:58→08:00及19:58→20:00的合法提前准备，不重置真实automationStartedAt。",
+        "内部截止同时夹到原开始+538秒与SG09/21结束点，防止慢DB后在时段外新派发；过期、未来、旧日、错slot与超原截止仍拒绝，保留未知不重播及历史证据。",
+        "固定bootstrap继续2d2d07f，客户端执行行为不变；任务时序文字由父端单独纠正。仅仓库与隔离回归，未访问或部署生产、不补跑已终态08批，不改调度/权限/预算/schema。"
+      ],
+      "sources": [
+        {
+          "label": "提前唤醒边界、固定bootstrap兼容与验证范围",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/stable-research-runtime.md"
+        }
+      ]
+    },
     {
       "id": "hkis-runtime-consumed-service-access-20261023",
       "at": "2026-10-23T16:22:03Z",

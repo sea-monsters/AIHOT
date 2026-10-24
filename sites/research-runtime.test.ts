@@ -1,5 +1,6 @@
 import {privateSitesDispatch,PRIVATE_SITES_TEST_TOKEN} from './fixtures/private-sites-dispatch.ts';
 import {paperReaderApi} from './paper-reader.ts';
+import {frozenRuntimeBudget,assertRuntimeBudget} from './research-runtime-budget.ts';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
@@ -119,4 +120,57 @@ test('private dispatcher consumes service access: existing client GET and frozen
   const count=reached,invalid=await createResearchClient(origin,'SYNTHETIC_WRONG_ACCESS')(RUNTIME_MANIFEST_PATH,undefined,10000);assert.equal(invalid.status,'unknown');assert.equal(invalid.diagnostic.applicationReached,false);assert.equal(reached,count);
   const personal=await dispatch(origin+'/api/site/research/reader-state?id=fixture',{headers:{'OAI-Sites-Authorization':'Bearer '+PRIVATE_SITES_TEST_TOKEN}});assert.equal(personal.status,403);assert.equal((await personal.json()).code,'owner_required');assert.deepEqual(snapshot(f),before);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
  }finally{globalThis.fetch=oldFetch;if(previous===undefined)delete process.env.HKIS_BUILD_SHA;else process.env.HKIS_BUILD_SHA=previous;f.sql.close()}
+});
+
+test('early AM/PM preparation keeps its original 540s clock and admits only the actual matching SG write hour/date',async()=>{
+ const cases=[{start:'2026-10-23T23:58:22.000Z',write:'2026-10-24T00:00:54.151Z',slot:8},{start:'2026-10-24T11:58:00.000Z',write:'2026-10-24T12:00:00.000Z',slot:20}] as const;
+ for(const c of cases){const f=await freezeRuntime(await runtimeDescription(source),bootstrap,c.start,c.slot),headers=frozenRuntimeHeaders(f),now=Date.parse(c.write);
+  const checked=await validateFrozenRuntime(request(RUNTIME_ROOT+'/recover',{},headers),source,now);assert.equal(checked.startedAt,c.start);assert.equal(checked.slot,c.slot);
+  const budget=frozenRuntimeBudget(checked);assert.equal(budget.deadlineAt,Date.parse(c.start)+538000);assert.ok(budget.deadlineAt<now+538000);assert.doesNotThrow(()=>assertRuntimeBudget(budget,now));
+  const originalDeadline=new Date(budget.deadlineAt).toISOString();assert.equal(runtimeOperationBody('/api/site/research/ingestion/recover',{maxMs:6000,deadlineAt:originalDeadline},checked,now).deadlineAt,originalDeadline);
+  assert.throws(()=>runtimeOperationBody('/api/site/research/ingestion/recover',{maxMs:6000,deadlineAt:new Date(now+538000).toISOString()},checked,now),(e:any)=>e.code==='runtime_budget_invalid');
+  assert.throws(()=>{(checked as any).startedAt=c.write},TypeError);
+ }
+});
+
+test('early preparation never revives stale/future/cross-day freezes or authorizes writes before, after or in the wrong slot',async()=>{
+ const cases=[
+  {start:'2026-10-23T23:49:59.000Z',write:'2026-10-24T00:00:54.151Z',slot:8,code:'runtime_expired'},
+  {start:'2026-10-24T00:01:00.000Z',write:'2026-10-24T00:00:54.151Z',slot:8,code:'runtime_expired'},
+  {start:'2026-10-23T23:58:22.000Z',write:'2026-10-24T00:07:22.000Z',slot:8,code:'runtime_expired'},
+  {start:'2026-10-23T23:58:22.000Z',write:'2026-10-25T00:00:54.151Z',slot:8,code:'runtime_expired'},
+  {start:'2026-10-23T15:59:00.000Z',write:'2026-10-24T00:00:54.151Z',slot:8,code:'runtime_expired'},
+  {start:'2026-10-23T23:58:22.000Z',write:'2026-10-23T23:59:59.999Z',slot:8,code:'batch_window'},
+  {start:'2026-10-24T11:58:00.000Z',write:'2026-10-24T11:59:59.999Z',slot:20,code:'batch_window'},
+  {start:'2026-10-24T00:00:00.000Z',write:'2026-10-24T00:00:54.151Z',slot:20,code:'batch_window'},
+  {start:'2026-10-24T00:58:00.000Z',write:'2026-10-24T01:00:00.000Z',slot:8,code:'batch_window'},
+  {start:'2026-10-24T12:58:00.000Z',write:'2026-10-24T13:00:00.000Z',slot:20,code:'batch_window'},
+ ] as const;
+ for(const c of cases){const f=await freezeRuntime(await runtimeDescription(source),bootstrap,c.start,c.slot);await assert.rejects(validateFrozenRuntime(request(RUNTIME_ROOT+'/recover',{},frozenRuntimeHeaders(f)),source,Date.parse(c.write)),(e:any)=>e.code===c.code)}
+ const f=await freezeRuntime(await runtimeDescription(source),bootstrap,'2026-10-23T23:58:22.000Z',8),now=Date.parse('2026-10-24T00:00:54.151Z');
+ assert.throws(()=>runtimeOperationBody('/api/site/research/batch/finish',{batchKey:'2026-10-23/08',maxMs:6000,deadlineAt:new Date(frozenRuntimeBudget(f).deadlineAt).toISOString()},f,now),(e:any)=>e.code==='runtime_operation_rejected');
+});
+
+test('early-start recovery succeeds with unchanged history; known expiry/window refusals echo the config and stop the existing client without replay',async(t)=>{
+ const start='2026-10-23T23:58:22.000Z',now=Date.parse('2026-10-24T00:00:54.151Z');t.mock.timers.enable({apis:['Date'],now});const f=fixture(),previous=process.env.HKIS_BUILD_SHA,oldFetch=globalThis.fetch;let posts=0;
+ try{process.env.HKIS_BUILD_SHA=source;await history(f);const before=snapshot(f),frozen=await freezeRuntime(await runtimeDescription(source),bootstrap,start,8),dispatch=privateSitesDispatch(r=>researchRuntimeApi(r,f.env));globalThis.fetch=(async(url,options)=>{if(options?.method==='POST')posts++;return dispatch(url,options)}) as typeof fetch;
+  const call=createResearchClient(origin,PRIVATE_SITES_TEST_TOKEN,{runtime:frozen,now:Date.now}),body={maxMs:6000,deadlineAt:new Date(frozenRuntimeBudget(frozen).deadlineAt).toISOString()},accepted=await call('/api/site/research/ingestion/recover',body,10000);
+  assert.equal(accepted.status,'ok');assert.equal(accepted.diagnostic.applicationReached,true);assert.equal(accepted.recovery.known,true);assert.deepEqual(snapshot(f),before);
+  // Reuse the original immutable freeze; do not re-GET or mint a later start.
+  t.mock.timers.setTime(Date.parse(start)+540000);const expired=await researchRuntimeApi(request(RUNTIME_ROOT+'/recover',body,frozenRuntimeHeaders(frozen)),f.env);assert.equal(expired.status,409);assert.equal(expired.headers.get('x-hkis-config-hash'),frozen.configHash);assert.equal((await expired.json()).code,'runtime_expired');assert.deepEqual(snapshot(f),before);
+  t.mock.timers.setTime(Date.parse('2026-10-23T23:59:59.000Z'));const beforePosts=posts,blocked=await runResearchSlot(call,8,Date.now,Date.parse(start));assert.equal(posts,beforePosts+1);assert.equal(blocked.status,'deferred');assert.equal(blocked.reason,'recovery_unconfirmed');assert.equal(blocked.steps[0].reason,'batch_window');assert.notEqual(blocked.steps[0].reason,'runtime_changed');assert.deepEqual(snapshot(f),before);assert.equal(f.sql.prepare('SELECT count(*) n FROM research_batches').get()!.n,0);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
+ }finally{globalThis.fetch=oldFetch;if(previous===undefined)delete process.env.HKIS_BUILD_SHA;else process.env.HKIS_BUILD_SHA=previous;f.sql.close()}
+});
+
+
+test('late AM/PM admission clamps the internal deadline to slot end; slow DB cannot extend work into 09/21',async(t)=>{
+ const cases=[{slot:8,start:'2026-10-24T00:58:00.000Z',write:'2026-10-24T00:59:59.000Z',end:'2026-10-24T01:00:00.000Z'},{slot:20,start:'2026-10-24T12:58:00.000Z',write:'2026-10-24T12:59:59.000Z',end:'2026-10-24T13:00:00.000Z'}] as const;
+ t.mock.timers.enable({apis:['Date'],now:Date.parse(cases[0].write)});
+ for(const c of cases){t.mock.timers.setTime(Date.parse(c.write));const f=fixture(),previous=process.env.HKIS_BUILD_SHA,oldFetch=globalThis.fetch;let delayed=false,outbound=0;
+  try{process.env.HKIS_BUILD_SHA=source;await history(f);const before=snapshot(f),frozen=await freezeRuntime(await runtimeDescription(source),bootstrap,c.start,c.slot),budget=frozenRuntimeBudget(frozen);assert.equal(budget.deadlineAt,Date.parse(c.end));assert.ok(budget.deadlineAt<Date.parse(c.start)+538000);
+   const prepare=f.db.prepare.bind(f.db);f.db.prepare=(q:string)=>{const s=prepare(q),run=s.runSync.bind(s);s.runSync=()=>{const value=run();if(!delayed&&q.includes('INSERT INTO runtime_logs')){delayed=true;t.mock.timers.setTime(Date.parse(c.end))}return value};return s};globalThis.fetch=async()=>{outbound++;throw Error('No dispatch outside write window')};
+   const r=await researchRuntimeApi(request(RUNTIME_ROOT+'/metadata',{cohort:c.slot===8?'previous_day':'pending',maxMs:75000},frozenRuntimeHeaders(frozen)),f.env);assert.equal(r.status,409);assert.equal((await r.json()).code,'runtime_expired');assert.equal(delayed,true);assert.equal(outbound,0);assert.deepEqual(snapshot(f),before);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
+   await assert.rejects(validateFrozenRuntime(request(RUNTIME_ROOT+'/recover',{},frozenRuntimeHeaders(frozen)),source,Date.parse(c.end)),(e:any)=>e.code==='batch_window');
+  }finally{globalThis.fetch=oldFetch;if(previous===undefined)delete process.env.HKIS_BUILD_SHA;else process.env.HKIS_BUILD_SHA=previous;f.sql.close()}
+ }
 });
