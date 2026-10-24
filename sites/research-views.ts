@@ -1,6 +1,7 @@
 import {PUBLISHERS,RESEARCH_SOURCES,TOPICS} from './research-config.ts';
 import type {Paper} from './research-domain.ts';
 import {evidenceExcerpt,extractedKeywords,publicationDay,weekWindow} from './weekly.ts';
+import {matchesPaperQuery} from './paper-keywords.ts';
 type StoredPaper=Paper&{id:string;firstSeen?:string;lastSeen?:string};
 export function collectedDay(value?:string):string|null {if(!value)return null;const n=Date.parse(value);return Number.isFinite(n)?new Date(n+8*3600000).toISOString().slice(0,10):null;}
 export function validDay(value:string):boolean {return /^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value+'T00:00:00Z'))&&new Date(value+'T00:00:00Z').toISOString().slice(0,10)===value;}
@@ -9,8 +10,7 @@ export function buildResearchView(input:StoredPaper[],params:URLSearchParams,mod
  const today=weekWindow(at).endDate;
  const filters={q:(params.get('q')||'').trim().slice(0,200),topic:TOPICS.some(t=>t.id===params.get('topic'))?params.get('topic')!:'',publisher:PUBLISHERS.includes(params.get('publisher')||'')?params.get('publisher')!:'',min:Math.min(100,Math.max(0,Number(params.get('min'))||0)),scope:params.get('scope')==='all'?'all':'related',basis:params.get('basis')==='publication'?'publication':'collection',sort:params.get('sort')==='priority'?'priority':'latest',date:params.get('date')||''};
  const papers=input.filter(p=>(p.priority??0)>=0).map(p=>{const publication=publicationDay(p);return {...p,topics:TOPICS.filter(t=>t.pattern.test([p.title,p.abstract||'',...p.keywords].join(' '))).map(t=>t.id),publicationDate:publication.date,publicationBasis:publication.basis,collectionDate:collectedDay(p.firstSeen),evidence:evidenceExcerpt(p),extractedKeywords:extractedKeywords(p),sourceUrl:p.doi?'https://doi.org/'+encodeURI(p.doi):p.url};});
- const terms=filters.q.toLowerCase().split(/\s+/).filter(Boolean).slice(0,6);
- const scoped=papers.filter(p=>(filters.scope==='all'||p.topics.length>0)&&(!filters.topic||p.topics.includes(filters.topic))&&(!filters.publisher||p.publisher===filters.publisher)&&(p.priority??0)>=filters.min&&terms.every(t=>[p.title,p.abstract||'',...p.authors.map(a=>a.name),...p.affiliations,p.doi||''].join(' ').toLowerCase().includes(t)));
+ const scoped=papers.filter(p=>(filters.scope==='all'||p.topics.length>0)&&(!filters.topic||p.topics.includes(filters.topic))&&(!filters.publisher||p.publisher===filters.publisher)&&(p.priority??0)>=filters.min&&matchesPaperQuery(p,filters.q));
  const dayOf=(p:typeof papers[number])=>filters.basis==='publication'?(p.publicationDate&&p.publicationDate<=today?p.publicationDate:null):p.collectionDate;
  const counts=new Map<string,number>();for(const p of scoped){const day=dayOf(p);if(day&&day<=today)counts.set(day,(counts.get(day)||0)+1);}
  const days=[...counts.entries()].sort((a,b)=>b[0].localeCompare(a[0])).map(([date,count])=>({date,count}));

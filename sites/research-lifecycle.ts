@@ -32,11 +32,16 @@ export async function reconcileBatches(db:any,at=new Date()){
 }
 export async function admitRun(db:any,sourceId:string,batchKey:string|null,entryPoint:string,started:string){
  const id=crypto.randomUUID(),until=new Date(Date.now()+SOURCE_LEASE_MS).toISOString(),lockValue=until+'|'+id,key='lock:'+sourceId;
- const allowed=processingIdle+' AND '+finalizingAdmissionOpen+' AND '+(sourceId==='__metadata__'?collectionIdle:(batchKey?"EXISTS(SELECT 1 FROM research_batches WHERE key=? AND status='running') AND "+metadataIdle:metadataIdle));
+ // A standalone source must not enter a batch that already owns discovery.
+ // Keep this in the INSERT SELECT so it also guards a conflicting lock update;
+ // collectionIdle itself would reject the lock inserted by our own first write.
+ const batchCapacity=`(SELECT count(*) FROM research_runs WHERE batch_key=? AND phase='collection' AND status='running' AND coalesce(lease_until,strftime('%Y-%m-%dT%H:%M:%fZ',started_at,'+10 minutes'))>${databaseNowSql})<3`;
+ const allowed=processingIdle+' AND '+finalizingAdmissionOpen+' AND '+(sourceId==='__metadata__'?collectionIdle+' AND '+ingestionIdle:(batchKey?"EXISTS(SELECT 1 FROM research_batches WHERE key=? AND status='running') AND "+batchCapacity+' AND '+metadataIdle:"NOT EXISTS(SELECT 1 FROM research_batches WHERE status='running') AND "+metadataIdle));
+ const batchArgs=batchKey&&sourceId!=='__metadata__'?[batchKey,batchKey]:[];
  const result=await db.batch([
-  db.prepare(`INSERT INTO research_settings(key,value) SELECT ?,? WHERE ${allowed} ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE research_settings.value<?`).bind(key,lockValue,...(batchKey?[batchKey]:[]),started),
+  db.prepare(`INSERT INTO research_settings(key,value) SELECT ?,? WHERE ${allowed} ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE research_settings.value<?`).bind(key,lockValue,...batchArgs,started),
   db.prepare("UPDATE research_runs SET status='interrupted',closed_at=?,close_reason='source_lease_expired' WHERE source_id=? AND status='running' AND EXISTS(SELECT 1 FROM research_settings WHERE key=? AND value=?)").bind(started,sourceId,key,lockValue),
-  db.prepare(`INSERT INTO research_runs(id,started_at,status,source_id,batch_key,entry_point,lease_until,lease_token,lock_value) SELECT ?,?,'running',?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM research_settings WHERE key=? AND value=?) AND ${allowed}`).bind(id,started,sourceId,batchKey,entryPoint,until,id,lockValue,key,lockValue,...(batchKey?[batchKey]:[])),
+  db.prepare(`INSERT INTO research_runs(id,started_at,status,source_id,batch_key,entry_point,lease_until,lease_token,lock_value) SELECT ?,?,'running',?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM research_settings WHERE key=? AND value=?) AND ${allowed}`).bind(id,started,sourceId,batchKey,entryPoint,until,id,lockValue,key,lockValue,...batchArgs),
  ]);
  if(!result[2]?.meta?.changes)return null;
  return {id,key,lockValue,until};
@@ -52,7 +57,11 @@ export function fencedRunDatabase(db:any,runId:string,signal?:AbortSignal,guard?
  const batch=async(statements:any[])=>{
   try{
    checkCollectionCancellation(signal);
-   const fence=guard?db.prepare(`INSERT INTO research_run_write_guards(run_id) SELECT CASE WHEN (${guard.sql}) THEN ? ELSE '__invalid_processing_fence__' END`).bind(...guard.args,runId):db.prepare('INSERT INTO research_run_write_guards(run_id) VALUES(?)').bind(runId);
+   // Metadata cannot publish an older queue view while captured ingestion waits.
+   // The separate, origin-checked local recovery actor must be able to drain it.
+   const metadataSafe=`NOT EXISTS(SELECT 1 FROM research_runs WHERE id=? AND source_id='__metadata__' AND coalesce(entry_point,'')<>'local_recovery') OR ${ingestionIdle}`;
+   const condition=guard?`(${guard.sql}) AND (${metadataSafe})`:metadataSafe;
+   const fence=db.prepare(`INSERT INTO research_run_write_guards(run_id) SELECT CASE WHEN (${condition}) THEN ? ELSE '__invalid_processing_fence__' END`).bind(...(guard?.args||[]),runId,runId);
    const result=await db.batch([fence,...statements.map(unwrap),db.prepare('DELETE FROM research_run_write_guards WHERE run_id=?').bind(runId)]);
    // Submitted transactions may commit before cancellation is observed. Retain
    // that atomic evidence; stop before the next transaction or HTTP dispatch.

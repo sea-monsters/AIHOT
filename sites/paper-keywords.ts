@@ -1,6 +1,8 @@
 import {TOPICS} from './research-config.ts';
 import {parseAssessment} from './research-pipeline.ts';
 import type {Paper} from './research-domain.ts';
+import {doiId} from './doi.ts';
+import {paperInstitutionEvidence} from './paper-metadata.ts';
 export type KeywordSource='author'|'publisher-index'|'openalex-keyword'|'openalex-topic'|'ai'|'derived';
 export type KeywordConfidence='high'|'medium'|'low';
 export const KEYWORD_POLICY='first-three-v2';
@@ -65,4 +67,8 @@ export function keywordCandidates(p:Paper&{analysis?:any}){
  return [...members.values()];
 }
 export const paperCategories=(p:Paper&{analysis?:any})=>keywordCandidates(p).slice(0,3);
-export function matchesPaperQuery(p:Paper&{analysis?:any},query:string,categories=paperCategories(p)){const text=[p.title,p.abstract||'',...(p.authors||[]).map(a=>a.name),...(p.affiliations||[]),...(p.keywords||[]),...(p.provenance?.keywordEvidence?.records||[]).flatMap((r:any)=>(r.terms||[]).map((k:any)=>typeof k==='string'?k:k.label)),...categories.flatMap(k=>[k.id,k.label])].join(' ').normalize('NFKC').toLowerCase();return query.normalize('NFKC').toLowerCase().split(/\s+/).filter(Boolean).slice(0,6).every(term=>text.includes(term))}
+export function matchesPaperQuery(p:Paper&{analysis?:any},query:string,categories?:ReturnType<typeof paperCategories>){
+ const normalizedQuery=query.normalize('NFKC'),terms=(doiId(normalizedQuery)||normalizedQuery).toLowerCase().split(/\s+/).filter(Boolean).slice(0,6);if(!terms.length)return true;
+ const institutions=paperInstitutionEvidence(p).flatMap(i=>[i.label,...i.evidence.flatMap((e:any)=>e.rawAffiliations||[])]);
+ const text=[p.title,p.abstract||'',doiId(p.doi)||p.doi||'',...(p.authors||[]).map(a=>a.name),...(p.affiliations||[]),...institutions,...(p.keywords||[]),...(p.provenance?.keywordEvidence?.records||[]).flatMap((r:any)=>(r.terms||[]).map((k:any)=>typeof k==='string'?k:k.label)),...(categories||paperCategories(p)).flatMap(k=>[k.id,k.label])].join(' ').normalize('NFKC').toLowerCase();return terms.every(term=>text.includes(term));
+}

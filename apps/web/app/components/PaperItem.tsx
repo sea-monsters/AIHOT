@@ -5,7 +5,7 @@ import {PaperCardState,PaperSourceLink} from './PaperReader';
 import {AssessmentBadge} from './PaperAssessment';
 import {DisclosureIndicator} from './ui/Interaction';
 import {usePaperMotion} from './ui/usePaperMotion';
-import {paperSource,paperUpdate,paperWords} from '../lib/paper-item';
+import {paperSource,paperUpdate,paperWords,paperScoreAvailability,paperScoreText} from '../lib/paper-item';
 import {paperDetailCache} from '../lib/paper-detail-cache';
 
 export function PaperItem({paper:p,className='',heading=2,prefix='',lazy=false,detailPath,children,scoreLabel,score,note,onNavigate}:{paper:any;className?:string;heading?:2|3|4;prefix?:string;lazy?:boolean;detailPath?:string;children?:ReactNode;scoreLabel?:string;score?:number|null;note?:ReactNode;onNavigate?:()=>void}){
@@ -24,9 +24,9 @@ export function PaperItem({paper:p,className='',heading=2,prefix='',lazy=false,d
  const data=lazy?(detail?.key===JSON.stringify([p.id,revision,detailPath])?detail.value:null):p,source=paperSource(data?.doi??p.doi,data?.url??p.url),Heading=`h${heading}` as 'h2'|'h3'|'h4';
  const authorsWords=paperWords(p.keywords),categories=paperWords(p.categories),words=authorsWords.length?authorsWords:categories;
  const affiliations=[...new Set([...paperWords(p.affiliations),...paperWords(p.metadata?.institutions)])];
- const scoreAvailability=p.readingScore?'available':p.scoreAvailability||(p.metadataStatus==null||p.metadataStatus==='ready'||p.metadataStatus==='legacy_ready'?'available':p.metadataStatus==='abstain'?'abstained':'pending'),scoreReady=scoreAvailability==='available';
+ const scoreAvailability=paperScoreAvailability(p),scoreReady=scoreAvailability==='available';
  const priority=scoreLabel?score:scoreReady?(p.readingScore?.value??p.priority??p.ruleScore):null;
- const updated=paperUpdate(p.updatedAt),label=scoreLabel||'阅读优先级',scoreSource=scoreLabel?'':p.readingScore?'归档规则分':scoreReady?'规则分':scoreAvailability==='abstained'?'未纳入评分':'等待元数据归一化',ruleVersion=p.readingScore?.ruleVersion||p.ruleVersion,scoreText=typeof priority==='number'&&Number.isFinite(priority)?priority:scoreAvailability==='pending'?'等待补全':scoreAvailability==='abstained'?'未纳入':'未提供';
+ const updated=paperUpdate(p.updatedAt),label=scoreLabel||'阅读优先级',scoreSource=scoreLabel?'':p.readingScore?'归档规则分':scoreReady?'规则分':scoreAvailability==='abstained'?'未纳入评分':'等待元数据归一化',ruleVersion=p.readingScore?.ruleVersion||p.ruleVersion,scoreText=paperScoreText(priority,scoreLabel?'available':scoreAvailability);
  return <PaperCardState id={p.id} title={p.title} className={'paper-item '+className}>
   <div ref={motion.ref} className="paper-item-drawer" data-open={open} data-motion-active={motion.moving}>
    <div className="paper-item-heading">

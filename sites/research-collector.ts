@@ -3,7 +3,7 @@ import {AIError} from './ai/security.ts';
 import {collectionControl} from './research-collection-control.ts';
 import {collectionCycle} from './research-crossref.ts';
 import {RESEARCH_PAGE_BUDGET} from './research-config.ts';
-import {checkCollectionCancellation} from './research-lifecycle.ts';
+import {checkCollectionCancellation,databaseNowSql} from './research-lifecycle.ts';
 const parse=(s:any,f:any)=>{try{return JSON.parse(s)}catch{return f}};
 /** Finite waves: independent sources overlap persistence/RSS, but all head work
  * settles before continuations. The provider gate still serializes Crossref. */
@@ -11,7 +11,10 @@ export async function collectBatchSlice(db:any,batchKey:string,call:(sourceId:st
  const now=options.now||Date.now,started=options.startedMs??now(),deadline=runtimeDeadline(started+Math.min(75000,options.maxMs),options.runtimeBudget),results:any[]=[];
  if(deadline-now()<8000)return {batchKey,status:'partial',reason:'slice_deadline',stopReason:'slice_deadline',calls:0,attempted:0,results,collectionControl:await collectionControl(db,batchKey,new Date(now()))};
  const key='batch-collector:'+batchKey,lease=new Date(deadline+5000).toISOString()+'|'+crypto.randomUUID();
- const claimed=await db.prepare('INSERT INTO research_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE research_settings.value<?').bind(key,lease,new Date(now()).toISOString()).run();
+ // Coordinator expiry does not cancel source workers delayed by persistence.
+ // Fence both first admission and takeover in SQL, including legacy source locks.
+ const workersIdle=`NOT EXISTS(SELECT 1 FROM research_runs WHERE batch_key=? AND phase='collection' AND status='running' AND coalesce(lease_until,strftime('%Y-%m-%dT%H:%M:%fZ',started_at,'+10 minutes'))>${databaseNowSql}) AND NOT EXISTS(SELECT 1 FROM research_settings l JOIN research_batches b ON b.key=? JOIN json_each(b.sources_json) s ON l.key='lock:'||s.value WHERE l.value>=${databaseNowSql})`;
+ const claimed=await db.prepare(`INSERT INTO research_settings(key,value) SELECT ?,? WHERE ${workersIdle} ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE research_settings.value<? AND ${workersIdle}`).bind(key,lease,batchKey,batchKey,new Date(now()).toISOString(),batchKey,batchKey).run();
  if(!claimed.meta?.changes)return {status:'deferred',reason:'lock_busy',stopReason:'lock_busy',batchKey,calls:0,results,collectionControl:{stop:true,reason:'lock_busy',nextAction:'readback_reconcile'}};
  let stopReason='slice_deadline',control:any=null,reconcileControl:any=null;
  const tried=new Map<string,number>();

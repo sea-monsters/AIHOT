@@ -15,3 +15,5 @@ export function paperUpdate(value:unknown){
  return new Date(value).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false})+' UTC+08';
 }
 export function paperWords(value:any):string[]{return Array.isArray(value)?[...new Set(value.map(v=>typeof v==='string'?v:v?.label).filter((v):v is string=>typeof v==='string'&&!!v.trim()))]:[]}
+export function paperScoreAvailability(p:any):'available'|'pending'|'abstained'{return p.readingScore?'available':p.scoreAvailability||(p.metadataStatus==null||p.metadataStatus==='ready'||p.metadataStatus==='legacy_ready'?'available':p.metadataStatus==='abstain'?'abstained':'pending')}
+export function paperScoreText(value:unknown,availability:'available'|'pending'|'abstained'){return availability==='available'&&typeof value==='number'&&Number.isFinite(value)?value:availability==='pending'?'等待补全':availability==='abstained'?'未纳入':'未提供'}

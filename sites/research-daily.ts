@@ -1,6 +1,6 @@
 import {runtimeDeadline,assertRuntimeBudget,type RuntimeBudget} from './research-runtime-budget.ts';
 import {phaseTiming,phaseEvent} from './research-telemetry.ts';
-import {batchLifecycle} from './research-lifecycle.ts';
+import {batchLifecycle,databaseNowSql} from './research-lifecycle.ts';
 import {paperInstitutionEvidence} from './paper-metadata.ts';
 import {briefDto} from './research-briefs.ts';
 import {dailyDateRevision} from './daily-visits.ts';
@@ -79,19 +79,28 @@ export async function prepareDaily(db:any,date:string,at=new Date()){
  await db.batch([db.prepare('INSERT OR IGNORE INTO research_daily(date,source_date,cutoff,status,coverage_json,selection_json,paper_ids_json,content_hash,schema_version,prompt_version,created_at,updated_at,finished_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(date,w.sourceDate,w.cutoff,status,JSON.stringify(coverage),JSON.stringify(selection),JSON.stringify(paperIds),hash,DAILY_SCHEMA,DAILY_PROMPT,created,created,inputs.length?null:created),...inputs.map(g=>db.prepare('INSERT OR IGNORE INTO research_daily_groups(id,date,ordinal,keyword,status,input_json,paper_ids_json,content_hash,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,? FROM research_daily WHERE date=? AND content_hash=?').bind(g.id,date,g.ordinal,g.keyword,'queued',JSON.stringify({id:g.id,keyword:g.keyword,papers:g.papers}),JSON.stringify(g.papers.map((p:any)=>p.id)),g.contentHash,created,created,date,hash)),db.prepare("UPDATE research_daily_work SET status='frozen',updated_at=? WHERE date=? AND EXISTS(SELECT 1 FROM research_daily WHERE date=?)").bind(at.toISOString(),date,date)]);
  return db.prepare('SELECT * FROM research_daily WHERE date=?').bind(date).first();
 }
-async function refreshStatus(db:any,date:string){
+type DailyLease={value:string};
+const dailyLeaseGuard=(lease:DailyLease)=>({sql:`EXISTS(SELECT 1 FROM research_settings WHERE key='daily_generation_lock' AND value=? AND value>${databaseNowSql})`,args:[lease.value]});
+function runningGroupGuard(row:any,lease:DailyLease){const lock=dailyLeaseGuard(lease);return {sql:`status='running' AND request_id IS ? AND updated_at=? AND content_hash=? AND ${lock.sql}`,args:[row.request_id,row.updated_at,row.content_hash,...lock.args]};}
+async function refreshStatus(db:any,date:string,lease:DailyLease){
  const report=await db.prepare('SELECT * FROM research_daily WHERE date=?').bind(date).first();if(!report)return;
  const rows=(await db.prepare('SELECT status,count(*) n FROM research_daily_groups WHERE date=? GROUP BY status').bind(date).all()).results,counts=Object.fromEntries(rows.map((r:any)=>[r.status,Number(r.n)])),selection=parse(report.selection_json),coverage=parse(report.coverage_json);
  let status=report.status;if(rows.length){status=counts.running?'running':counts.queued?(counts.completed?'partial':'queued'):counts.unknown||counts.failed?'needs_review':counts.insufficient?'partial':coverage.complete&&!coverage.untrackedNewPapers&&!selection.capacityDeferred&&!selection.missingAbstract&&!selection.oversizedEvidence&&!selection.unresolvedScores?'completed':'partial';}
- await db.prepare('UPDATE research_daily SET status=?,updated_at=?,finished_at=? WHERE date=?').bind(status,stamp(),counts.queued||counts.running?null:stamp(),date).run();
+ // An unchanged terminal archive keeps its original processing-end fact.
+ if(status===report.status)return;
+ const lock=dailyLeaseGuard(lease),changed=stamp();
+ await db.prepare(`UPDATE research_daily SET status=?,updated_at=?,finished_at=? WHERE date=? AND status=? AND updated_at=? AND ${lock.sql}`).bind(status,changed,counts.queued||counts.running?null:changed,date,report.status,report.updated_at,...lock.args).run();
 }
-async function saveOutput(db:any,text:string,rows:any[]){const results=parseDailyOutput(text,rows.map(r=>parse(r.input_json)));await db.batch(results.map(r=>db.prepare('UPDATE research_daily_groups SET status=?,result_json=?,error_code=?,updated_at=? WHERE id=?').bind(r.status,r.result?JSON.stringify(r.result):null,r.errorCode||null,stamp(),r.id)));}
-async function recoverInterrupted(db:any){
+async function saveOutput(db:any,text:string,rows:any[],lease:DailyLease){
+ const results=parseDailyOutput(text,rows.map(r=>parse(r.input_json))),writes=results.map(r=>{const row=rows.find(row=>row.id===r.id),guard=runningGroupGuard(row,lease);return db.prepare(`UPDATE research_daily_groups SET status=?,result_json=?,error_code=?,updated_at=? WHERE id=? AND ${guard.sql}`).bind(r.status,r.result?JSON.stringify(r.result):null,r.errorCode||null,stamp(),r.id,...guard.args)});
+ const saved=await db.batch(writes);return saved.every((r:any)=>r.meta?.changes===1);
+}
+async function recoverInterrupted(db:any,lease:DailyLease){
  const rows=(await db.prepare("SELECT * FROM research_daily_groups WHERE status='running' AND updated_at<?").bind(new Date(Date.now()-4*60000).toISOString()).all()).results;
  for(const requestId of new Set(rows.map((r:any)=>r.request_id))){const group=rows.filter((r:any)=>r.request_id===requestId),receipt=await db.prepare('SELECT status,response_json FROM ai_receipts WHERE id=?').bind(requestId+':0').first();
-  if(receipt?.status==='received'){try{const text=dailyReceiptText(parse(receipt.response_json));await saveOutput(db,text,group)}catch{await db.batch(group.map((r:any)=>db.prepare("UPDATE research_daily_groups SET status='failed',error_code='invalid_daily_output',updated_at=? WHERE id=?").bind(stamp(),r.id)))}}
-  else await db.batch(group.map((r:any)=>db.prepare('UPDATE research_daily_groups SET status=?,error_code=?,updated_at=? WHERE id=?').bind(receipt?'unknown':'queued',receipt?'request_already_attempted':null,stamp(),r.id)));
-  for(const date of new Set(group.map((r:any)=>r.date)))await refreshStatus(db,String(date));
+  if(receipt?.status==='received'){try{const text=dailyReceiptText(parse(receipt.response_json));await saveOutput(db,text,group,lease)}catch{await db.batch(group.map((r:any)=>{const guard=runningGroupGuard(r,lease);return db.prepare(`UPDATE research_daily_groups SET status='failed',error_code='invalid_daily_output',updated_at=? WHERE id=? AND ${guard.sql}`).bind(stamp(),r.id,...guard.args)}))}}
+  else await db.batch(group.map((r:any)=>{const guard=runningGroupGuard(r,lease);return db.prepare(`UPDATE research_daily_groups SET status=?,error_code=?,updated_at=? WHERE id=? AND ${guard.sql}`).bind(receipt?'unknown':'queued',receipt?'request_already_attempted':null,stamp(),r.id,...guard.args)}));
+  for(const date of new Set(group.map((r:any)=>r.date)))await refreshStatus(db,String(date),lease);
  }
 }
 export async function generateDaily(db:any,env:any,body:any={},request?:Request,at=new Date(),runtimeBudget?:RuntimeBudget){
@@ -104,35 +113,43 @@ export async function generateDaily(db:any,env:any,body:any={},request?:Request,
  const sourceDay=await preparationCohort(db,executionDate),targetDate=reportDay(sourceDay);
  await db.batch([...new Set([executionDate,targetDate])].map(day=>db.prepare("INSERT OR IGNORE INTO research_daily_work(date,source_date,status,created_at,updated_at) SELECT ?,?,'pending',?,? WHERE NOT EXISTS(SELECT 1 FROM research_daily WHERE date=?)").bind(day,dailyWindow(at,day).sourceDate,started,started,day)));
  const pendingWork=await db.prepare("SELECT date FROM research_daily_work w WHERE status<>'frozen' AND date<=? AND NOT EXISTS(SELECT 1 FROM research_daily d WHERE d.date=w.date) ORDER BY date LIMIT 1").bind(executionDate).first(),date=pendingWork?.date||executionDate;
- const lock=await db.prepare("INSERT INTO research_settings(key,value) VALUES('daily_generation_lock',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE research_settings.value<?").bind(expires,started).run();if(!lock.meta?.changes)return {status:'busy',date,attempted:0};
+ const lock=await db.prepare(`INSERT INTO research_settings(key,value) VALUES('daily_generation_lock',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE research_settings.value<${databaseNowSql}`).bind(expires).run();if(!lock.meta?.changes)return {status:'busy',date,attempted:0};
+ const lease={value:expires},leaseGuard=dailyLeaseGuard(lease);
  const timing=phaseTiming(started),phaseId=crypto.randomUUID();const result:any={date,status:'ok',blocked,modelAvailability:blocked||'available',attempted:0,processedDates:[],limits:DAILY_LIMITS};
  try{
-  await recoverInterrupted(db);const preparation=await prepareDaily(db,date,at);if(preparation?.deferred){result.status='deferred';return {...result,reason:preparation.status,metadataPending:preparation.metadataPending,scoringPending:preparation.scoringPending,attempted:0};}
+  await recoverInterrupted(db,lease);const preparation=await prepareDaily(db,date,at);if(preparation?.deferred){result.status='deferred';return {...result,reason:preparation.status,metadataPending:preparation.metadataPending,scoringPending:preparation.scoringPending,attempted:0};}
   const max=Math.min(DAILY_LIMITS.callsPerRun,Math.max(0,Number(body.maxCalls??2)));
   if(!blocked)for(let call=0;call<max;call++){
    if(Date.now()>deadline-95000){result.blocked='time_budget';break}
    const charged=await db.prepare("SELECT count(*) n FROM ai_receipts WHERE purpose='daily_digest' AND request_id LIKE ?").bind('daily:'+executionDate+':%').first();if(Number(charged?.n||0)>=DAILY_LIMITS.callsPerRun){result.blocked='daily_call_cap';break}
    const candidates=(await db.prepare("SELECT * FROM research_daily_groups WHERE status='queued' AND date<=? ORDER BY date,ordinal LIMIT ?").bind(date,DAILY_LIMITS.groupsPerCall).all()).results;if(!candidates.length)break;
    const rows:any[]=[];for(const candidate of candidates){if(candidate.date!==candidates[0].date)break;const proposed=[...rows,candidate];if(new TextEncoder().encode(JSON.stringify({groups:proposed.map(r=>parse(r.input_json))})).length>DAILY_LIMITS.inputBytes)break;rows.push(candidate)}
-   if(!rows.length){await db.prepare("UPDATE research_daily_groups SET status='failed',error_code='context_limit',updated_at=? WHERE id=?").bind(stamp(),candidates[0].id).run();await refreshStatus(db,candidates[0].date);continue}
+   if(!rows.length){await db.prepare(`UPDATE research_daily_groups SET status='failed',error_code='context_limit',updated_at=? WHERE id=? AND status='queued' AND updated_at=? AND ${leaseGuard.sql}`).bind(stamp(),candidates[0].id,candidates[0].updated_at,...leaseGuard.args).run();await refreshStatus(db,candidates[0].date,lease);continue}
    config=await processingConfig(db,env,request);blocked=block(config,env);if(blocked){result.blocked=blocked;break}
    const requestId='daily:'+executionDate+':'+rows[0].date+':'+await digest(rows.map(r=>r.id)),safe={model:config.model,endpoint:config.endpoint,protocol:config.protocol,reasoning:config.reasoning,revision:config.revision,maxOutputTokens:Math.min(config.max_tokens,DAILY_LIMITS.outputTokens),schema:DAILY_SCHEMA,prompt:DAILY_PROMPT};
-   await db.batch(rows.map(r=>db.prepare("UPDATE research_daily_groups SET status='running',request_id=?,config_json=?,error_code=NULL,updated_at=? WHERE id=? AND status='queued'").bind(requestId,JSON.stringify(safe),stamp(),r.id)));await refreshStatus(db,rows[0].date);
+   // Claim the exact selected versions in one statement. A stalled executor
+   // cannot dispatch after another lease owner has completed these groups.
+   const claimedAt=stamp(),ids=JSON.stringify(rows.map(r=>r.id)),versions=JSON.stringify(rows.map(r=>({id:r.id,contentHash:r.content_hash,updatedAt:r.updated_at})));
+   const claimed=await db.prepare(`UPDATE research_daily_groups SET status='running',request_id=?,config_json=?,error_code=NULL,updated_at=? WHERE id IN (SELECT value FROM json_each(?)) AND status='queued' AND ${leaseGuard.sql} AND ${databaseNowSql}<? AND (SELECT count(*) FROM research_daily_groups g JOIN json_each(?) v ON g.id=json_extract(v.value,'$.id') WHERE g.status='queued' AND g.content_hash=json_extract(v.value,'$.contentHash') AND g.updated_at=json_extract(v.value,'$.updatedAt'))=?`).bind(requestId,JSON.stringify(safe),claimedAt,ids,...leaseGuard.args,new Date(deadline).toISOString(),versions,rows.length).run();
+   if(claimed.meta?.changes!==rows.length){result.blocked='lock_busy';result.leaseLost=true;break;}
+   for(const row of rows){row.request_id=requestId;row.updated_at=claimedAt;}
+   await refreshStatus(db,rows[0].date,lease);
+   const dispatchGuard=async()=>{const state=await db.prepare(`SELECT (${leaseGuard.sql} AND ${databaseNowSql}<? AND (SELECT count(*) FROM research_daily_groups WHERE id IN (SELECT value FROM json_each(?)) AND status='running' AND request_id=? AND updated_at=?)=?) valid`).bind(...leaseGuard.args,new Date(deadline).toISOString(),ids,requestId,claimedAt,rows.length).first();return {valid:state?.valid===1&&Date.now()<deadline,deadlineAt:deadline,leaseUntil:expires};};
    let reservedUnsent=false;
    try{
-    const dailyPaperIds=rows.flatMap((r:any)=>parse(r.input_json).papers||[]).map((p:any)=>p.id).filter((id:any):id is string=>typeof id==='string');const httpStarted=Date.now();const response=await providerCall(db,config.owner_id,config,env,requestId,0,[{role:'system',content:DAILY_SYSTEM},{role:'user',content:JSON.stringify({groups:rows.map(r=>parse(r.input_json)),evidenceScope:'abstract_only'})}],'daily_digest',{allowTools:false,maxOutputTokens:DAILY_LIMITS.outputTokens,...(runtimeBudget?{dispatchGuard:async()=>({valid:Date.now()<deadline,deadlineAt:deadline,leaseUntil:new Date(Math.min(deadline,Date.parse(expires))).toISOString()})}:{}),telemetry:{phase:'daily_digest',runId:phaseId,batchKey:rows[0].date,cohortKey:sourceDay,paperIds:dailyPaperIds,configRevision:config.revision}});
-    timing.httpMs+=Date.now()-httpStarted;if(response.calls.length)throw new AIError('answer_format',502,'日报不允许工具调用');await saveOutput(db,response.text,rows);
-   }catch(e){const receipt=await db.prepare('SELECT status FROM ai_receipts WHERE id=?').bind(requestId+':0').first(),code=e instanceof AIError?e.code:'invalid_daily_output';reservedUnsent=code==='dispatch_not_sent';if(reservedUnsent)result.reservedUnsent=(result.reservedUnsent||0)+1;const status=!receipt?'queued':['unknown','pending'].includes(receipt.status)?'unknown':'failed';await db.batch(rows.map(r=>db.prepare('UPDATE research_daily_groups SET status=?,error_code=?,updated_at=? WHERE id=?').bind(status,code,stamp(),r.id)));result.blocked=code;result.status='partial';}
+    const dailyPaperIds=rows.flatMap((r:any)=>parse(r.input_json).papers||[]).map((p:any)=>p.id).filter((id:any):id is string=>typeof id==='string');const httpStarted=Date.now();const response=await providerCall(db,config.owner_id,config,env,requestId,0,[{role:'system',content:DAILY_SYSTEM},{role:'user',content:JSON.stringify({groups:rows.map(r=>parse(r.input_json)),evidenceScope:'abstract_only'})}],'daily_digest',{allowTools:false,maxOutputTokens:DAILY_LIMITS.outputTokens,dispatchGuard,telemetry:{phase:'daily_digest',runId:phaseId,batchKey:rows[0].date,cohortKey:sourceDay,paperIds:dailyPaperIds,configRevision:config.revision}});
+    timing.httpMs+=Date.now()-httpStarted;if(response.calls.length)throw new AIError('answer_format',502,'日报不允许工具调用');if(!await saveOutput(db,response.text,rows,lease)){result.blocked='lock_busy';result.leaseLost=true;}
+   }catch(e){const receipt=await db.prepare('SELECT status FROM ai_receipts WHERE id=?').bind(requestId+':0').first(),code=e instanceof AIError?e.code:'invalid_daily_output';reservedUnsent=code==='dispatch_not_sent';if(reservedUnsent)result.reservedUnsent=(result.reservedUnsent||0)+1;const status=!receipt?'queued':['unknown','pending'].includes(receipt.status)?'unknown':'failed';await db.batch(rows.map(r=>{const guard=runningGroupGuard(r,lease);return db.prepare(`UPDATE research_daily_groups SET status=?,error_code=?,updated_at=? WHERE id=? AND ${guard.sql}`).bind(status,code,stamp(),r.id,...guard.args)}));result.blocked=code;result.status='partial';}
    if(!reservedUnsent&&await db.prepare('SELECT id FROM ai_receipts WHERE id=?').bind(requestId+':0').first())result.attempted++;
-   result.processedDates.push(rows[0].date);await refreshStatus(db,rows[0].date);if(result.blocked)break;
+   result.processedDates.push(rows[0].date);await refreshStatus(db,rows[0].date,lease);if(result.blocked)break;
   }
-  await refreshStatus(db,date);
-  if(result.blocked)await db.prepare("UPDATE research_daily_groups SET error_code=?,updated_at=? WHERE status='queued' AND date<=?").bind(result.blocked,stamp(),date).run();
-  const queue=(await db.prepare("SELECT status,count(*) n FROM research_daily_groups WHERE date<=? GROUP BY status").bind(date).all()).results;result.processedDates=[...new Set(result.processedDates)];result.queue=Object.fromEntries(queue.map((r:any)=>[r.status,Number(r.n)]));if(!result.queue.queued&&!result.queue.running)result.blocked=null;
+  await refreshStatus(db,date,lease);
+  if(result.blocked)await db.prepare(`UPDATE research_daily_groups SET error_code=?,updated_at=? WHERE status='queued' AND date<=? AND ${leaseGuard.sql}`).bind(result.blocked,stamp(),date,...leaseGuard.args).run();
+  const queue=(await db.prepare("SELECT status,count(*) n FROM research_daily_groups WHERE date<=? GROUP BY status").bind(date).all()).results;result.processedDates=[...new Set(result.processedDates)];result.queue=Object.fromEntries(queue.map((r:any)=>[r.status,Number(r.n)]));if(!result.queue.queued&&!result.queue.running&&!result.leaseLost)result.blocked=null;
   const saved=await db.prepare('SELECT status,source_date,selection_json,coverage_json FROM research_daily WHERE date=?').bind(date).first(),savedSelection=parse(saved.selection_json),savedCoverage=parse(saved.coverage_json);
   result.report={date,sourceDate:saved.source_date,status:saved.status,eligible:savedSelection.eligible,newPapers:savedSelection.newPapers,coverageComplete:savedCoverage.complete,untrackedNewPapers:savedCoverage.untrackedNewPapers,batches:(savedCoverage.batches||[]).map((b:any)=>({key:b.key,status:b.status,attemptedSources:b.attemptedSources,expectedSources:b.expectedSources,runIds:b.runs.map((r:any)=>r.id)}))};
   result.status=result.blocked?'blocked':result.queue.queued||result.queue.failed||result.queue.unknown||!['completed','empty'].includes(saved.status)?'partial':'ok';return result;
- }finally{await phaseEvent(db,{runId:phaseId,phase:'daily'},timing,result.status,0,{modelCalls:result.attempted,maxCalls:2});await db.prepare("DELETE FROM research_settings WHERE key='daily_generation_lock' AND value=?").bind(expires).run();}
+ }finally{try{await phaseEvent(db,{runId:phaseId,phase:'daily'},timing,result.status,0,{modelCalls:result.attempted,maxCalls:2});}finally{await db.prepare("DELETE FROM research_settings WHERE key='daily_generation_lock' AND value=?").bind(expires).run();}}
 }
 function publicGroup(r:any){const input=parse(r.input_json),config=parse(r.config_json,null);return {id:r.id,keyword:r.keyword,status:r.status,result:parse(r.result_json,null),config,errorCode:r.error_code,contentHash:r.content_hash,updatedAt:r.updated_at,papers:(input.papers||[]).map((p:any)=>({id:p.id,title:p.title,url:p.doi?'https://doi.org/'+encodeURI(p.doi):p.url,doi:p.doi,journal:p.journal,publisher:p.publisher,authors:p.authors,affiliations:[...new Set([...(p.affiliations||[]),...paperInstitutionEvidence(p).map(i=>i.label)])],keywords:p.keywords,updatedAt:p.updatedAt||null,firstSeen:p.firstSeen,readingScore:p.readingScore,abstractSource:p.provenance?.abstract||null,contentHash:p.contentHash}))};}
 export async function dailyCalendarRead(db:any,params:URLSearchParams,at=new Date()){

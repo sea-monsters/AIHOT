@@ -1,8 +1,28 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-24T00:15:59Z",
+  "latestVersion": "2026-10-24T03:15:39Z",
   "releases": [
+    {
+      "id": "hkis-dataflow-concurrency-consistency-20261024",
+      "at": "2026-10-24T03:15:39Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "加固采集并发、日报归属和论文展示一致性",
+      "body": [
+        "采集入口原子排除批次冲突并统一同批并发3；协调lease过期仍有来源工作时拒绝接管，元数据入场和写入均阻挡待恢复耐久片段，不扩大原预算或放松安全门控。",
+        "日报派发及回写关联当前lease和精确组版本，过期执行者不能覆盖新owner的完成或unknown决定；重复终态请求保留原结束事实，遥测失败也释放本次锁。",
+        "论文规范索引按最终题名生成，旧Crossref重放不回退检查时间；详情与列表统一待补全/未纳入/真零分显示，全库和feed统一合法DOI及已验证机构搜索。",
+        "新增真实迁移SQLite/D1、失败竞态和隔离Chromium回归；保留first_seen、分析历史、reader及冻结内容，不批量修复历史数据，不触发真实采集或付费模型。",
+        "此项记录仓库修复，Sites实际发布由独立移植复核确定。固定bootstrap2d2d07f、自动任务、权限、来源和额度不变，未上线manual或上游依赖升级不因此成为生产功能。"
+      ],
+      "sources": [
+        {
+          "label": "复核矩阵、复现回归、移植边界与剩余限制",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/dataflow-review.md"
+        }
+      ]
+    },
     {
       "id": "hkis-runtime-early-preparation-window-20261024",
       "at": "2026-10-24T00:15:59Z",
