@@ -4,7 +4,7 @@ import {mkdirSync,writeFileSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 import {resolve} from 'node:path';
-import {privateSlotMain} from './run-research-slot.mjs';
+import {privateSlotMain,slotOutcome} from './run-research-slot.mjs';
 
 const token='SYNTHETIC_CLIENT_OUTCOME_SENTINEL',origin='https://fixture.chatgpt.site';
 const phases:[8|20,string][]=[[8,'enrich'],[8,'process'],[8,'daily/generate'],[20,'batch/start'],[20,'sync'],[20,'batch/finish'],[20,'enrich'],[20,'process']];
@@ -58,3 +58,5 @@ test('actual HTTP client keeps the sent opaque ID for gateway/truncated/missing-
  const mismatch=await slot(8,'enrich',()=>Response.json({status:'unknown',requestId:different})),step=mismatch.result.steps.at(-1);assert.equal(mismatch.result.status,'unknown');assert.equal(step.sentRequestId,mismatch.sentIds.at(-1));assert.equal(step.requestId,different);assert.equal(step.operationIdMismatch,true);assert.notEqual(step.requestId,step.sentRequestId);stopped(mismatch.paths,'enrich');
  const rejected=await slot(20,'batch/finish',()=>Response.json({code:'batch_in_flight'},{status:409}));assert.equal(rejected.result.status,'deferred');assert.equal(rejected.result.steps.at(-1).requestId,rejected.sentIds.at(-1));stopped(rejected.paths,'batch/finish');
 });
+
+test('attested unique-model configuration rejection is known, while unlisted HTTP codes remain unknown',async()=>{const known=await slotOutcome(Response.json({code:'not_configured'},{status:409}));assert.equal(known.status,'deferred');assert.equal(known.code,'not_configured');const other=await slotOutcome(Response.json({code:'arbitrary_rejection'},{status:409}));assert.equal(other.status,'unknown')});

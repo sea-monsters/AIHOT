@@ -135,7 +135,7 @@ async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started
  if(slot===20)for(const k of ['metadata_previous','rules_previous','daily'])goals[k]={status:'not_due',reason:'not_due',sourceDay:null,reportDate:null};
  let batchKey:string|null=null,preparationMs=0,collectionBudgetMs=0,collectionDeadline=0,collectionStoppedAt:number|null=null,collectionCalls=0,collectionRequests=0,collectionCallsKnown=true,collectionStopReason:string|null=null,coverage=coverageEvidence(null),target:any=null;
  const mark=(key:string,status:string,reason:any=null)=>Object.assign(goals[key],{status,reason});
- const outcome=(status:string,reason:any=null)=>{for(const [key,g] of Object.entries(goals) as any){if(g.status==='pending'){g.status='deferred';g.reason=['unknown','blocked'].includes(status)?'not_dispatched_after_stop':key==='collection'?'core_not_started':'maintenance_budget'}g.nextAction=['unknown','blocked'].includes(g.status)?'review_committed_state':['partial','deferred'].includes(g.status)?'next_scheduled_window':g.status==='external'?'separate_authorized_workflow':'none'}return {status,reason,batchKey,preparationMs,collectionBudgetMs,collectionContract:'bounded-v1',collectionCalls:collectionCallsKnown?collectionCalls:null,collectionRequests,remainingCollectionCalls:collectionCallsKnown?limits.collectionCalls-collectionCalls:null,remainingCollectionMs:Math.max(0,collectionDeadline-(collectionStoppedAt??now())),collectionStopReason,coverageStatus:coverage.status,coverage,elapsedMs:now()-started,remainingMs:remaining(),goals,steps}};
+ const outcome=(status:string,reason:any=null)=>{for(const [key,g] of Object.entries(goals) as any){if(g.status==='pending'){g.status='deferred';g.reason=['unknown','blocked'].includes(status)?'not_dispatched_after_stop':key==='collection'?'core_not_started':'maintenance_budget'}g.nextAction??=['unknown','blocked'].includes(g.status)?'review_committed_state':['partial','deferred'].includes(g.status)?'next_scheduled_window':g.status==='external'?'separate_authorized_workflow':'none'}return {status,reason,batchKey,preparationMs,collectionBudgetMs,collectionContract:'bounded-v1',collectionCalls:collectionCallsKnown?collectionCalls:null,collectionRequests,remainingCollectionCalls:collectionCallsKnown?limits.collectionCalls-collectionCalls:null,remainingCollectionMs:Math.max(0,collectionDeadline-(collectionStoppedAt??now())),collectionStopReason,coverageStatus:coverage.status,coverage,elapsedMs:now()-started,remainingMs:remaining(),goals,steps}};
  const invoke=async(phase:string,path:string,body:any,limit:number)=>{
   if(remaining()<=0){steps.push({phase,status:'deferred',reason:'deadline'});return {status:'deferred',reason:'deadline'};}
   const at=now();let v:any;try{v=await call(path,body,Math.max(1,Math.min(limit,remaining())))}catch{v={status:'unknown',reason:'response_unconfirmed'}}
@@ -202,12 +202,12 @@ async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started
  const recovered=await recover();if(goalBarrier(recovered)||recovered.status!=='ok')return stop('metadata_current',recovered,'recovery_unconfirmed');
  const maintain=async(cohort:'current'|'previous_day',paid:number)=>{
   const suffix=cohort==='current'?'current':'previous',metadataKey='metadata_'+suffix,rulesKey='rules_'+suffix,scope=cohort==='previous_day'?{sourceDay:target.sourceDay}:{};
-  if(remaining()<30000){mark(metadataKey,'deferred','maintenance_budget');mark(rulesKey,'deferred','metadata_deferred');return {prepared:false};}
+  if(remaining()<30000){mark(metadataKey,'deferred','maintenance_budget');mark(rulesKey,'deferred','metadata_deferred');return {prepared:false,reason:'maintenance_budget'};}
   const maxMs=Math.min(75000,remaining()-15000),v=await invoke('metadata','/api/site/research/enrich',{cohort,maxMs,...scope},maxMs+15000);
   if(goalBarrier(v))return {stopped:stop(metadataKey,v,'metadata_deferred')};
   if(v.sourceDay!==(cohort==='current'?today:target.sourceDay)){mark(metadataKey,'unknown','goal_target_unconfirmed');return {stopped:outcome('unknown','goal_target_unconfirmed')};}
   const pending=Number(v.deferred)>0||Number(v.scopePending)>0||Number(v.remainingMetadata)>0||v.status!=='ok';mark(metadataKey,pending?'partial':'ok',pending?(reasonOf(v)||'pending_metadata'):null);
-  if(remaining()<limits.localScoringMinMs){mark(rulesKey,'deferred','local_scoring_budget');return {prepared:false};}
+  if(remaining()<limits.localScoringMinMs){mark(rulesKey,'deferred','local_scoring_budget');return {prepared:false,reason:'local_scoring_budget'};}
   const local=await invoke('local_scoring','/api/site/research/process',{maxPapers:0,cohort,maxMs:Math.min(30000,remaining()-2000),deadlineAt:new Date(deadline).toISOString(),...scope},Math.min(30000,remaining()));
   if(goalBarrier(local))return {stopped:stop(rulesKey,local,'assessment_deferred')};
   if(local.scope?.sourceDay!==(cohort==='current'?today:target.sourceDay)||!Number.isInteger(local.remainingQueued)||local.remainingQueued<0){mark(rulesKey,'unknown','goal_target_unconfirmed');return {stopped:outcome('unknown','goal_target_unconfirmed')};}
@@ -218,7 +218,7 @@ async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started
    else {const v=await invoke('scoring','/api/site/research/process',{maxPapers:paid,cohort,maxMs:Math.min(slot===8?120000:210000,remaining()-2000),deadlineAt:new Date(deadline).toISOString(),...scope},Math.min(slot===8?120000:210000,remaining()));
     if(goalBarrier(v))return {stopped:stop('assessment',v,'assessment_deferred')};
     if(v.scope?.sourceDay!==(cohort==='current'?today:target.sourceDay)||!Number.isInteger(v.remainingQueued)||v.remainingQueued<0){mark('assessment','unknown','goal_target_unconfirmed');return {stopped:outcome('unknown','goal_target_unconfirmed')};}
-    queued=v.remainingQueued;mark('assessment',queued?'partial':'ok',queued?(reasonOf(v)||'work_pending'):null);
+    queued=v.remainingQueued;const incomplete=queued>0||v.status!=='ok'||!!v.blocked||Number(v.failed)>0;mark('assessment',incomplete?'partial':'ok',incomplete?(reasonOf(v)||'work_pending'):null);if(Number(v.failed)>0)goals.assessment.nextAction='review_committed_state';
    }
   }else if(paid>0)mark('assessment','ok');
   else if(cohort===(slot===8?'previous_day':'current'))mark('assessment','deferred','runtime_disabled');
@@ -229,13 +229,13 @@ async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started
  if(slot===8&&target.completed===true){for(const key of ['metadata_previous','rules_previous','assessment','daily'])mark(key,'ok','goal_completed')}
  else if(slot===8){
   const prior=await maintain('previous_day',policy.assessmentMaxPapers);if(prior.stopped)return prior.stopped;
-  if(!prior.prepared)mark('daily','deferred',prior.pending?'pending_metadata':'pending_scoring');
+  if(!prior.prepared)mark('daily','deferred',prior.reason||(prior.pending?'pending_metadata':'pending_scoring'));
   else if(policy.dailyMaxCalls===0)mark('daily','deferred','runtime_disabled');
   else if(remaining()<190000)mark('daily','deferred','daily_budget');
   else {const daily=await invoke('daily','/api/site/research/daily/generate',{maxCalls:policy.dailyMaxCalls,sourceDay:target.sourceDay},190000);if(goalBarrier(daily))return stop('daily',daily,'preparation_deferred');if((daily.report?.sourceDate||daily.sourceDay||daily.source_date)!==target.sourceDay||(daily.date||daily.report?.date)!==target.reportDate){mark('daily','unknown','goal_target_unconfirmed');return outcome('unknown','goal_target_unconfirmed')};mark('daily',daily.status==='ok'?'ok':'deferred',daily.reason||reasonOf(daily));}
  }
  const current=await maintain('current',slot===20?policy.assessmentMaxPapers:0);if(current.stopped)return current.stopped;
- if(remaining()>=15000){const brief=await invoke('brief','/api/site/research/brief/prepare',{batchKey},15000);if(goalBarrier(brief))return stop('brief',brief,'brief_preparation_failed');if(!brief.brief||brief.brief.batchKey!==batchKey){mark('brief','unknown','brief_preparation_failed');return outcome('unknown','brief_preparation_failed')};mark('brief','external','awaiting_assistant');}
+ if(remaining()>=15000){const brief=await invoke('brief','/api/site/research/brief/prepare',{batchKey},15000);if(goalBarrier(brief))return stop('brief',brief,'brief_preparation_failed');if(!brief.brief||brief.brief.batchKey!==batchKey){mark('brief','unknown','brief_preparation_failed');return outcome('unknown','brief_preparation_failed')};if(brief.brief.status==='published')mark('brief','ok','goal_completed');else if(brief.brief.status==='awaiting_analysis')mark('brief','external','awaiting_assistant');else {mark('brief','unknown','brief_preparation_failed');return outcome('unknown','brief_preparation_failed')};}
  else mark('brief','deferred','brief_budget');
  return outcome(Object.values(goals).some((g:any)=>['partial','deferred','blocked','unknown','pending'].includes(g.status))?'partial':'ok');
 }

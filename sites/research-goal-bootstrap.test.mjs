@@ -76,11 +76,12 @@ const fixtureResponse=async(input,options)=>{
  else if(suffix==='metadata')result={status:'ok',sourceDay:body.sourceDay||executionDay,ready:0,abstained:0,deferred:0,scopePending:0,remainingMetadata:0};
  else if(suffix==='scoring')result={status:'ok',scope:{sourceDay:body.sourceDay||executionDay},sourceDay:body.sourceDay||executionDay,remainingQueued:spec.queued?3:body.maxPapers===0?1:0,modelCalls:0};
  else if(suffix==='daily')result={status:'deferred',reason:'pending_scoring',blocked:'ai_disabled',date:reportDate,report:{sourceDate:sourceDay},attempted:0};
- else if(suffix==='brief')result={brief:{batchKey:key,status:'awaiting_analysis'}};
+ else if(suffix==='brief')result={brief:{batchKey:key,status:spec.publishedBrief?'published':'awaiting_analysis'}};
  else throw Error('Unexpected fixture route');
  if(spec.completedTarget&&suffix==='plan')Object.assign(result.maintenance,{completed:true,status:spec.completedTarget});
  if(spec.metadataPartial&&suffix==='metadata')Object.assign(result,{status:'partial',reason:'provider_cooldown',ready:1,deferred:1,remainingMetadata:1});
  if(spec.aiDisabled&&suffix==='scoring')Object.assign(result,{status:'blocked',blocked:'ai_disabled',attempted:0,modelCalls:0,remainingQueued:1});
+ if(spec.knownRejection&&phase==='paid')result={status:'partial',blocked:'provider_rejected',failed:1,attempted:1,unknownAttempts:0,remainingQueued:0,scope:{sourceDay:body.sourceDay||executionDay}};
  if(spec.unknownAttempts&&phase==='paid')Object.assign(result,{status:'partial',unknownAttempts:1,attempted:1});
  if(spec.partialCoverage&&suffix==='finish')Object.assign(result,{status:'partial',expectedSources:2,attemptedSources:1,completeSources:1,missingSources:['not_checked_fixture_source']});
  if(spec.collectionGate==='concurrent_start'&&suffix==='start')result={status:'deferred',reason:'collection_in_progress'};
@@ -240,3 +241,7 @@ test('known collection cancellation and concurrency gates stop without replay, f
   const result=await run({collectionGate});assert.equal(result.code,0);assert.equal(result.report.status,'blocked');assert.equal(goal(result,'collection').status,'blocked');assert.equal(result.report.coverageStatus,'unknown');const sequence=names(result);assert.equal(sequence.at(-1),collectionGate==='concurrent_start'?'start':'collect');assert.equal(sequence.includes('finish'),false);assert.equal(sequence.includes('metadata'),false);assert.equal(sequence.includes('scoring'),false);assert.equal(sequence.includes('daily'),false);assert.equal(sequence.filter(name=>name===(collectionGate==='concurrent_start'?'start':'collect')).length,1);
  }
 });
+
+test('known terminal provider rejection remains a partial assessment goal rather than success',async()=>{const result=await run({knownRejection:true});collected(result);assert.equal(result.code,0);assert.equal(goal(result,'assessment').status,'partial');assert.equal(goal(result,'assessment').reason,'provider_rejected');assert.equal(goal(result,'assessment').nextAction,'review_committed_state');assert.equal(posts(result).filter(r=>r.path.endsWith('/scoring')&&r.body.maxPapers>0).length,1)});
+
+test('already published brief is acknowledged without scheduling another assistant analysis',async()=>{const result=await run({publishedBrief:true});collected(result);assert.equal(result.code,0);assert.equal(goal(result,'brief').status,'ok');assert.equal(goal(result,'brief').reason,'goal_completed');assert.equal(goal(result,'brief').nextAction,'none');assert.equal(names(result).filter(n=>n==='brief').length,1)});

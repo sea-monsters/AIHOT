@@ -7,7 +7,7 @@ import {pathToFileURL} from 'node:url';
 // Only exact service code/status pairs prove a rejected operation. Gateways
 // and unreadable bodies cannot tell us whether a POST already committed.
 const safeOperationId=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)?v.toLowerCase():null;
-const rejected={...Object.fromEntries(RUNTIME_CODES.map(code=>[code,[400,409]])),batch_window:[409],interval_owner_ambiguous:[409],origin_rejected:[403],request_marker_required:[403],request_rejected:[403],invalid_request:[400],invalid_json:[400],request_too_large:[413],method_not_allowed:[405],ingestion_pending:[409],collection_unknown:[409],batch_in_flight:[409],batch_closed:[409],collection_canceled:[409],collection_lease_lost:[409],owner_required:[403],invalid_deadline:[400],invalid_batch:[400,404],daily_window:[409]};
+const rejected={not_configured:[409],...Object.fromEntries(RUNTIME_CODES.map(code=>[code,[400,409]])),batch_window:[409],interval_owner_ambiguous:[409],origin_rejected:[403],request_marker_required:[403],request_rejected:[403],invalid_request:[400],invalid_json:[400],request_too_large:[413],method_not_allowed:[405],ingestion_pending:[409],collection_unknown:[409],batch_in_flight:[409],batch_closed:[409],collection_canceled:[409],collection_lease_lost:[409],owner_required:[403],invalid_deadline:[400],invalid_batch:[400,404],daily_window:[409]};
 // Trusted application decoder. Network callers must establish matching application evidence first.
 export async function slotOutcome(response,path=''){
  let value;try{value=await response.json()}catch{return {status:'unknown',reason:'response_unconfirmed'}}
