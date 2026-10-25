@@ -1,0 +1,236 @@
+{
+  "baselineMain": "dbfc1087e5775b91dbf30125bde1753534c534d0",
+  "reportedProduction": {
+    "version": 104,
+    "source": "34eeaead9486b4b112000f1521bc0f1f90cb1ead",
+    "accessedByThisTask": false
+  },
+  "testedRecommendedBootstrap": "48d21620f77c0fd2f4eb8a637d8b81590167d0d7",
+  "pinOrScheduleChanged": false,
+  "node": "24.22.1",
+  "sites": {
+    "tests": 852,
+    "pass": 852,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "seconds": 207.058
+  },
+  "web": {
+    "tests": 68,
+    "pass": 68
+  },
+  "typecheck": "pass",
+  "fullBuild": "pass",
+  "changelog": {
+    "releases": 134,
+    "priorReleasesExactlyPreserved": 133
+  },
+  "realBootstrapLoopback": {
+    "testCases": 21,
+    "unknownInjectionSubprocesses": 88,
+    "dependencyFree": true,
+    "actualLegacyPinReproduced": true,
+    "legacyPinRejectsNewTemplateBeforePost": true,
+    "stdinCredentialLeak": false
+  },
+  "realBootstrapCompiledWorkerD1": [
+    {
+      "case": "am-budget",
+      "bootstrapSource": "48d21620f77c0fd2f4eb8a637d8b81590167d0d7",
+      "serverSource": "48d21620f77c0fd2f4eb8a637d8b81590167d0d7",
+      "bootstrapMode": "reviewed-clean-checkout",
+      "posts": [
+        "recover",
+        "plan",
+        "start",
+        "collect",
+        "finish",
+        "recover"
+      ],
+      "core": "ok",
+      "coverage": "complete",
+      "elapsedMs": 525800,
+      "remainingMs": 12200,
+      "crossrefCalls": 4,
+      "rssCalls": 4,
+      "modelCalls": 0,
+      "originalRowsPreserved": true,
+      "dailyReason": "maintenance_budget"
+    },
+    {
+      "case": "pm-core",
+      "bootstrapSource": "48d21620f77c0fd2f4eb8a637d8b81590167d0d7",
+      "serverSource": "48d21620f77c0fd2f4eb8a637d8b81590167d0d7",
+      "bootstrapMode": "reviewed-clean-checkout",
+      "posts": [
+        "recover",
+        "start",
+        "collect",
+        "finish",
+        "recover",
+        "metadata",
+        "scoring",
+        "brief"
+      ],
+      "core": "ok",
+      "coverage": "complete",
+      "elapsedMs": 800,
+      "remainingMs": 537200,
+      "crossrefCalls": 4,
+      "rssCalls": 4,
+      "modelCalls": 0,
+      "originalRowsPreserved": true,
+      "dailyReason": "not_due"
+    },
+    {
+      "case": "am-backlog-daily",
+      "bootstrapSource": "48d21620f77c0fd2f4eb8a637d8b81590167d0d7",
+      "serverSource": "48d21620f77c0fd2f4eb8a637d8b81590167d0d7",
+      "bootstrapMode": "reviewed-clean-checkout",
+      "posts": [
+        "recover",
+        "plan",
+        "start",
+        "collect",
+        "finish",
+        "recover",
+        "metadata",
+        "scoring",
+        "daily",
+        "metadata",
+        "scoring",
+        "brief"
+      ],
+      "core": "ok",
+      "coverage": "complete",
+      "elapsedMs": 800,
+      "remainingMs": 537200,
+      "crossrefCalls": 4,
+      "rssCalls": 4,
+      "modelCalls": 0,
+      "originalRowsPreserved": true,
+      "dailyReason": "pending_scoring"
+    }
+  ],
+  "nativeCommands": [
+    {
+      "args": [
+        "sites/test-worker.mjs"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "sites/test-runtime-worker.mjs"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "sites/test-runtime-dispatch-bootstrap.mjs"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "sites/test-runtime-dispatch-bootstrap.mjs",
+        "--candidate"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "sites/test-runtime-dispatch-bootstrap.mjs",
+        "--candidate",
+        "--early-am"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "sites/test-execution-worker.mjs"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "sites/test-cancellation-worker.mjs"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "sites/test-ingestion-worker.mjs"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "sites/test-local-finalize-worker.mjs"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "sites/test-daily-worker.mjs"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "sites/test-brief-worker.mjs"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "sites/test-metadata-worker.mjs"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "sites/test-attribution-worker.mjs"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "sites/test-scoring-recovery-worker.mjs"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "sites/test-recovery-worker.mjs"
+      ],
+      "exit": 0
+    },
+    {
+      "args": [
+        "sites/test-pipeline-worker.mjs"
+      ],
+      "exit": 0
+    }
+  ],
+  "isolatedOnly": true,
+  "productionCollection": false,
+  "paidModelCalls": 0,
+  "newCredentialsOrPermissions": false,
+  "schemaMigrations": false,
+  "dataProtection": "All original fixture paper/record/change/analysis/member/reader/published brief/daily/group/version rows preserved field by field; normal new current data and explicit work allowed.",
+  "rolloutRequirements": [
+    "Parent must review the new capability/template and matching bootstrap pin; no task or production changes performed here.",
+    "The proposed explicit fact prepare invokes the existing prepareBrief: writes statistics placeholder and frozen evidence only, no model or brief/save. Existing v3 prohibition must be explicitly amended before use.",
+    "Do not bundle undeployed manual/dependencies.",
+    "Ordinary compatible v2 Site SHA changes remain discovered and frozen at run start."
+  ],
+  "remainingLimits": [
+    "No promise of all 32 sources in available original budget.",
+    "Deferred registered work resumes only in existing authorized windows; no new scheduler or historical paper scan.",
+    "Unknown POST/receipt outcomes are not replayed.",
+    "Legacy no-manifest CLI is not the new approved execution profile.",
+    "Legacy Node/PG engine was not rerun; earlier 27 model-disabled baseline failures remain documented."
+  ]
+}

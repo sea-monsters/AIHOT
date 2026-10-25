@@ -85,3 +85,14 @@ PM不登记/生成日报，处理current；AM优先维护捕获的previous目标
 3. 保留原始automationStartedAt；有效截止不晚于开始+538秒和时段结束。有效余量不足105秒不开采集批，plan若已确认则欠账保留。每POST未知立即停止全部后续写入，报告各目标已确认事实并按原只读接口核对，不补跑。
 
 事实prepare即使稍后执行，也只读finished batch的member.snapshot_json及收尾cutoff，不读后补当前paper元数据；planPaperWrite在批次非running后禁止更新这些snapshots。证据创建时间与来源快照时间分别保留，不把较晚frozenAt冒称采集结束时间。实际模型分析/200字正文和brief/save始终留给原更新简报流程。本任务没有修改Library说明、真实automation或pin。
+
+
+## 本轮完成的验证
+
+Node24.22.1。完整Sites **852/852**，Web **68/68**，typecheck、完整Web client/SSR/Worker build、changelog检查通过。新增真实clean bootstrap loopback **21项**含**88个unknown子进程注入**；14个原生Worker脚本/16种命令模式最终全部通过。新正式profile与旧legacy兼容测试分别记录，未把旧路径算成新编排的证明。
+
+真实bootstrap+private dispatcher+compiled Worker/D1 **3/3**：bootstrap和server同为干净代码提交48d21620f77c0fd2f4eb8a637d8b81590167d0d7。AM原始准备已耗405秒，采集确认complete后仅余12.2秒，维护都未派发，当日work仍存在，日报原因准确为maintenance_budget；PM先采集后current local；AM旧backlog在本地50行处理后真实daily返回pending_scoring=1，核心完成事实与该延期原因同时保留。每场仅两合成到期来源、4次Crossref与4次RSS fixture响应，零模型/回执，所有原有历史表行逐字段相同。时钟同时覆盖bootstrap/Worker/D1/trigger，仅隔离夹具，不能外推供应商生产速度。
+
+验收期间保留失败证据：首轮完整848/849的唯一断言要求ai_disabled后仍发paid，收紧为不派发后整轮849通过；后续新增真实拒绝不误报成功、published不误报待助手及known配置拒绝等回归，最终852通过。原生组合最初fixture误用ai_preferences.updated_at（实际schema无此列），再因固定同毫秒时钟制造run排序伪差；仅修fixture schema和双端递增时钟，不改门控或删数据断言。真实组合还捕获pending_scoring被ai_disabled掩盖的问题，修复为同时保留依赖reason和blocked维度后3场全过。
+
+[机器可读验收](fixtures/collection-goals-validation.json)记录具体模式、事实和限制。建议父端审查的新固定bootstrap为48d21620f77c0fd2f4eb8a637d8b81590167d0d7（不是自动更新pin）；后续仅文档验收提交不会改变五个执行模块。真实Sites发布、任务全文与pin由父端协调，本执行器不访问生产或补跑。
