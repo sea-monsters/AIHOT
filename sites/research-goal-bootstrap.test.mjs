@@ -75,7 +75,7 @@ const fixtureResponse=async(input,options)=>{
  else if(suffix==='finish')result={status:'complete',batchStatus:'finished',expectedSources:1,attemptedSources:1,completeSources:1,missingSources:[]};
  else if(suffix==='metadata')result={status:'ok',sourceDay:body.sourceDay||executionDay,ready:0,abstained:0,deferred:0,scopePending:0,remainingMetadata:0};
  else if(suffix==='scoring')result={status:'ok',scope:{sourceDay:body.sourceDay||executionDay},sourceDay:body.sourceDay||executionDay,remainingQueued:spec.queued?3:body.maxPapers===0?1:0,modelCalls:0};
- else if(suffix==='daily')result={status:'deferred',reason:'pending_scoring',date:reportDate,report:{sourceDate:sourceDay},attempted:0};
+ else if(suffix==='daily')result={status:'deferred',reason:'pending_scoring',blocked:'ai_disabled',date:reportDate,report:{sourceDate:sourceDay},attempted:0};
  else if(suffix==='brief')result={brief:{batchKey:key,status:'awaiting_analysis'}};
  else throw Error('Unexpected fixture route');
  if(spec.completedTarget&&suffix==='plan')Object.assign(result.maintenance,{completed:true,status:spec.completedTarget});

@@ -54,7 +54,7 @@ async function seed(db,spec){
  await db.prepare("INSERT INTO research_brief_evidence(batch_key,paper_id,evidence_json) VALUES('2026-10-01/20',?,?)").bind(historical.id,JSON.stringify({original:'frozen brief evidence',paperId:historical.id})).run();
  await db.prepare("INSERT INTO research_daily(date,source_date,cutoff,status,coverage_json,selection_json,paper_ids_json,content_hash,schema_version,prompt_version,created_at,updated_at,finished_at) VALUES('2026-10-02','2026-10-01','2026-10-01T16:00:00Z','completed','{}','{}','[]','historic-daily','fixture','fixture','2026-10-02','2026-10-02','2026-10-02')").run();
  await db.prepare("INSERT INTO ai_settings(owner_id,endpoint,model,protocol,reasoning,enabled,updated_at) VALUES('fixture-owner','https://api.openai.com/v1','disabled-fixture','responses','low',0,?)").bind(spec.writeAt).run();
- await db.prepare('INSERT INTO ai_preferences(owner_id,value_json,updated_at) VALUES(?,?,?)').bind('fixture-owner',JSON.stringify({keywords:[],excludedKeywords:['fixture-only']}),spec.writeAt).run();
+ await db.prepare('INSERT INTO ai_preferences(owner_id,value_json) VALUES(?,?)').bind('fixture-owner',JSON.stringify({keywords:[],excludedKeywords:['fixture-only']})).run();
  await db.prepare("INSERT INTO research_settings(key,value) VALUES('collection_intervals',?)").bind(JSON.stringify({sourceIntervals:Object.fromEntries(RESEARCH_SOURCES.map(source=>[source.id,24])),publisherIntervals:{}})).run();
  for(const [i,source] of RESEARCH_SOURCES.entries())await db.prepare('INSERT INTO research_settings(key,value) VALUES(?,?)').bind('crossref:'+source.id,JSON.stringify({lastHeadAttemptAt:new Date(Date.parse(spec.writeAt)-(i<2?48:12)*3600000).toISOString()})).run();
  if(spec.backlog){
@@ -73,19 +73,19 @@ async function seed(db,spec){
 }
 
 async function run(spec){
- let now=Date.parse(spec.writeAt),crossrefCalls=0,rssCalls=0,recoveries=0;const requests=[],issued=new Set();
+ let now=Date.parse(spec.writeAt),crossrefCalls=0,rssCalls=0,recoveries=0,advance;const requests=[],issued=new Set();
  const mf=new Miniflare(convertV4MiniflareOptions({modules:[{type:'ESModule',path:'entry.mjs',contents:entry},{type:'ESModule',path:'candidate.mjs',contents:bundle}],compatibilityDate:'2026-09-01',compatibilityFlags:['nodejs_compat','enable_request_signal'],d1Databases:['DB'],bindings:{HKIS_OWNER_EMAIL:'owner@example.invalid'},outboundService:async request=>{
   const url=new URL(request.url);assert.equal(request.method,'GET','fixture prohibits all model/paid POSTs');
   if(url.hostname==='api.crossref.org'){
    const source=RESEARCH_SOURCES.slice(0,2).find(s=>url.pathname==='/journals/'+s.issn+'/works');assert.ok(source,'only the two due fixture journals may dispatch');crossrefCalls++;
-   const items=issued.has(source.id)?[]:[record(source,'10.9999/goal-current-'+spec.name+'-'+source.id,spec.writeAt.slice(0,10))];issued.add(source.id);return Response.json({message:{items,'total-results':items.length}});
+   const items=issued.has(source.id)?[]:[record(source,'10.9999/goal-current-'+spec.name+'-'+source.id,spec.writeAt.slice(0,10))];issued.add(source.id);await advance(100);return Response.json({message:{items,'total-results':items.length}});
   }
-  assert.ok(RESEARCH_SOURCES.slice(0,2).some(source=>source.rss===url.href),'fixture refuses any non-scholarly or unexpected external endpoint');rssCalls++;return new Response('<rss><channel/></rss>');
+  assert.ok(RESEARCH_SOURCES.slice(0,2).some(source=>source.rss===url.href),'fixture refuses any non-scholarly or unexpected external endpoint');rssCalls++;await advance(100);return new Response('<rss><channel/></rss>');
  }}));
  let server;
  try{
   const db=await mf.getD1Database('DB');await migrate(db);
-  const advance=async milliseconds=>{now+=milliseconds;const response=await mf.dispatchFetch(origin+'/__goal_fixture/clock',{method:'POST',body:String(now)});assert.equal(response.status,200);assert.equal((await db.prepare('SELECT value FROM research_settings WHERE key=?').bind(clockKey).first()).value,new Date(now).toISOString())};
+  let clockTail=Promise.resolve();advance=milliseconds=>{clockTail=clockTail.then(async()=>{now+=milliseconds;const response=await mf.dispatchFetch(origin+'/__goal_fixture/clock',{method:'POST',body:String(now)});assert.equal(response.status,200);assert.equal((await db.prepare('SELECT value FROM research_settings WHERE key=?').bind(clockKey).first()).value,new Date(now).toISOString())});return clockTail};
   await advance(0);const {day,before}=await seed(db,spec);
   const dispatch=privateSitesDispatch(async request=>{
    assert.equal(request.headers.has('OAI-Sites-Authorization'),false);assert.equal(request.headers.has('oai-authenticated-user-id'),false);assert.equal(request.headers.has('oai-authenticated-user-email'),false);
@@ -122,7 +122,7 @@ privateStableSlotMain().catch(e=>{process.stderr.write(String(e.code||'fixture_f
   assert.ok(posts.filter(r=>r.path.endsWith('/collect')).length>=1);assert.equal(issued.size,2);assert.equal(crossrefCalls,4);assert.equal(rssCalls,4);
   assert.equal((await db.prepare('SELECT count(*) n FROM ai_receipts').first()).n,0);await preserveEveryOriginalRow(db,before);
   if(spec.slot===8){const work=await db.prepare('SELECT * FROM research_daily_work WHERE date=?').bind(day).first();assert.ok(work,'AM plan must persist today even if maintenance is later skipped');assert.equal(work.source_date,'2026-10-24')}
-  if(spec.lowBudget){assert.ok(!order.some(name=>['metadata','scoring','daily','brief'].includes(name)));assert.equal(report.elapsedMs,525000);assert.equal(report.remainingMs,13000);assert.equal(report.goals.metadata_previous.status,'deferred');assert.equal(report.goals.metadata_current.status,'deferred')}
+  if(spec.lowBudget){assert.ok(!order.some(name=>['metadata','scoring','daily','brief'].includes(name)));assert.equal(report.elapsedMs,525000+100*(crossrefCalls+rssCalls));assert.equal(report.remainingMs,538000-report.elapsedMs);assert.equal(report.goals.metadata_previous.status,'deferred');assert.equal(report.goals.metadata_current.status,'deferred')}
   if(spec.backlog){const daily=posts.find(r=>r.path.endsWith('/daily'));assert.ok(daily,'actual compiled daily preparation must run');assert.equal(daily.body.sourceDay,'2026-10-23');assert.equal(daily.status,200);assert.equal(daily.value.reason,'pending_scoring');assert.equal(daily.value.scoringPending,1);assert.equal(report.goals.daily.status,'deferred');assert.equal(report.goals.daily.reason,'pending_scoring');assert.equal(report.goals.daily.sourceDay,'2026-10-23')}
   console.log('GOAL RUNTIME WORKER OK',JSON.stringify({case:spec.name,bootstrapSource:bootstrapPin,serverSource:serverPin,bootstrapMode:supplied?'reviewed-clean-checkout':'five-module-clean-fixture',posts:order,core:report.goals.collection.status,coverage:report.coverageStatus,elapsedMs:report.elapsedMs,remainingMs:report.remainingMs,crossrefCalls,rssCalls,modelCalls:0,originalRowsPreserved:true,dailyReason:report.goals.daily.reason}));
  }finally{if(server){server.closeAllConnections();if(server.listening)await new Promise(resolve=>server.close(resolve))}await mf.dispose()}

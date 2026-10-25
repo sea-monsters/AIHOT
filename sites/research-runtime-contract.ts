@@ -88,7 +88,7 @@ export function runtimeOperationBody(path:string,body:any,frozen:any,now=Date.no
  const deadline=()=>{if(typeof body.deadlineAt!=='string'||!Number.isFinite(Date.parse(body.deadlineAt))||Date.parse(body.deadlineAt)>Date.parse(frozen.startedAt)+m.limits.totalMs-reserve||Date.parse(body.deadlineAt)<=now)fail('runtime_budget_invalid')};
  if(left<=reserve)fail('runtime_expired');
  const target=()=>{if(typeof body.sourceDay!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(body.sourceDay)||!Number.isFinite(Date.parse(body.sourceDay+'T00:00:00Z'))||new Date(body.sourceDay+'T00:00:00Z').toISOString().slice(0,10)!==body.sourceDay)fail('runtime_operation_rejected')};
- if(path.endsWith('/run/plan')){shape(['slot']);if(body.slot!==frozen.slot)fail('runtime_operation_rejected')}
+ if(path.endsWith('/run/plan')){shape(['slot']);if(frozen.slot!==8||body.slot!==frozen.slot)fail('runtime_operation_rejected')}
  else if(path.endsWith('/brief/prepare')){shape(['batchKey'])}
  else if(path.endsWith('/ingestion/recover')){shape(['maxMs','deadlineAt']);integer(body.maxMs,1,6000);deadline()}
  else if(path.endsWith('/enrich')){shape(body.cohort==='previous_day'?['cohort','maxMs','sourceDay']:['cohort','maxMs']);if(body.cohort!=='current'&&!(frozen.slot===8&&body.cohort==='previous_day'))fail('runtime_operation_rejected');if(body.cohort==='previous_day')target();integer(body.maxMs,1,75000)}

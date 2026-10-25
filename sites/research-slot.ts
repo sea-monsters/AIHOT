@@ -139,7 +139,7 @@ async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started
  const invoke=async(phase:string,path:string,body:any,limit:number)=>{
   if(remaining()<=0){steps.push({phase,status:'deferred',reason:'deadline'});return {status:'deferred',reason:'deadline'};}
   const at=now();let v:any;try{v=await call(path,body,Math.max(1,Math.min(limit,remaining())))}catch{v={status:'unknown',reason:'response_unconfirmed'}}
-  steps.push({phase,status:v?.status||v?.batchStatus||(v?.brief?'ok':'unknown'),reason:reasonOf(v),blocked:v?.blocked||null,cohort:body?.cohort||null,startedMs:at-started,endedMs:now()-started,runId:v?.runId,requestId:v?.requestId,sentRequestId:v?.sentRequestId,operationIdMismatch:v?.operationIdMismatch===true,...Object.fromEntries(['ready','abstained','deferred','scopePending','remainingQueued','remainingMetadata','attempted','reservedUnsent'].map(k=>[k,v?.[k]??null]))});
+  steps.push({phase,status:v?.status||v?.batchStatus||(v?.brief?'ok':'unknown'),reason:v?.reason||reasonOf(v),blocked:v?.blocked||null,cohort:body?.cohort||null,startedMs:at-started,endedMs:now()-started,runId:v?.runId,requestId:v?.requestId,sentRequestId:v?.sentRequestId,operationIdMismatch:v?.operationIdMismatch===true,...Object.fromEntries(['ready','abstained','deferred','scopePending','remainingQueued','remainingMetadata','attempted','reservedUnsent'].map(k=>[k,v?.[k]??null]))});
   return v;
  };
  const recover=async()=>{for(let slice=0;slice<4;slice++){
@@ -221,6 +221,7 @@ async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started
     queued=v.remainingQueued;mark('assessment',queued?'partial':'ok',queued?(reasonOf(v)||'work_pending'):null);
    }
   }else if(paid>0)mark('assessment','ok');
+  else if(cohort===(slot===8?'previous_day':'current'))mark('assessment','deferred','runtime_disabled');
   return {prepared:!pending&&queued===0,pending,queued};
  };
  // AM's single paid assessment belongs to its captured previous-day goal;
@@ -231,7 +232,7 @@ async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started
   if(!prior.prepared)mark('daily','deferred',prior.pending?'pending_metadata':'pending_scoring');
   else if(policy.dailyMaxCalls===0)mark('daily','deferred','runtime_disabled');
   else if(remaining()<190000)mark('daily','deferred','daily_budget');
-  else {const daily=await invoke('daily','/api/site/research/daily/generate',{maxCalls:policy.dailyMaxCalls,sourceDay:target.sourceDay},190000);if(goalBarrier(daily))return stop('daily',daily,'preparation_deferred');if((daily.report?.sourceDate||daily.sourceDay||daily.source_date)!==target.sourceDay||(daily.date||daily.report?.date)!==target.reportDate){mark('daily','unknown','goal_target_unconfirmed');return outcome('unknown','goal_target_unconfirmed')};mark('daily',daily.status==='ok'?'ok':'deferred',reasonOf(daily));}
+  else {const daily=await invoke('daily','/api/site/research/daily/generate',{maxCalls:policy.dailyMaxCalls,sourceDay:target.sourceDay},190000);if(goalBarrier(daily))return stop('daily',daily,'preparation_deferred');if((daily.report?.sourceDate||daily.sourceDay||daily.source_date)!==target.sourceDay||(daily.date||daily.report?.date)!==target.reportDate){mark('daily','unknown','goal_target_unconfirmed');return outcome('unknown','goal_target_unconfirmed')};mark('daily',daily.status==='ok'?'ok':'deferred',daily.reason||reasonOf(daily));}
  }
  const current=await maintain('current',slot===20?policy.assessmentMaxPapers:0);if(current.stopped)return current.stopped;
  if(remaining()>=15000){const brief=await invoke('brief','/api/site/research/brief/prepare',{batchKey},15000);if(goalBarrier(brief))return stop('brief',brief,'brief_preparation_failed');if(!brief.brief||brief.brief.batchKey!==batchKey){mark('brief','unknown','brief_preparation_failed');return outcome('unknown','brief_preparation_failed')};mark('brief','external','awaiting_assistant');}
