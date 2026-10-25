@@ -1,4 +1,5 @@
 import {phaseTiming,phaseEvent} from './research-telemetry.ts';
+import {assertRuntimeBudget,runtimeDeadline,type RuntimeBudget} from './research-runtime-budget.ts';
 import {paperCategories} from './paper-keywords.ts';
 import {AIError,owner,KIMI_CODE_ENDPOINT,encryptionReady} from './ai/security.ts';
 import {providerCall} from './ai/provider.ts';
@@ -50,7 +51,8 @@ export async function attachAnalyses(db:any,papers:any[],analysisKey?:string|nul
  const byPaper=new Map<string,any>(rows.map((r:any)=>[r.paper_id,r]));
  return papers.map(p=>{const row=byPaper.get(p.id),matching=row&&row.content_hash===p.contentHash&&row.config_hash===activeKey&&row.schema_version===ANALYSIS_SCHEMA?row:null;const out={...p,analysis:matching?{id:matching.id,status:matching.status,gate:parse(matching.gate_json),result:parse(matching.result_json,null),config:parse(matching.config_json),schema:matching.schema_version,updatedAt:matching.updated_at,errorCode:matching.error_code}:null,analysisStale:!matching&&byPaper.has(p.id)};return {...out,categories:paperCategories(out)}});
 }
-export async function processRecent(rawDb:any,env:any,body:any={},request?:Request,options:{startedMs?:number}={}){
+export async function processRecent(rawDb:any,env:any,body:any={},request?:Request,options:{startedMs?:number;runtimeBudget?:RuntimeBudget}={}){
+ assertRuntimeBudget(options.runtimeBudget);
  const requestStarted=options.startedMs??Date.now();if(body.deadlineAt!==undefined&&(typeof body.deadlineAt!=='string'||!Number.isFinite(Date.parse(body.deadlineAt))))throw new AIError('invalid_deadline',400,'整轮截止时点无效');
  const selected=body.paperIds;if(selected!==undefined&&(!Array.isArray(selected)||selected.length<1||selected.length>3||selected.some((id:any)=>typeof id!=='string'||!/^[-a-zA-Z0-9:_]{1,100}$/.test(id))||body.cohort!==undefined))throw new AIError('invalid_selection',400,'明确补评分须传1–3个paperIds，不同时指定cohort');
  let db=rawDb;
@@ -58,10 +60,10 @@ export async function processRecent(rawDb:any,env:any,body:any={},request?:Reque
  const prefRow=await db.prepare('SELECT value_json FROM ai_preferences WHERE owner_id=?').bind(config.owner_id).first();const preferences=parse(prefRow?.value_json,{keywords:[],excludedKeywords:[]});
  const safeConfig=configurationFields(config,{keywords:preferences.keywords||[],excludedKeywords:preferences.excludedKeywords||[]});const configHash=await digest(safeConfig);
  const maxPapers=Math.min(PROCESSING_LIMITS.papersPerRequest,Math.max(0,Math.floor(Number(body.maxPapers??1)||0)));
- const maxMs=Math.min(PROCESSING_LIMITS.requestMs,Math.max(1,Math.min(Number(body.maxMs??PROCESSING_LIMITS.requestMs),body.deadlineAt===undefined?Infinity:Date.parse(body.deadlineAt)-requestStarted)));
+ const maxMs=Math.min(PROCESSING_LIMITS.requestMs,Math.max(1,Math.min(Number(body.maxMs??PROCESSING_LIMITS.requestMs),runtimeDeadline(body.deadlineAt===undefined?Infinity:Date.parse(body.deadlineAt),options.runtimeBudget)-requestStarted)));
  // Old callers omit cohort: retain the body shape, but never spend on an
  // unbounded legacy/month backlog. Only this cohort's current ready version.
- const today=window.endDate,day=body.cohort==='previous_day'?await preparationCohort(db,today):today;const cohortGate=selected?" AND p.id IN (SELECT value FROM json_each(?)) AND "+selectedReadySql()+" AND NOT EXISTS(SELECT 1 FROM research_analyses prior JOIN ai_receipts receipt ON receipt.id=prior.request_id||':0' WHERE prior.paper_id=p.id AND (prior.status IN ('failed','unknown','running') OR receipt.status IN ('pending','unknown')))":" AND EXISTS(SELECT 1 FROM research_ready_evidence e WHERE e.paper_id=p.id AND e.content_hash=p.content_hash AND e.daily_cohort_key IN (?,?))";const cohortArgs=selected?[JSON.stringify([...new Set(selected)])]:[day+'/08',day+'/20'];
+ const today=window.endDate,day=body.cohort==='previous_day'?(options.runtimeBudget?.maintenance?.sourceDay||await preparationCohort(db,today)):today;const cohortGate=selected?" AND p.id IN (SELECT value FROM json_each(?)) AND "+selectedReadySql()+" AND NOT EXISTS(SELECT 1 FROM research_analyses prior JOIN ai_receipts receipt ON receipt.id=prior.request_id||':0' WHERE prior.paper_id=p.id AND (prior.status IN ('failed','unknown','running') OR receipt.status IN ('pending','unknown')))":" AND EXISTS(SELECT 1 FROM research_ready_evidence e WHERE e.paper_id=p.id AND e.content_hash=p.content_hash AND e.daily_cohort_key IN (?,?))";const cohortArgs=selected?[JSON.stringify([...new Set(selected)])]:[day+'/08',day+'/20'];
  const started=new Date(requestStarted).toISOString(),runId=crypto.randomUUID(),until=new Date(Date.now()+6*60000).toISOString(),expires=until+'|'+runId;
  // The global work barrier belongs to the atomic lock claim, not a preflight.
  const lock=await rawDb.batch([
@@ -72,7 +74,7 @@ export async function processRecent(rawDb:any,env:any,body:any={},request?:Reque
  if(!lock[2]?.meta?.changes){const gate=await rawDb.prepare(`SELECT (${collectionIdle}) collection_idle,(${metadataIdle}) metadata_idle,(${ingestionIdle}) ingestion_idle`).first();return {status:gate.collection_idle&&gate.metadata_idle&&gate.ingestion_idle?'busy':'deferred',reason:!gate.ingestion_idle?'ingestion_pending':!gate.collection_idle?'collection_in_progress':!gate.metadata_idle?'metadata_in_progress':'processing_in_progress',attempted:0};}
  const leaseGuard={sql:`EXISTS(SELECT 1 FROM research_settings WHERE key='processing_lock' AND value=? AND value>${databaseNowSql}) AND ${ingestionIdle}`,args:[expires]};
  db=fencedRunDatabase(rawDb,runId,undefined,leaseGuard);let confirmed=false;
- const timing=phaseTiming(started),phaseId=crypto.randomUUID();const result:any={status:blocked?'blocked':'ok',blocked,window,scanned:0,rulesOnly:0,insufficient:0,queued:0,attempted:0,completed:0,deferred:0,failed:0,cached:0,limits:PROCESSING_LIMITS};
+ const timing=phaseTiming(started),phaseId=crypto.randomUUID();const result:any={status:blocked?'blocked':'ok',blocked,window,scanned:0,rulesOnly:0,insufficient:0,queued:0,attempted:0,unknownAttempts:0,completed:0,deferred:0,failed:0,cached:0,limits:PROCESSING_LIMITS};
  try{
   const publication="coalesce(nullif(json_extract(provenance_json,'$.publicationDates.online'),''),CASE WHEN date_precision='day' THEN published_at END)";
   if(!selected)await db.prepare(`UPDATE research_papers SET metadata_status='abstain',reasons_json=json_array('超出当前更新窗口，保留证据并弃权；未调用模型') WHERE metadata_status IN ('ready','pending') AND length(${publication})=10 AND date(${publication},'+0 days')=${publication} AND (${publication}<? OR ${publication}>?)`).bind(window.startDate,window.endDate).run();
@@ -121,6 +123,7 @@ export async function processRecent(rawDb:any,env:any,body:any={},request?:Reque
     // No receipt means nothing was sent. Budget/config blocks may be resumed; every sent/unknown outcome is terminal for this cache key.
     const status=!receipt?(code==='context_limit'?'insufficient':'queued'):receipt.status==='unknown'||receipt.status==='pending'?'unknown':'failed';
     await db.prepare('UPDATE research_analyses SET status=?,error_code=?,updated_at=? WHERE id=? AND status=\'running\'').bind(status,code,stamp(),row.analysis_id).run();
+    if(status==='unknown')result.unknownAttempts++;
     if(receipt&&!received&&!notSent)result.attempted++;else if(!receipt)result.deferred++;result.failed++;result.status='partial';result.blocked=code;break;
    }
   }

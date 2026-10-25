@@ -240,7 +240,9 @@ export async function finishBatch(db:any,key:any,at=new Date(),options:any={}){
  }
  if(current.status!=='running')await db.prepare('DELETE FROM research_settings WHERE key=?').bind(finalizingKey(key)).run();
  const cutoff=new Date(Date.parse(current.finished_at||current.closed_at||at.toISOString())+1).toISOString();
- return {batchKey:key,mode:current.mode||'scheduled',...(recovery?{recovery}:{}),...await batchCoverage(db,key,cutoff),brief:current.status==='finished'&&current.mode!=='manual'?await prepareBrief(db,key):null};
+ // New runtimes prepare brief evidence as a separate, explicit operation. Core
+ // completion and coverage must be confirmed first; unknown CAS still throws.
+ return {batchKey:key,mode:current.mode||'scheduled',...(recovery?{recovery}:{}),...await batchCoverage(db,key,cutoff),brief:current.status==='finished'&&current.mode!=='manual'?(options.deferBrief===true?{status:'deferred',reason:'separate_brief_workflow'}:await prepareBrief(db,key)):null};
 }
 export async function batchCoverage(db:any,key:string,cutoff:string){
  const batch=await db.prepare('SELECT * FROM research_batches WHERE key=?').bind(key).first();const expected=parse(batch?.sources_json,RESEARCH_SOURCES.map(s=>s.id));

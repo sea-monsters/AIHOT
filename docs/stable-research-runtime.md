@@ -1,3 +1,5 @@
+> 2026-10-25待发布更新：正式模板升级为collection-first-v1能力及scheduled-am-v2/pm-v2，一次新bootstrap与Site成对切换由父端审核；下方先前实现/验证记录保留为历史。当前根因与移植清单见[目标编排](collection-goals.md)。
+
 # 稳定采集运行契约
 
 2026-10-23 维护记录。本次交付仓库源码、固定 bootstrap 与隔离验证；Sites 发布和原任务切换由父端独立审查。本执行器不部署、不改任务、不读取或写入生产论文。初次实现时生产基线为 v99；此前父端报告v101已发布；当前父端报告v102已上线，实际sourceRevision为8a34c1bbfdb94b2b00e79138deee7de0fe907ef7。提前唤醒边界修正尚未部署，正式复核由父端负责。本执行器未访问该生产版本。
@@ -47,7 +49,7 @@ bootstrap 递归冻结并记录协议、manifest/hash、实际Site sourceRevisio
 >
 > 从固定仓库https://github.com/sea-monsters/AIHOT.git获取批准完整提交<APPROVED_BOOTSTRAP_SHA>，在独立、干净的该提交checkout中运行node sites/run-stable-research-slot.mjs。无需npm，不安装依赖，不执行最新main或manifest指定代码。核实HEAD等于一次固定SHA；不可得、脏工作树或SHA不符即停止，不自动换版本。安全stdin JSON仅传baseUrl、精确allowedOrigins、原token、automationStartedAt（真实UTC ISO含毫秒）、当前实际slot 8或20、expectedBootstrapSource=<APPROVED_BOOTSTRAP_SHA>，保持budgetMs=540000、collectionCalls=35。不增加expectedSiteSource或绕过冻结。
 >
-> 由固定bootstrap只读一次严格runtime manifest，核对协议major、必需能力、hash、实际编译SHA、固定08/20模板和有界参数，冻结manifest/hash、Site SHA、bootstrap SHA和开始时间。按固定540秒/35次来源调用及模板执行，保留各阶段既有更严门控，每次写入携带冻结标识，服务端副作用前核对。旧server不支持、未知major/capability、危险额外字段、途中变版或回滚不兼容都停止，不换路径、不取最新版重启。普通兼容发布无需手填Site SHA，新协议/能力/操作仍需审查升级bootstrap。
+> 由固定bootstrap只读一次严格runtime manifest，核对协议major、必需能力、hash、实际编译SHA、固定08/20模板和有界参数，冻结manifest/hash、Site SHA、bootstrap SHA和开始时间。按固定540秒/35次来源调用及新v2模板执行：必要恢复、AM当日前日持久待办计划、核心采集及确认收尾优先，随后各独立目标有界维护。固定最老明确sourceDay/reportDate，不把日报欠准备当作未采集；余量不足记录待办续办，不补跑旧采集。保留各阶段既有更严门控，每次写入携带冻结标识，服务端副作用前核对。旧server不支持、未知major/capability、危险额外字段、途中变版或回滚不兼容都停止，不换路径、不取最新版重启。普通兼容发布无需手填Site SHA，新协议/能力/操作仍需审查升级bootstrap。
 >
 > 保留owner-only、同源检查、预算/租约、来源冷却、落库恢复、当前归属和冻结证据。仅处理模板允许的当前/前日队列，不批量补历史、不改first_seen/已有分析/收藏、不重写published brief或daily、不变更模型/供应商/费用额度。未知POST立即停止，不重放、不强制收尾、不换凭据或通道；仅按已有只读接口核对同一operation/batch已提交状态，回读也计总预算。
 >

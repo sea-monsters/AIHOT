@@ -1,8 +1,27 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-24T03:15:39Z",
+  "latestVersion": "2026-10-25T08:01:43Z",
   "releases": [
+    {
+      "id": "hkis-core-first-goals-20261025",
+      "at": "2026-10-25T08:01:43Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "按核心采集目标重排早晚管线并保留独立续办",
+      "body": [
+        "修复08前日精华欠评分会在当天采集前阻断整轮的问题。新模板先恢复并登记既有待办，再执行核心采集和确认收尾；metadata、评分、精华与进展简报各自记录状态，预算不足明确延期。",
+        "保留原540秒、35调用及模型额度，早唤醒准备不重置预算，低于核心最低余量不开批；未知写入、权限/版本变化及租约冲突仍停止，不把所有deferred或partial统一放行。",
+        "复用daily_work保留当日前日及最老显式欠账，同一目标日期贯穿各阶段，不静默转向今日或重写冻结输入；诊断保留pending_scoring、剩余队列和各目标续办事实。",
+        "新collection-first能力与v2模板需父端审查一次固定bootstrap升级；旧pin会在POST前拒绝新能力。此处仅记录仓库实现，未发布Sites、修改任务pin、补跑失败批或触发真实付费模型。"
+      ],
+      "sources": [
+        {
+          "label": "根因、目标状态机、故障矩阵及兼容切换",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/collection-goals.md"
+        }
+      ]
+    },
     {
       "id": "hkis-dataflow-concurrency-consistency-20261024",
       "at": "2026-10-24T03:15:39Z",

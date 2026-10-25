@@ -3,9 +3,11 @@
 export const RUNTIME_CONTRACT='hkis-runtime-v1';
 export const RUNTIME_ROOT='/api/hkis/runtime/v1';
 export const RUNTIME_MANIFEST_PATH=RUNTIME_ROOT+'/manifest';
-export const RUNTIME_CAPABILITIES=['frozen-writes-v1','bounded-collection-v1','scheduled-cohorts-v1','unknown-stop-v1'] as const;
-export const RUNTIME_CODES=['runtime_manifest_invalid','runtime_protocol_unsupported','runtime_capability_unsupported','runtime_budget_invalid','runtime_freeze_required','runtime_changed','runtime_expired','runtime_operation_rejected','runtime_disabled','runtime_source_unavailable'] as const;
+export const RUNTIME_CAPABILITIES=['frozen-writes-v1','bounded-collection-v1','scheduled-cohorts-v1','unknown-stop-v1','collection-first-v1'] as const;
+export const RUNTIME_CODES=['runtime_manifest_invalid','runtime_protocol_unsupported','runtime_capability_unsupported','runtime_budget_invalid','runtime_freeze_required','runtime_changed','runtime_expired','runtime_operation_rejected','runtime_disabled','runtime_source_unavailable','runtime_goal_changed'] as const;
 export const RUNTIME_PATHS:Record<string,string>={
+ '/api/site/research/run/plan':RUNTIME_ROOT+'/plan',
+ '/api/site/research/brief/prepare':RUNTIME_ROOT+'/brief',
  '/api/site/research/ingestion/recover':RUNTIME_ROOT+'/recover',
  '/api/site/research/enrich':RUNTIME_ROOT+'/metadata',
  '/api/site/research/process':RUNTIME_ROOT+'/scoring',
@@ -16,7 +18,7 @@ export const RUNTIME_PATHS:Record<string,string>={
 };
 export const RUNTIME_HEADERS={contract:'x-hkis-runtime-contract',configHash:'x-hkis-config-hash',sourceRevision:'x-hkis-site-source',bootstrapSource:'x-hkis-bootstrap-source',startedAt:'x-hkis-run-started-at',slot:'x-hkis-runtime-slot'} as const;
 export const RUNTIME_CEILINGS={totalMs:540000,collectionCalls:35,collection8Ms:260000,collection20Ms:330000,collectionSliceMs:75000,collectionConcurrency:3};
-export const DEFAULT_RUNTIME_MANIFEST={schemaVersion:1,protocolMajor:1,requiredCapabilities:[...RUNTIME_CAPABILITIES],limits:{...RUNTIME_CEILINGS},slots:{'8':{template:'scheduled-am-v1',enabled:true,assessmentMaxPapers:1,dailyMaxCalls:2},'20':{template:'scheduled-pm-v1',enabled:true,assessmentMaxPapers:2,dailyMaxCalls:0}}};
+export const DEFAULT_RUNTIME_MANIFEST={schemaVersion:1,protocolMajor:1,requiredCapabilities:[...RUNTIME_CAPABILITIES],limits:{...RUNTIME_CEILINGS},slots:{'8':{template:'scheduled-am-v2',enabled:true,assessmentMaxPapers:1,dailyMaxCalls:2},'20':{template:'scheduled-pm-v2',enabled:true,assessmentMaxPapers:2,dailyMaxCalls:0}}};
 export class RuntimeContractError extends Error {
  code:string;
  constructor(code:string){super(code);this.code=code;}
@@ -37,7 +39,7 @@ export function validateRuntimeManifest(value:any){
  keys(value.slots,['8','20']);
  for(const slot of ['8','20']){
   const s=value.slots[slot];keys(s,['template','enabled','assessmentMaxPapers','dailyMaxCalls']);
-  if(s.template!==(slot==='8'?'scheduled-am-v1':'scheduled-pm-v1')||typeof s.enabled!=='boolean')fail();
+  if(s.template!==(slot==='8'?'scheduled-am-v2':'scheduled-pm-v2')||typeof s.enabled!=='boolean')fail();
   if(!Number.isInteger(s.assessmentMaxPapers)||s.assessmentMaxPapers<0||s.assessmentMaxPapers>(slot==='8'?1:2)||!Number.isInteger(s.dailyMaxCalls)||s.dailyMaxCalls<0||s.dailyMaxCalls>(slot==='8'?2:0))fail('runtime_budget_invalid');
  }
  return structuredClone(value) as typeof DEFAULT_RUNTIME_MANIFEST;
@@ -85,10 +87,13 @@ export function runtimeOperationBody(path:string,body:any,frozen:any,now=Date.no
  const integer=(value:any,min:number,max:number)=>{if(!Number.isInteger(value)||value<min||value>max)fail('runtime_budget_invalid')};
  const deadline=()=>{if(typeof body.deadlineAt!=='string'||!Number.isFinite(Date.parse(body.deadlineAt))||Date.parse(body.deadlineAt)>Date.parse(frozen.startedAt)+m.limits.totalMs-reserve||Date.parse(body.deadlineAt)<=now)fail('runtime_budget_invalid')};
  if(left<=reserve)fail('runtime_expired');
- if(path.endsWith('/ingestion/recover')){shape(['maxMs','deadlineAt']);integer(body.maxMs,1,6000);deadline()}
- else if(path.endsWith('/enrich')){shape(['cohort','maxMs']);if(body.cohort!==(frozen.slot===8?'previous_day':'pending'))fail('runtime_operation_rejected');integer(body.maxMs,1,75000)}
- else if(path.endsWith('/process')){shape(['maxPapers','cohort','maxMs','deadlineAt']);if(body.cohort!==(frozen.slot===8?'previous_day':'current'))fail('runtime_operation_rejected');integer(body.maxPapers,0,s.assessmentMaxPapers);integer(body.maxMs,1,frozen.slot===8?120000:210000);deadline()}
- else if(path.endsWith('/daily/generate')){shape(['maxCalls']);integer(body.maxCalls,1,s.dailyMaxCalls);if(frozen.slot!==8||left<190000)fail('runtime_operation_rejected')}
+ const target=()=>{if(typeof body.sourceDay!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(body.sourceDay)||!Number.isFinite(Date.parse(body.sourceDay+'T00:00:00Z'))||new Date(body.sourceDay+'T00:00:00Z').toISOString().slice(0,10)!==body.sourceDay)fail('runtime_operation_rejected')};
+ if(path.endsWith('/run/plan')){shape(['slot']);if(body.slot!==frozen.slot)fail('runtime_operation_rejected')}
+ else if(path.endsWith('/brief/prepare')){shape(['batchKey'])}
+ else if(path.endsWith('/ingestion/recover')){shape(['maxMs','deadlineAt']);integer(body.maxMs,1,6000);deadline()}
+ else if(path.endsWith('/enrich')){shape(body.cohort==='previous_day'?['cohort','maxMs','sourceDay']:['cohort','maxMs']);if(body.cohort!=='current'&&!(frozen.slot===8&&body.cohort==='previous_day'))fail('runtime_operation_rejected');if(body.cohort==='previous_day')target();integer(body.maxMs,1,75000)}
+ else if(path.endsWith('/process')){shape(body.cohort==='previous_day'?['maxPapers','cohort','maxMs','deadlineAt','sourceDay']:['maxPapers','cohort','maxMs','deadlineAt']);if(body.cohort!==(frozen.slot===8?'previous_day':'current')&&!(frozen.slot===8&&body.cohort==='current'&&body.maxPapers===0))fail('runtime_operation_rejected');if(body.cohort==='previous_day')target();integer(body.maxPapers,0,s.assessmentMaxPapers);integer(body.maxMs,1,frozen.slot===8?120000:210000);deadline()}
+ else if(path.endsWith('/daily/generate')){shape(['maxCalls','sourceDay']);target();integer(body.maxCalls,1,s.dailyMaxCalls);if(frozen.slot!==8||left<190000)fail('runtime_operation_rejected')}
  else if(path.endsWith('/batch/start')){shape(['slot']);if(body.slot!==frozen.slot)fail('runtime_operation_rejected')}
  else if(path.endsWith('/batch/collect')){shape(['batchKey','maxMs','maxCalls','concurrency']);integer(body.maxMs,1,m.limits.collectionSliceMs);integer(body.maxCalls,1,m.limits.collectionCalls);integer(body.concurrency,1,m.limits.collectionConcurrency)}
  else if(path.endsWith('/batch/finish')){shape(['batchKey','maxMs','deadlineAt']);integer(body.maxMs,1,6000);deadline()}

@@ -37,7 +37,7 @@ globalThis.fetch=async(url,options)=>{
  if(scenario==='changed'){headers['x-hkis-source-revision']='b'.repeat(40);return Response.json({code:'runtime_changed'},{status:409,headers})}
  if(scenario==='unknown')throw Error('SYNTHETIC_PRIVATE_TRANSPORT');
  const path=new URL(url).pathname;
- const value=path.endsWith('/start')?{status:'finished',batchKey:'2026-10-24/20',collectionContract:'bounded-v1',coverage:{status:'complete',batchStatus:'finished',expectedSources:1,attemptedSources:1,completeSources:1,missingSources:[]}}:path.endsWith('/recover')?{status:'ok',recovery:{known:true,remainingItems:0,processedItems:0}}:path.endsWith('/metadata')?{status:'ok',ready:0}: {status:'ok'};
+ const value=path.endsWith('/start')?{status:'finished',batchKey:'2026-10-24/20',collectionContract:'bounded-v1',coverage:{status:'complete',batchStatus:'finished',expectedSources:1,attemptedSources:1,completeSources:1,missingSources:[]}}:path.endsWith('/recover')?{status:'ok',recovery:{known:true,remainingItems:0,processedItems:0}}:path.endsWith('/metadata')?{status:'ok',ready:0,sourceDay:'2026-10-24'}:path.endsWith('/scoring')?{status:'ok',scope:{sourceDay:'2026-10-24'},remainingQueued:0}:path.endsWith('/brief')?{brief:{batchKey:'2026-10-24/20',status:'awaiting_analysis'}}: {status:'ok'};
  return Response.json(value,{headers});
 };
 try{await privateStableSlotMain()}catch{}
@@ -48,7 +48,7 @@ async function run(scenario,input={}){
  return new Promise((resolve,reject)=>{const child=spawn(process.execPath,[harness,scenario],{stdio:['pipe','pipe','pipe'],env:{...process.env,COLLECT_ENABLED:'false',MODEL_CALLS_ENABLED:'false'}});let out='',err='';const timer=setTimeout(()=>{child.kill('SIGKILL');reject(Error('Bootstrap test timeout'))},15000);child.stdout.on('data',v=>out+=v);child.stderr.on('data',v=>err+=v);child.on('error',reject);child.on('close',code=>{clearTimeout(timer);assert.ok(!(out+err).includes('SYNTHETIC_PRIVATE_SERVICE_TOKEN'));assert.ok(!(out+err).includes('SYNTHETIC_PRIVATE_TRANSPORT'));const rows=out.trim().split('\n'),h=rows.find(v=>v.startsWith('HARNESS '));resolve({code,out,events:rows.filter(v=>v.startsWith('HKIS_DIAGNOSTIC ')).map(v=>JSON.parse(v.slice(16))),stats:h?JSON.parse(h.slice(8)):null})});child.stdin.end(JSON.stringify(value)+'\n')});
 }
 test('pinned clean dependency-free bootstrap freezes the server manifest and carries proof on every fixed write',async()=>{
- const r=await run('normal');assert.equal(r.code,0);assert.equal(r.stats.posts,5);assert.equal(r.stats.frozenWrites,5);assert.ok(r.events.some(v=>v.state==='frozen'&&v.bootstrapSource===sha));assert.ok(!r.out.includes('expectedSiteSource'));
+ const r=await run('normal');assert.equal(r.code,0);assert.equal(r.stats.posts,6);assert.equal(r.stats.frozenWrites,6);assert.ok(r.events.some(v=>v.state==='frozen'&&v.bootstrapSource===sha));assert.ok(!r.out.includes('expectedSiteSource'));
 });
 test('old servers, unknown major/capabilities/fields, excessive budgets and bad hashes stop before POST',async()=>{
  for(const [scenario,code] of [['old','server_contract_unconfirmed'],['major','runtime_protocol_unsupported'],['capability','runtime_capability_unsupported'],['extra','runtime_manifest_invalid'],['budget','runtime_budget_invalid'],['lowbudget','runtime_budget_invalid'],['lowtime','runtime_budget_invalid'],['hash','runtime_manifest_invalid']]){const r=await run(scenario);assert.equal(r.code,2,scenario);assert.equal(r.stats.posts,0,scenario);assert.equal(r.events.at(-1).code,code,scenario)}

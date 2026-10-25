@@ -113,8 +113,8 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace
   expiryTiming.persistMs=Date.now()-expiryStart;await phaseEvent(db,{runId:lease.id,phase:'metadata:expiry'},expiryTiming,'abstain',0,{expired:result.expired});
   await db.prepare("UPDATE research_enrichment_queue SET status='pending' WHERE (doi,source_id) IN (SELECT doi,source_id FROM research_enrichment_queue WHERE status='overflow' ORDER BY first_seen,doi,source_id LIMIT max(0,min(100,2000-(SELECT count(*) FROM research_enrichment_queue WHERE status IN ('pending','deferred','blocked') AND NOT(origin_run_id IS NULL AND daily_cohort_key IS NULL)))))").run();
   const today=dailyCohortKey(started).slice(0,10);
-  if(body.cohort==='previous_day'&&localHour(new Date(started))===8)await db.prepare("INSERT OR IGNORE INTO research_daily_work(date,source_date,status,created_at,updated_at) SELECT ?,?,'pending',?,? WHERE NOT EXISTS(SELECT 1 FROM research_daily WHERE date=?)").bind(today,dailyWindow(new Date(started),today).sourceDate,started,started,today).run();
-  const day=body.cohort==='previous_day'?await preparationCohort(db,today):body.cohort==='current'?today:null;result.sourceDay=day;
+  if(body.cohort==='previous_day'&&!runtimeBudget?.maintenance&&localHour(new Date(started))===8)await db.prepare("INSERT OR IGNORE INTO research_daily_work(date,source_date,status,created_at,updated_at) SELECT ?,?,'pending',?,? WHERE NOT EXISTS(SELECT 1 FROM research_daily WHERE date=?)").bind(today,dailyWindow(new Date(started),today).sourceDate,started,started,today).run();
+  const day=body.cohort==='previous_day'?(runtimeBudget?.maintenance?.sourceDay||await preparationCohort(db,today)):body.cohort==='current'?today:null;result.sourceDay=day;
   // Pending maintenance is a bounded current-month debt pass.  Requiring a
   // daily_work row here silently stranded older collection days forever.  A
   // frozen daily report is only a fence for its archived snapshot/evidence;

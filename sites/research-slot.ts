@@ -17,7 +17,7 @@ const coverageEvidence=(value:any)=>{
 };
 /** Serial client slices; bounded server workers settle before each response.
  * Unknown outcomes end this invocation without replay or forced finalization. */
-export async function runResearchSlot(call:Call,slot:8|20,now=Date.now,started=now(),runtimeManifest?:any){
+async function runLegacyResearchSlot(call:Call,slot:8|20,now=Date.now,started=now(),runtimeManifest?:any){
  const manifest=runtimeManifest?validateRuntimeManifest(runtimeManifest):null,limits={...SLOT_LIMITS,...(manifest?.limits||{})},policy=manifest?.slots[String(slot) as '8'|'20']||{enabled:true,assessmentMaxPapers:slot===8?1:2,dailyMaxCalls:slot===8?2:0};
  const deadline=started+limits.totalMs,steps:any[]=[];
  const remaining=()=>Math.max(0,deadline-now());
@@ -111,4 +111,130 @@ export async function runResearchSlot(call:Call,slot:8|20,now=Date.now,started=n
   }else steps.push({phase:'scoring',status:'deferred',reason:policy.assessmentMaxPapers===0?'runtime_disabled':'paid_scoring_budget'});
  }else if(slot===20)steps.push({phase:'scoring',status:'deferred',reason:metadataReady?'local_scoring_budget':'metadata_deferred'});
  return outcome(coverage.status!=='complete'||steps.some(s=>!(s.phase==='collection'&&s.status==='partial')&&['deferred','partial','blocked','busy','error','interrupted','budget_deferred','backfill_pending','scope_pending','coverage_incomplete','identity_ambiguous'].includes(s.status))?'partial':'ok',steps.some(s=>s.phase==='collection'&&s.reason==='provider_cooldown')?{reason:'provider_cooldown'}:{});
+}
+
+
+/** Explicit new template; legacy direct callers keep their historical profile.
+ * The approved bootstrap always validates a manifest and never downgrades. */
+export async function runResearchSlot(call:Call,slot:8|20,now=Date.now,started=now(),runtimeManifest?:any){
+ if(!runtimeManifest)return runLegacyResearchSlot(call,slot,now,started);
+ return runCollectionFirstSlot(call,slot,now,started,validateRuntimeManifest(runtimeManifest));
+}
+const SOFT_GOAL_REASONS=new Set(['pending_metadata','pending_scoring','provider_deferred','provider_cooldown','work_pending','no_new_ready_in_cohort','no_queued_in_cohort','not_configured','ai_disabled','key_unavailable','interactive_only','connection_test_required','time_budget','daily_call_cap','paid_scoring_budget','local_scoring_budget','metadata_deferred']);
+const reasonOf=(v:any)=>v?.code||v?.error||v?.blocked||v?.reason||v?.deferredReason||v?.collectionControl?.reason||null;
+function goalBarrier(v:any):'unknown'|'blocked'|null {
+ if(!v||v.status==='unknown'||v.known===false||v.recovery?.known===false||Number(v.queue?.unknown)>0||Number(v.unknownAttempts)>0||['provider_network','provider_stream_unknown','stream_unknown','request_already_attempted'].includes(v.blocked))return 'unknown';
+ if(v.code||v.error||v.leaseLost||Number(v.reservedUnsent)>0||Number(v.queue?.running)>0||['busy','interrupted','failed','error'].includes(v.status)||['collection_in_progress','metadata_in_progress','processing_in_progress','lock_busy','ingestion_pending','collection_lease_lost','dispatch_not_sent','scoring_state_changed','configuration_changed'].includes(reasonOf(v)))return 'blocked';
+ if(['deferred','blocked'].includes(v.status)&&!SOFT_GOAL_REASONS.has(reasonOf(v)))return 'blocked';
+ return null;
+}
+async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started:number,manifest:any){
+ const limits={...SLOT_LIMITS,...manifest.limits},policy=manifest.slots[String(slot)],localEnd=new Date(started+8*3600000);localEnd.setUTCHours(slot+1,0,0,0);
+ const deadline=Math.min(started+limits.totalMs-2000,localEnd.getTime()-8*3600000),remaining=()=>Math.max(0,deadline-now()),today=new Date(started+8*3600000).toISOString().slice(0,10);
+ const steps:any[]=[],goals:any=Object.fromEntries(['collection','metadata_current','rules_current','metadata_previous','rules_previous','assessment','daily','brief'].map(k=>[k,{status:'pending',reason:null,sourceDay:k.endsWith('_current')?today:null,reportDate:null}]));
+ if(slot===20)for(const k of ['metadata_previous','rules_previous','daily'])goals[k]={status:'not_due',reason:'not_due',sourceDay:null,reportDate:null};
+ let batchKey:string|null=null,preparationMs=0,collectionBudgetMs=0,collectionDeadline=0,collectionStoppedAt:number|null=null,collectionCalls=0,collectionRequests=0,collectionCallsKnown=true,collectionStopReason:string|null=null,coverage=coverageEvidence(null),target:any=null;
+ const mark=(key:string,status:string,reason:any=null)=>Object.assign(goals[key],{status,reason});
+ const outcome=(status:string,reason:any=null)=>{for(const [key,g] of Object.entries(goals) as any){if(g.status==='pending'){g.status='deferred';g.reason=['unknown','blocked'].includes(status)?'not_dispatched_after_stop':key==='collection'?'core_not_started':'maintenance_budget'}g.nextAction=['unknown','blocked'].includes(g.status)?'review_committed_state':['partial','deferred'].includes(g.status)?'next_scheduled_window':g.status==='external'?'separate_authorized_workflow':'none'}return {status,reason,batchKey,preparationMs,collectionBudgetMs,collectionContract:'bounded-v1',collectionCalls:collectionCallsKnown?collectionCalls:null,collectionRequests,remainingCollectionCalls:collectionCallsKnown?limits.collectionCalls-collectionCalls:null,remainingCollectionMs:Math.max(0,collectionDeadline-(collectionStoppedAt??now())),collectionStopReason,coverageStatus:coverage.status,coverage,elapsedMs:now()-started,remainingMs:remaining(),goals,steps}};
+ const invoke=async(phase:string,path:string,body:any,limit:number)=>{
+  if(remaining()<=0){steps.push({phase,status:'deferred',reason:'deadline'});return {status:'deferred',reason:'deadline'};}
+  const at=now();let v:any;try{v=await call(path,body,Math.max(1,Math.min(limit,remaining())))}catch{v={status:'unknown',reason:'response_unconfirmed'}}
+  steps.push({phase,status:v?.status||v?.batchStatus||(v?.brief?'ok':'unknown'),reason:reasonOf(v),blocked:v?.blocked||null,cohort:body?.cohort||null,startedMs:at-started,endedMs:now()-started,runId:v?.runId,requestId:v?.requestId,sentRequestId:v?.sentRequestId,operationIdMismatch:v?.operationIdMismatch===true,...Object.fromEntries(['ready','abstained','deferred','scopePending','remainingQueued','remainingMetadata','attempted','reservedUnsent'].map(k=>[k,v?.[k]??null]))});
+  return v;
+ };
+ const recover=async()=>{for(let slice=0;slice<4;slice++){
+  if(remaining()<15000)return {status:'deferred',reason:'deadline'};
+  const v=await invoke('local_recovery','/api/site/research/ingestion/recover',{maxMs:6000,deadlineAt:new Date(deadline).toISOString()},15000),p=v?.recovery;
+  if(v?.status==='partial'&&v.reason==='ingestion_pending'&&p?.known===true&&p?.confirmed===true&&Number.isInteger(p.processedItems)&&p.processedItems>0&&Number.isInteger(p.remainingItems)&&p.remainingItems>0)continue;
+  if(goalBarrier(v))return v;
+  if(p?.known!==true||p?.confirmed!==true)return {status:'unknown',reason:'recovery_unconfirmed'};
+  if(v.status==='ok'&&p.remainingItems===0)return v;
+  if(v.status!=='partial'||v.reason!=='ingestion_pending'||!Number.isInteger(p.processedItems)||p.processedItems<=0||!Number.isInteger(p.remainingItems)||p.remainingItems<=0)return {status:'deferred',reason:'ingestion_pending'};
+ }return {status:'deferred',reason:'ingestion_pending'};};
+ const stop=(key:string,v:any,fallback:string)=>{const status=goalBarrier(v)||'blocked',reason=reasonOf(v)||fallback;mark(key,status,reason);return outcome(status,reason)};
+ if(!policy.enabled){mark('collection','deferred','runtime_disabled');return outcome('deferred','runtime_disabled')}
+ if(remaining()<15000){mark('collection','deferred','core_budget_insufficient');return outcome('deferred','core_budget_insufficient')}
+ const before=await recover();if(goalBarrier(before)||before.status!=='ok')return stop('collection',before,'recovery_unconfirmed');
+ if(slot===8){
+  if(remaining()<15000){mark('collection','deferred','core_budget_insufficient');return outcome('deferred','core_budget_insufficient')}
+  const plan=await invoke('plan','/api/site/research/run/plan',{slot},15000);if(goalBarrier(plan))return stop('collection',plan,'goal_plan_unconfirmed');
+  target=plan?.maintenance;const validDay=(d:any)=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&Number.isFinite(Date.parse(d+'T00:00:00Z'))&&new Date(d+'T00:00:00Z').toISOString().slice(0,10)===d;
+  if(plan.status!=='ok'||plan.dailyWorkRecorded!==true||!validDay(target?.sourceDay)||!validDay(target?.reportDate)||target.sourceDay>=today||Date.parse(target.reportDate+'T00:00:00Z')-Date.parse(target.sourceDay+'T00:00:00Z')!==86400000){mark('collection','unknown','goal_plan_unconfirmed');return outcome('unknown','goal_plan_unconfirmed')}
+  for(const k of ['metadata_previous','rules_previous','assessment','daily'])Object.assign(goals[k],target);
+ }
+ // At least start15 + one settled collection slice30 + four finish slices60.
+ // Optional outputs never spend this core admission reserve.
+ if(remaining()<105000){mark('collection','deferred','core_budget_insufficient');return outcome('deferred','core_budget_insufficient')}
+ preparationMs=now()-started;collectionBudgetMs=Math.min(slot===8?limits.collection8Ms:limits.collection20Ms,remaining()-60000);
+ const batch=await invoke('start','/api/site/research/batch/start',{slot},15000);
+ if(goalBarrier(batch)||!batch?.batchKey)return stop('collection',batch,'batch_not_terminal');
+ batchKey=batch.batchKey;if(batch.collectionContract!=='bounded-v1'){mark('collection','unknown','collection_contract_unconfirmed');return outcome('unknown','collection_contract_unconfirmed')}
+ mark('collection','pending');collectionDeadline=Math.min(now()+collectionBudgetMs,deadline-60000);
+ let control=batch.collectionControl;
+ if(batch.status==='running'){
+  if(!control||typeof control.stop!=='boolean'||control.nextAction==='readback_reconcile'){mark('collection','blocked','collection_interrupted_readback_reconcile');return outcome('blocked','collection_interrupted_readback_reconcile')}
+  while(collectionCalls<limits.collectionCalls&&!control.stop){
+   if(!control.nextSourceId){collectionStopReason='no_dispatchable_source';break}
+   const left=collectionDeadline-now();if(left<30000){collectionStopReason='collection_time_budget';break}
+   const maxMs=Math.min(limits.collectionSliceMs,left-15000),maxCalls=limits.collectionCalls-collectionCalls;collectionRequests++;
+   const v=await invoke('collection','/api/site/research/batch/collect',{batchKey,maxMs,maxCalls,concurrency:limits.collectionConcurrency},maxMs+15000);
+   if(!v||v.status==='unknown'||v.batchKey!==batchKey||!Array.isArray(v.results)||!Number.isInteger(v.calls)||v.calls<0||v.calls>maxCalls||v.calls!==v.results.length||!v.collectionControl||typeof v.collectionControl.stop!=='boolean'||typeof v.stopReason!=='string'){
+    collectionCallsKnown=false;mark('collection','unknown','collection_contract_unconfirmed');return outcome('unknown','collection_outcome_unknown_do_not_finish_in_flight');
+   }
+   collectionCalls+=v.calls;
+   if(v.results.some((r:any)=>!r||r.status==='unknown')){mark('collection','unknown','collection_interrupted_readback_reconcile');return outcome('unknown','collection_interrupted_readback_reconcile')}
+   if(v.code||v.error||v.status==='interrupted'||v.collectionControl.nextAction==='readback_reconcile'||v.results.some((r:any)=>r.code||r.status==='interrupted'||r.error==='collection_canceled'))return stop('collection',v,'collection_interrupted_readback_reconcile');
+   control=v.collectionControl;collectionStopReason=v.stopReason||control.reason;
+   if(control.stop)break;
+   if(v.calls===0||['deferred','blocked','busy'].includes(v.status)||!['slice_deadline','slice_call_limit'].includes(v.stopReason))break;
+  }
+  collectionStopReason??=control?.reason||(collectionCalls>=limits.collectionCalls?'call_budget':'collection_stopped');collectionStoppedAt=now();
+  let finish:any=null;for(let slice=0;slice<4;slice++){
+   if(remaining()<15000){mark('collection','deferred','finish_unconfirmed_do_not_start_maintenance');return outcome('deferred','finish_unconfirmed_do_not_start_maintenance')}
+   finish=await invoke('finish','/api/site/research/batch/finish',{batchKey,maxMs:Math.min(6000,remaining()-3000),deadlineAt:new Date(deadline).toISOString()},15000);const p=finish?.recovery;
+   if(finish?.code!=='ingestion_pending'||p?.known!==true||p?.confirmed!==true||!Number.isInteger(p.processedItems)||p.processedItems<=0||!Number.isInteger(p.remainingItems)||p.remainingItems<=0)break;
+  }
+  if(!finish||goalBarrier(finish)||finish.batchStatus!=='finished')return stop('collection',finish,'finish_unconfirmed_do_not_start_maintenance');
+  coverage=coverageEvidence(finish);
+ }else if(batch.status==='finished'){collectionStoppedAt=now();coverage=coverageEvidence(batch.coverage);collectionStopReason=control?.reason||'batch_closed'}
+ else return stop('collection',batch,'batch_not_terminal');
+ mark('collection',coverage.status==='complete'?'ok':'partial',coverage.status==='complete'?null:'coverage_incomplete');
+ const recovered=await recover();if(goalBarrier(recovered)||recovered.status!=='ok')return stop('metadata_current',recovered,'recovery_unconfirmed');
+ const maintain=async(cohort:'current'|'previous_day',paid:number)=>{
+  const suffix=cohort==='current'?'current':'previous',metadataKey='metadata_'+suffix,rulesKey='rules_'+suffix,scope=cohort==='previous_day'?{sourceDay:target.sourceDay}:{};
+  if(remaining()<30000){mark(metadataKey,'deferred','maintenance_budget');mark(rulesKey,'deferred','metadata_deferred');return {prepared:false};}
+  const maxMs=Math.min(75000,remaining()-15000),v=await invoke('metadata','/api/site/research/enrich',{cohort,maxMs,...scope},maxMs+15000);
+  if(goalBarrier(v))return {stopped:stop(metadataKey,v,'metadata_deferred')};
+  if(v.sourceDay!==(cohort==='current'?today:target.sourceDay)){mark(metadataKey,'unknown','goal_target_unconfirmed');return {stopped:outcome('unknown','goal_target_unconfirmed')};}
+  const pending=Number(v.deferred)>0||Number(v.scopePending)>0||Number(v.remainingMetadata)>0||v.status!=='ok';mark(metadataKey,pending?'partial':'ok',pending?(reasonOf(v)||'pending_metadata'):null);
+  if(remaining()<limits.localScoringMinMs){mark(rulesKey,'deferred','local_scoring_budget');return {prepared:false};}
+  const local=await invoke('local_scoring','/api/site/research/process',{maxPapers:0,cohort,maxMs:Math.min(30000,remaining()-2000),deadlineAt:new Date(deadline).toISOString(),...scope},Math.min(30000,remaining()));
+  if(goalBarrier(local))return {stopped:stop(rulesKey,local,'assessment_deferred')};
+  if(local.scope?.sourceDay!==(cohort==='current'?today:target.sourceDay)||!Number.isInteger(local.remainingQueued)||local.remainingQueued<0){mark(rulesKey,'unknown','goal_target_unconfirmed');return {stopped:outcome('unknown','goal_target_unconfirmed')};}
+  mark(rulesKey,'ok');let queued=local.remainingQueued;
+  if(paid>0&&queued>0&&local.blocked)mark('assessment','deferred',local.blocked);
+  else if(paid>0&&queued>0){
+   if(remaining()<limits.paidScoringMinMs)mark('assessment','deferred','paid_scoring_budget');
+   else {const v=await invoke('scoring','/api/site/research/process',{maxPapers:paid,cohort,maxMs:Math.min(slot===8?120000:210000,remaining()-2000),deadlineAt:new Date(deadline).toISOString(),...scope},Math.min(slot===8?120000:210000,remaining()));
+    if(goalBarrier(v))return {stopped:stop('assessment',v,'assessment_deferred')};
+    if(v.scope?.sourceDay!==(cohort==='current'?today:target.sourceDay)||!Number.isInteger(v.remainingQueued)||v.remainingQueued<0){mark('assessment','unknown','goal_target_unconfirmed');return {stopped:outcome('unknown','goal_target_unconfirmed')};}
+    queued=v.remainingQueued;mark('assessment',queued?'partial':'ok',queued?(reasonOf(v)||'work_pending'):null);
+   }
+  }else if(paid>0)mark('assessment','ok');
+  return {prepared:!pending&&queued===0,pending,queued};
+ };
+ // AM's single paid assessment belongs to its captured previous-day goal;
+ // PM's two belong to current. Current local rules never consume paid quota.
+ if(slot===8&&target.completed===true){for(const key of ['metadata_previous','rules_previous','assessment','daily'])mark(key,'ok','goal_completed')}
+ else if(slot===8){
+  const prior=await maintain('previous_day',policy.assessmentMaxPapers);if(prior.stopped)return prior.stopped;
+  if(!prior.prepared)mark('daily','deferred',prior.pending?'pending_metadata':'pending_scoring');
+  else if(policy.dailyMaxCalls===0)mark('daily','deferred','runtime_disabled');
+  else if(remaining()<190000)mark('daily','deferred','daily_budget');
+  else {const daily=await invoke('daily','/api/site/research/daily/generate',{maxCalls:policy.dailyMaxCalls,sourceDay:target.sourceDay},190000);if(goalBarrier(daily))return stop('daily',daily,'preparation_deferred');if((daily.report?.sourceDate||daily.sourceDay||daily.source_date)!==target.sourceDay||(daily.date||daily.report?.date)!==target.reportDate){mark('daily','unknown','goal_target_unconfirmed');return outcome('unknown','goal_target_unconfirmed')};mark('daily',daily.status==='ok'?'ok':'deferred',reasonOf(daily));}
+ }
+ const current=await maintain('current',slot===20?policy.assessmentMaxPapers:0);if(current.stopped)return current.stopped;
+ if(remaining()>=15000){const brief=await invoke('brief','/api/site/research/brief/prepare',{batchKey},15000);if(goalBarrier(brief))return stop('brief',brief,'brief_preparation_failed');if(!brief.brief||brief.brief.batchKey!==batchKey){mark('brief','unknown','brief_preparation_failed');return outcome('unknown','brief_preparation_failed')};mark('brief','external','awaiting_assistant');}
+ else mark('brief','deferred','brief_budget');
+ return outcome(Object.values(goals).some((g:any)=>['partial','deferred','blocked','unknown','pending'].includes(g.status))?'partial':'ok');
 }
