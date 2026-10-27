@@ -21,7 +21,7 @@ export function publisherURL(value:unknown,source:JournalSource){
 const unique=(a:string[])=>[...new Set(a.filter(Boolean))],text=(v:any)=>typeof v==='string'?v.replace(/\s+/g,' ').trim():'';
 const complete=(v:string)=>v.length>=180&&v.length<=PUBLISHER_LIMITS.abstractChars&&!/(?:…|\.{3})\s*$|\b(?:show more|read more|preview only|abstract unavailable)\b/i.test(v);
 export type PublisherEvidence={initialUrl:string;url:string;redirects:string[];retrievedAt:string;documentHash:string;titles:string[];dois:string[];journals:string[];issns:string[];authors:string[];abstract:string|null;field:string|null;reason:string;contentTrust:'untrusted'};
-/** Only primary scholarly metadata and explicitly labelled Abstract containers.
+/** Only primary scholarly metadata with an explicit structured abstract field.
  * Descriptions, references, highlights and arbitrary page text are not candidates. */
 export async function parsePublisherAbstract(html:string,url:string):Promise<PublisherEvidence>{
  const $=load(html),meta=(names:string[])=>$('head meta').toArray().filter(e=>names.includes(String($(e).attr('name')||$(e).attr('property')||'').toLowerCase())).map(e=>text($(e).attr('content'))).filter(Boolean);
@@ -40,24 +40,16 @@ export async function parsePublisherAbstract(html:string,url:string):Promise<Pub
   titles.push(title);dois.push(...ds);journals.push(...js);issns.push(...is);authors.push(...as);if(typeof a.abstract==='string')candidates.push({value:plain(a.abstract),field:'jsonld:ScholarlyArticle.abstract'});
  }
  const primaryHeadings=$('article h1,main h1,h1.c-article-title,h1.article-header__title').toArray().map(e=>text($(e).text()));titles.push(...primaryHeadings);
- const excluded=(e:any)=>{const n=$(e),label=[n.attr('id'),n.attr('class'),n.attr('role'),'aria-label' in (e.attribs||{})?n.attr('aria-label'):''].join(' ');return ['nav','aside','dialog'].includes(e.tagName)||n.attr('hidden')!==undefined||n.attr('aria-hidden')==='true'||/reference|bibliograph|citation|related|recommend|popup|popover|modal|dialog|supplement|graphical|highlight|plain.language/i.test(label)};
- const primaryArticles=$('article').toArray().filter(a=>!$(a).parents().toArray().some(excluded)&&!excluded(a)&&$(a).find('h1').toArray().filter(h=>$(h).closest('article')[0]===a&&titles.some(t=>normalizedTitle(t)===normalizedTitle(text($(h).text())))).length===1);
- $('h2,h3,h4').each((_,h)=>{if(!/^abstract$/i.test(text($(h).text()))||$(h).parents().toArray().some(excluded))return;
-  const container=$(h).closest('section,div'),label=[container.attr('id'),container.attr('class')].join(' '),article=$(h).closest('article')[0];
-  // Heading text alone is insufficient: bind to one primary article and an
-  // explicit abstract container. Unknown layouts conservatively abstain.
-  if(primaryArticles.length!==1||article!==primaryArticles[0]||!/(?:^|\s)(?:abstract|abstract-group|article-section__abstract)(?:\s|$)/i.test(label))return;
-  const stop=h.tagName==='h2'?'h1,h2':h.tagName==='h3'?'h1,h2,h3':'h1,h2,h3,h4',bound=$('<section></section>').append($(h).nextUntil(stop).clone());
-  if(bound.find('h1,h2').length||bound.find('h3,h4').toArray().some(e=>/^(?:highlights|graphical abstract|plain language summary|references)$/i.test(text($(e).text()))))return;
-  bound.find('h2,h3,h4').filter((_,e)=>/^abstract$/i.test(text($(e).text()))).remove();bound.find('*').filter((_,e)=>excluded(e)).remove();bound.find('script,style,figure').remove();
-  const parts=bound.find('p,h3,h4,li').toArray().filter(e=>!$(e).parents('p,li').length).map(e=>text($(e).text()));const value=(parts.length?parts.join('\n'):text(bound.text()))+(/\b(?:show more|read more)\b/i.test(bound.text())?' Show More':'');candidates.push({value,field:'section:Abstract'});
- });
+ // Body headings and CSS containers do not establish article ownership.
+ // No heading fallback: only the structured primary fields above can qualify.
  const full=candidates.filter(c=>complete(c.value)),values=unique(full.map(c=>c.value.replace(/\s+/g,' '))),selected=values.length===1?full[0]:null;
  const evidence:PublisherEvidence={initialUrl:url,url,redirects:[],retrievedAt:new Date().toISOString(),documentHash:await fingerprint(html),titles:unique(titles),dois:unique(dois.map(normalizeDoi)),journals:unique(journals),issns:unique(issns),authors:unique(authors).slice(0,100),abstract:selected?.value||null,field:selected?.field||null,reason:!selected&&$('input[type="password"],#challenge-form,form[action*="login"]').length?'publisher_access_page':values.length>1?'abstract_conflict':selected?'candidate':candidates.length?'abstract_incomplete':'no_explicit_abstract',contentTrust:'untrusted'};
  if(new TextEncoder().encode(JSON.stringify(evidence)).byteLength>131072)throw new AIError('publisher_metadata_too_large',409,'出版页元数据超过证据大小边界');return evidence;
 }
 export function verifyPublisherEvidence(e:PublisherEvidence,p:Paper,registry:Paper,source:JournalSource){
  if(!publisherURL(e.url,source))return 'publisher_url_rejected';
+ // Reject durable candidates produced by the removed heading fallback too.
+ if(e.abstract&&!['meta:citation_abstract','jsonld:ScholarlyArticle.abstract'].includes(e.field||''))return 'unsupported_abstract_field';
  if(!e.dois.length)return 'primary_doi_missing';
  if(e.dois.length!==1||e.dois[0]!==registry.doi||p.doi&&p.doi!==registry.doi)return 'primary_doi_conflict';
  if(!e.titles.length||e.titles.some(t=>normalizedTitle(t)!==normalizedTitle(p.title)))return 'primary_title_conflict';

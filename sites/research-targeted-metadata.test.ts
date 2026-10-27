@@ -14,14 +14,35 @@ import {digest} from './research-pipeline.ts';
 const source=RESEARCH_SOURCES[0]!,env={HKIS_AI_ENCRYPTION_KEY:'1'.repeat(64),HKIS_OWNER_EMAIL:'owner@example.org'},owner='owner',key='SYNTHETIC_METADATA_KEY';
 const abstract='We investigate transistor interface transport using controlled simulations and measured carrier statistics. The calibrated model identifies the stated physical mechanism and reports reproducible limitations under the tested device conditions.';
 const raw=(doi='10.9999/target')=>({DOI:doi,type:'journal-article',title:['TCAD transistor transport with explicit metadata evidence'],ISSN:[source.issn],author:[{given:'Fixture',family:'Author'}],published:{'date-parts':[[2027,1,2]]}});
-const html=(extra='',doi='10.9999/target',title=raw().title[0])=>`<html><head><meta name="citation_doi" content="${doi}"><meta name="citation_title" content="${title}"><meta name="citation_issn" content="${source.issn}"><meta name="citation_journal_title" content="${source.name}"><meta name="citation_author" content="Fixture Author">${extra}</head><body><article><h1>${title}</h1><section id="abstract"><h2>Abstract</h2><p>${abstract}</p></section><section><h2>References</h2><p>10.9999/reference</p></section></article></body></html>`;
+const headingHtml=(extra='',doi='10.9999/target',title=raw().title[0])=>`<html><head><meta name="citation_doi" content="${doi}"><meta name="citation_title" content="${title}"><meta name="citation_issn" content="${source.issn}"><meta name="citation_journal_title" content="${source.name}"><meta name="citation_author" content="Fixture Author">${extra}</head><body><article><h1>${title}</h1><section id="abstract"><h2>Abstract</h2><p>${abstract}</p></section><section><h2>References</h2><p>10.9999/reference</p></section></article></body></html>`;
+const html=(extra='',doi='10.9999/target',title=raw().title[0])=>headingHtml(`<meta name="citation_abstract" content="${abstract}">${extra}`,doi,title);
+const referenceAbstractPage=(heading='References')=>headingHtml().replace('<section id="abstract"><h2>Abstract</h2><p>'+abstract+'</p></section>','').replace('</article>','<section><h2>'+heading+'</h2><ol><li>Cited work<section id="abstract"><h3>Abstract</h3><p>'+abstract+' This is another paper.</p></section></li></ol></section></article>');
 function fixture(){const sql=new DatabaseSync(':memory:');sql.function('fixture_now',()=>new Date().toISOString());const clock=(q:string)=>q.replaceAll("strftime('%Y-%m-%dT%H:%M:%fZ','now')",'fixture_now()');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(clock(readFileSync('drizzle/'+f,'utf8')));const db:any={prepare(q:string){const s=sql.prepare(clock(q));return {q,args:[] as any[],bind(...a:any[]){this.args=a;return this},async first(){return s.get(...this.args)||null},async all(){return {results:s.all(...this.args)}},runSync(){return {meta:{changes:Number(s.run(...this.args).changes)}}},async run(){return this.runSync()}}},async batch(ss:any[]){sql.exec('BEGIN');try{const r=ss.map(s=>s.runSync());sql.exec('COMMIT');return r}catch(e){sql.exec('ROLLBACK');throw e}}};return {sql,db};}
 async function setup(f:any,doi:string|null='10.9999/target',title?:string){await initResearch(f.db);const cipher=await seal(key,env,credentialContext(owner));await f.db.prepare("INSERT INTO anysearch_settings(owner_id,endpoint,key_ciphertext,enabled,metadata_enabled,revision,updated_at,test_status) VALUES(?,'https://api.anysearch.com',?,0,1,1,?,'ok')").bind(owner,cipher,new Date().toISOString()).run();const p={...fromCrossref(raw(),source)!,doi,title:title||raw().title[0]!,abstract:null,url:'https://ieeexplore.ieee.org/document/fixture'};const saved=await savePaper(f.db,p,'2026-09-30T01:00:00.000Z');return {p,id:saved.id};}
 async function mocked<T>(fn:()=>Promise<T>,fetcher:typeof fetch){const old=globalThis.fetch;globalThis.fetch=fetcher;try{return await fn()}finally{globalThis.fetch=old}}
 const snapshot=(f:any)=>JSON.stringify(['research_batch_members','paper_reader_state','research_briefs','research_brief_evidence','research_daily','research_daily_groups','research_ready_evidence'].map(t=>f.sql.prepare('SELECT * FROM '+t).all()));
 
-test('only explicit Abstract/abstract fields qualify; references, descriptions and truncated text do not',async()=>{
- const valid=await parsePublisherAbstract(html(),'https://ieeexplore.ieee.org/document/fixture');assert.equal(valid.abstract,abstract);assert.equal(valid.field,'section:Abstract');assert.deepEqual(valid.dois,['10.9999/target']);
+test('semantic references without class attributes cannot supply heading abstracts',async()=>{
+ const registry=fromCrossref(raw(),source)!;
+ for(const heading of ['References','Bibliography','Related Articles']){const e=await parsePublisherAbstract(referenceAbstractPage(heading),'https://ieeexplore.ieee.org/document/fixture');assert.equal(e.abstract,null,heading);assert.notEqual(verifyPublisherEvidence(e,registry,registry,source),null);}
+});
+
+test('actual stored maintenance cannot write another article abstract from a semantic reference list',async()=>{
+ const f=fixture();try{const {id}=await setup(f);const before=f.sql.prepare('SELECT abstract,first_seen,metadata_revision,provenance_json FROM research_papers WHERE id=?').get(id),frozen=snapshot(f);
+  const r=await mocked(()=>maintainStoredMetadata(f.db,env,{paperIds:[id],fields:['abstract'],apply:true,maxSearches:0}),async(url:any)=>new URL(String(url)).hostname==='api.crossref.org'?Response.json({message:raw()}):new Response(referenceAbstractPage(),{headers:{'content-type':'text/html'}}));
+  assert.equal(r.updatedPapers,0,JSON.stringify(r));assert.equal(r.informationGain.abstractsAdded,0);assert.equal(r.searches,0);assert.equal(r.outcomes[0].reason,'no_explicit_abstract');assert.deepEqual(f.sql.prepare('SELECT abstract,first_seen,metadata_revision,provenance_json FROM research_papers WHERE id=?').get(id),before);assert.equal(snapshot(f),frozen);
+ }finally{f.sql.close()}
+});
+
+test('cached section Abstract evidence is rejected without another publisher or search call',async()=>{
+ const f=fixture();try{const {id}=await setup(f),candidate={...await parsePublisherAbstract(html(),'https://ieeexplore.ieee.org/document/fixture'),field:'section:Abstract'};
+  f.sql.prepare('INSERT INTO research_metadata_jobs VALUES(?,?,?,?,?,?,?,?,?)').run(id,owner,'["abstract"]','pending',JSON.stringify({publisher:candidate}),'{}','{}','2000','2000');
+  const r=await mocked(()=>maintainStoredMetadata(f.db,env,{paperIds:[id],fields:['abstract'],apply:true,verificationOnly:true}),async(url:any)=>{assert.equal(new URL(String(url)).hostname,'api.crossref.org');return Response.json({message:raw()})});assert.equal(r.updatedPapers,0,JSON.stringify(r));assert.equal(r.informationGain.abstractsAdded,0);assert.equal(r.outcomes[0].reason,'unsupported_abstract_field');assert.equal(r.publisherCalls,0);assert.equal(r.searches,0);assert.equal(f.sql.prepare('SELECT abstract FROM research_papers WHERE id=?').get(id)!.abstract,null);
+ }finally{f.sql.close()}
+});
+
+test('only primary structured abstract fields qualify; references, descriptions and truncated text do not',async()=>{
+ const valid=await parsePublisherAbstract(html(),'https://ieeexplore.ieee.org/document/fixture');assert.equal(valid.abstract,abstract);assert.equal(valid.field,'meta:citation_abstract');assert.deepEqual(valid.dois,['10.9999/target']);
  const registry=fromCrossref(raw(),source)!;assert.equal(verifyPublisherEvidence(valid,registry,registry,source),null);
  const referencesOnly=await parsePublisherAbstract(html().replace('<meta name="citation_doi" content="10.9999/target">','').replace('10.9999/reference','10.9999/target'),'https://ieeexplore.ieee.org/document/fixture');assert.equal(verifyPublisherEvidence(referencesOnly,registry,registry,source),'primary_doi_missing');
  const description=await parsePublisherAbstract(`<meta name="description" content="${abstract}"><p>${abstract}</p>`,'https://ieeexplore.ieee.org/document/fixture');assert.equal(description.abstract,null);
@@ -30,9 +51,10 @@ test('only explicit Abstract/abstract fields qualify; references, descriptions a
  const conflict=await parsePublisherAbstract(html(`<meta name="citation_abstract" content="${abstract} Different findings are claimed here.">`),'https://ieeexplore.ieee.org/document/fixture');assert.equal(conflict.abstract,null);assert.equal(conflict.reason,'abstract_conflict');
  const wrong=await parsePublisherAbstract(html('','10.9999/other'),'https://ieeexplore.ieee.org/document/fixture');assert.equal(verifyPublisherEvidence(wrong,registry,registry,source),'primary_doi_conflict');
  const long=await parsePublisherAbstract(html().replace(abstract,'x'.repeat(12001)),'https://ieeexplore.ieee.org/document/fixture');assert.equal(long.abstract,null);
- const structured=await parsePublisherAbstract(html().replace('<p>'+abstract+'</p>','<h3>Methods</h3><p>'+abstract+'</p><h3>Results</h3><p>Observed transport.</p>'),'https://ieeexplore.ieee.org/document/fixture');assert.match(structured.abstract!,/^Methods\n/);assert.match(structured.abstract!,/\nResults\nObserved transport/);
+ const structured=await parsePublisherAbstract(html().replace('content="'+abstract+'"','content="&lt;h3&gt;Methods&lt;/h3&gt;&lt;p&gt;'+abstract+'&lt;/p&gt;&lt;h3&gt;Results&lt;/h3&gt;&lt;p&gt;Observed transport.&lt;/p&gt;"'),'https://ieeexplore.ieee.org/document/fixture');assert.match(structured.abstract!,/^Methods\n/);assert.match(structured.abstract!,/\nResults\nObserved transport/);
  const highlights=await parsePublisherAbstract(html().replace('</p></section><section><h2>References','</p><h2>Highlights</h2><p>DO NOT COPY HIGHLIGHTS</p></section><section><h2>References'),'https://ieeexplore.ieee.org/document/fixture');assert.equal(highlights.abstract,abstract);
  const bodyMetadata=await parsePublisherAbstract(html().replace('<meta name="citation_doi" content="10.9999/target">','').replace('<h2>References</h2>','<h2>References</h2><meta name="citation_doi" content="10.9999/target">'),'https://ieeexplore.ieee.org/document/fixture');assert.deepEqual(bodyMetadata.dois,[]);
+ const headingOnly=await parsePublisherAbstract(headingHtml(),'https://ieeexplore.ieee.org/document/fixture');assert.equal(headingOnly.abstract,null);assert.equal(headingOnly.reason,'no_explicit_abstract');
 });
 
 test('JSON-LD ScholarlyArticle.abstract is accepted; generic Article.description is not',async()=>{
@@ -42,7 +64,7 @@ test('JSON-LD ScholarlyArticle.abstract is accepted; generic Article.description
 });
 
 test('reference, related and dialog abstracts cannot borrow primary page identity',async()=>{
- const main=html().replace('<section id="abstract"><h2>Abstract</h2><p>'+abstract+'</p></section>',''),registry=fromCrossref(raw(),source)!,other=abstract+' This is the cited paper, not the primary article.';
+ const main=headingHtml().replace('<section id="abstract"><h2>Abstract</h2><p>'+abstract+'</p></section>',''),registry=fromCrossref(raw(),source)!,other=abstract+' This is the cited paper, not the primary article.';
  for(const wrapper of ['<section id="references"><div class="reference-item">CONTENT</div></section>','<section class="related-articles">CONTENT</section>','<div class="citation">CONTENT</div>','<dialog open>CONTENT</dialog>','<div role="dialog">CONTENT</div>'])for(const content of ['<h3>Abstract</h3><p>'+other+'</p>','<section id="abstract"><h2>Abstract</h2><p>'+other+'</p></section>']){
   const e=await parsePublisherAbstract(main.replace('</article>',wrapper.replace('CONTENT',content)+'</article>'),'https://ieeexplore.ieee.org/document/fixture');assert.equal(e.abstract,null,wrapper);assert.notEqual(verifyPublisherEvidence(e,registry,registry,source),null);
  }
@@ -51,7 +73,7 @@ test('reference, related and dialog abstracts cannot borrow primary page identit
 });
 
 test('each JSON-LD abstract must carry its own matching primary scholarly identity',async()=>{
- const main=html().replace('<section id="abstract"><h2>Abstract</h2><p>'+abstract+'</p></section>',''),registry=fromCrossref(raw(),source)!,other=abstract+' This belongs to a referenced article.';
+ const main=headingHtml().replace('<section id="abstract"><h2>Abstract</h2><p>'+abstract+'</p></section>',''),registry=fromCrossref(raw(),source)!,other=abstract+' This belongs to a referenced article.';
  const foreign={'@type':'ScholarlyArticle','@id':'https://doi.org/10.9999/cited',url:'https://doi.org/10.9999/cited',abstract:other};
  for(const node of [{'@graph':[foreign]},{'@type':'WebPage',mainEntity:foreign},{'@type':'WebPage',mainEntity:{'@type':'ScholarlyArticle',abstract:other}},{'@graph':[{'@type':'ScholarlyArticle',headline:raw().title[0],abstract:other}]}]){
   const e=await parsePublisherAbstract(main.replace('</head>','<script type="application/ld+json">'+JSON.stringify(node)+'</script></head>'),'https://ieeexplore.ieee.org/document/fixture');assert.equal(e.abstract,null);assert.notEqual(verifyPublisherEvidence(e,registry,registry,source),null);
@@ -169,6 +191,6 @@ test('scheduled scope candidates cannot spend search quota and explicit jobs can
 });
 
 test('a verified DOI gain with no explicit abstract remains partial and reports the remaining gap',async()=>{
- const f=fixture();try{const {id}=await setup(f,null);const page=html().replace('<section id="abstract"><h2>Abstract</h2><p>'+abstract+'</p></section>','');const r=await mocked(()=>maintainStoredMetadata(f.db,env,{paperIds:[id],fields:['doi','abstract'],apply:true,maxSearches:0}),async(url:any)=>new URL(String(url)).hostname==='api.crossref.org'?Response.json({message:raw()}):new Response(page,{headers:{'content-type':'text/html'}}));assert.equal(r.informationGain.doisAdded,1);assert.equal(r.informationGain.abstractsAdded,0);assert.equal(r.status,'partial');assert.deepEqual(r.outcomes[0].remainingMissing,['abstract']);assert.equal(f.sql.prepare('SELECT status FROM research_metadata_jobs').get()!.status,'partial');assert.equal(f.sql.prepare('SELECT abstract FROM research_papers WHERE id=?').get(id)!.abstract,null);
+ const f=fixture();try{const {id}=await setup(f,null);const page=headingHtml().replace('<section id="abstract"><h2>Abstract</h2><p>'+abstract+'</p></section>','');const r=await mocked(()=>maintainStoredMetadata(f.db,env,{paperIds:[id],fields:['doi','abstract'],apply:true,maxSearches:0}),async(url:any)=>new URL(String(url)).hostname==='api.crossref.org'?Response.json({message:raw()}):new Response(page,{headers:{'content-type':'text/html'}}));assert.equal(r.informationGain.doisAdded,1);assert.equal(r.informationGain.abstractsAdded,0);assert.equal(r.status,'partial');assert.deepEqual(r.outcomes[0].remainingMissing,['abstract']);assert.equal(f.sql.prepare('SELECT status FROM research_metadata_jobs').get()!.status,'partial');assert.equal(f.sql.prepare('SELECT abstract FROM research_papers WHERE id=?').get(id)!.abstract,null);
  }finally{f.sql.close()}
 });

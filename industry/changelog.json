@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-27T03:46:52Z",
+  "latestVersion": "2026-10-27T03:59:58Z",
   "releases": [
+    {
+      "id": "hkis-remove-heading-abstract-fallback-20261027",
+      "at": "2026-10-27T03:59:58Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "禁用通用标题摘要回退，避免误收引用论文摘要",
+      "body": [
+        "移除通用HTML Abstract标题和容器提取，仅保留主文head citation_abstract与自带匹配身份的JSON-LD摘要；未提供这些结构化字段时明确保留缺失。",
+        "拒绝旧缓存的section摘要候选，避免在重新核验时继续写入；新增无属性References/Bibliography/Related Articles引用列表及实际数据库不得写入回归。",
+        "不改变预算、凭证、访问权限或生产开关；本条记录代码修复，生产发布及真实信息增益另行验证。"
+      ],
+      "sources": [
+        {
+          "label": "明确的摘要支持范围与回归",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/anysearch.md"
+        }
+      ]
+    },
     {
       "id": "hkis-publisher-abstract-primary-identity-20261027",
       "at": "2026-10-27T03:46:52Z",

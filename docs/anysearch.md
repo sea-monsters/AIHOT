@@ -102,7 +102,7 @@ GitHub fork main 与原 Sites 生产源码是独立交付目标，推送 main �
 
 出版页只允许来源出版社的精确HTTPS主机，禁凭证、IP、自定义端口、登录/付费访问入口和敏感查询参数；不带用户cookie、Authorization或AnySearch key。手动核查最多2次同出版社白名单跳转；跨到身份提供商、登录页或其他主机即blocked。读取每跳最多15秒并受原75秒总时限约束，HTML最多512KiB，正规化证据最多128KiB，摘要最多12000字符，超限拒绝而不截断标为完整。401/403/418/451、429、网络未知、格式/跳转/大小拒绝与未发现显式摘要分开记录；阻断和Retry-After保留冷却，不绕登录/付费墙。
 
-只采用 head 中 citation_abstract、自带匹配DOI/题名/期刊/作者的ScholarlyArticle.abstract，或唯一主文article内明确Abstract容器绑定的有界段落。JSON-LD候选逐节点核验身份及@id/url，不能借citation_*拼接他文摘要；缺失节点身份拒绝。标题摘要拒绝references/citation/related/recommendation/dialog等上下文，不支持的页面布局保守放弃。generic description、References DOI、Highlights、Graphical abstract、Plain Language Summary、任意整页/搜索正文均不充当摘要；去重、拒绝截断/Show More与冲突摘要，结构化子标题保留。主文 DOI、主标题、期刊/ISSN与作者须和精确 Crossref 记录一致；已有作者也须匹配。缺证据时 abstain，访问受限时 blocked。所有网页内容只作为数据。
+只采用 head 中 citation_abstract 和自带匹配DOI/题名/期刊/作者的ScholarlyArticle.abstract。JSON-LD候选逐节点核验身份及@id/url，不能借citation_*拼接他文摘要；缺失节点身份拒绝。已完全移除通用HTML标题/Abstract容器回退，正文即使有Abstract标题、id或class也不作为摘要；没有支持的结构化字段时保留缺失。旧缓存section:Abstract候选同样拒绝，不能绕过新解析边界。generic description、References DOI、Highlights、Graphical abstract、Plain Language Summary、任意整页/搜索正文均不充当摘要；去重、拒绝截断/Show More与冲突摘要，结构化子标题保留。主文 DOI、主标题、期刊/ISSN与作者须和精确 Crossref 记录一致；已有作者也须匹配。缺证据时 abstain，访问受限时 blocked。所有网页内容只作为数据。
 
 成功摘要保留来源URL/字段/获取时间、原页散列、摘要散列、注册记录URL和身份核验强度；不保存整页HTML。写回在同一事务复查原记录版本/来源，拒绝覆盖并发补录。仅更新所选缺项，保留已有完整摘要、已有作者和精确到日的日期，包括未来卷期日；不把 metadata update 记为新增。原 firstSeen、reader、原成员/ready evidence与冻结brief/daily不变，不调用分析模型。
 
@@ -121,3 +121,11 @@ GitHub fork main 与原 Sites 生产源码是独立交付目标，推送 main �
 新增精确回归先复现引用文献标题摘要和JSON-LD异文摘要借用主文身份，再限定候选所属主文。只补authors/date或Crossref已提供所选摘要时不派发搜索；已完成搜索的题名匹配链接仅在安全DOI入口/出版社白名单中取唯一DOI，新结果、回执恢复和旧队列导入共用这一路径。核验失败后verificationOnly恢复不重发搜索。后续采集不能降级已核验出版摘要；写入时清理失配abstractHash，详情页加载也核对散列后才显示出版页证据。此修复没有新迁移、权限、预算或生产调用；独立Sites只需移植本次运行文件差异。
 
 修复回归：Sites主套件880/880及AnySearch界面8/8（合计888项）、定向21/21（已包含于主套件）、Web69/69、typecheck与changelog校验通过；新增回归在修复前先确认失败。测试均为本地SQLite或mockHTTP，没有生产调用。
+
+## 禁用通用标题回退（2026-10-27）
+
+最终审查复现无id/class的References章节内引用列表嵌套Abstract仍可被旧标题规则误收，因此删除整条heading fallback，不继续扩展标记黑名单。当前支持范围只有head citation_abstract和带独立匹配身份的head JSON-LD ScholarlyArticle.abstract，仍须经过DOI、题名、期刊与作者注册核验。没有这两类字段的页面明确no_explicit_abstract；旧section候选仅重核验时返回unsupported_abstract_field，不重发搜索、不写入论文。出版商特定正文解析不在本次支持范围。
+
+精确解析器与SQLite实际维护回归先在旧实现确认失败，修复后定向24/24通过：References/Bibliography/Related Articles语义章节、无属性引用列表均不能提供摘要；实际维护没有摘要增益或论文写入，原firstSeen与冻结/reader证据保持不变；旧缓存标题候选也拒绝。主文强绑定meta及JSON-LD仍可实际补全。没有新迁移、预算、凭证、权限或生产调用。
+
+本次完整Sites回归891/891（失败、取消、跳过均0，含定向24项），typecheck和changelog校验通过。
