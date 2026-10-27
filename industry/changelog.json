@@ -1,8 +1,27 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-27T03:59:58Z",
+  "latestVersion": "2026-10-27T12:56:08Z",
   "releases": [
+    {
+      "id": "hkis-publisher-response-rss-ownership-20261027",
+      "at": "2026-10-27T12:56:08Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "区分出版入口不可用并保护RSS摘要归属",
+      "body": [
+        "出版页空体、未完成或部分响应、验证页与不可用页不再冒充缺DOI；保留脱敏HTTP状态、字节数与散列证据，沿用有界来源冷却，不绕登录或访问验证。",
+        "旧版负缓存没有原始HTML时要求显式有界刷新，保持付费搜索requestId及未知操作墓碑；不自动重新搜索，不提高预算。",
+        "RSS只从条目主摘要边界提取，拒绝引用列表与相关推荐中的他文Abstract并保留正常摘要；行政条目排除，疑似期号封面暂缓核对而不当作确认封面或删除库存。",
+        "官网样本受访问链路限制，本次未新增未经真实HTML验证的出版社选择器，也不把HTTP200或合成测试称为真实摘要增益。独立Sites发布和生产验收另行执行。"
+      ],
+      "sources": [
+        {
+          "label": "来源核查、API权限与有界刷新说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/publisher-source-audit.md"
+        }
+      ]
+    },
     {
       "id": "hkis-remove-heading-abstract-fallback-20261027",
       "at": "2026-10-27T03:59:58Z",

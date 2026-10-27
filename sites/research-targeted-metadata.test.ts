@@ -5,12 +5,13 @@ import {readFileSync,readdirSync} from 'node:fs';
 import {initResearch,savePaper,researchApi,combine} from './research.ts';
 import {queueMetadata,enrichMetadata} from './research-enrichment.ts';
 import {maintainStoredMetadata,listMetadataTargets} from './research-metadata-targeted.ts';
-import {parsePublisherAbstract,verifyPublisherEvidence,readPublisherAbstract,publicationKind,publisherURL} from './research-publisher-abstract.ts';
+import {parsePublisherAbstract,verifyPublisherEvidence,readPublisherAbstract,publicationKind,publisherURL,PUBLISHER_PARSER_VERSION} from './research-publisher-abstract.ts';
 import {RESEARCH_SOURCES} from './research-config.ts';
 import {fromCrossref} from './research-domain.ts';
 import {seal} from './ai/security.ts';
 import {credentialContext} from './anysearch/settings.ts';
 import {digest} from './research-pipeline.ts';
+import {metadataDiagnostics} from './research-metadata-diagnostics.ts';
 const source=RESEARCH_SOURCES[0]!,env={HKIS_AI_ENCRYPTION_KEY:'1'.repeat(64),HKIS_OWNER_EMAIL:'owner@example.org'},owner='owner',key='SYNTHETIC_METADATA_KEY';
 const abstract='We investigate transistor interface transport using controlled simulations and measured carrier statistics. The calibrated model identifies the stated physical mechanism and reports reproducible limitations under the tested device conditions.';
 const raw=(doi='10.9999/target')=>({DOI:doi,type:'journal-article',title:['TCAD transistor transport with explicit metadata evidence'],ISSN:[source.issn],author:[{given:'Fixture',family:'Author'}],published:{'date-parts':[[2027,1,2]]}});
@@ -116,6 +117,38 @@ test('publisher fetch enforces public exact hosts, manual redirects, size and no
  let calls=0;const e=await readPublisherAbstract('https://ieeexplore.ieee.org/document/old',source,Date.now()+10000,()=>{},async(url:any,init:any)=>{calls++;assert.equal(init.redirect,'manual');assert.equal(init.headers.Authorization,undefined);assert.equal(init.headers.Cookie,undefined);return calls===1?new Response(null,{status:302,headers:{location:'/document/new'}}):new Response(html(),{headers:{'content-type':'text/html'}})});assert.equal(e.redirects.length,1);
  for(const target of ['https://idp.nature.com/login','http://127.0.0.1/secret'])await assert.rejects(()=>readPublisherAbstract('https://ieeexplore.ieee.org/document/x',source,Date.now()+10000,()=>{},async()=>new Response(null,{status:302,headers:{location:target}})),(e:any)=>e.code==='publisher_redirect_blocked');
  await assert.rejects(()=>readPublisherAbstract('https://ieeexplore.ieee.org/document/x',source,Date.now()+10000,()=>{},async()=>new Response('x',{headers:{'content-type':'text/html','content-length':'999999'}})),(e:any)=>e.code==='publisher_too_large');
+});
+
+test('empty, partial, challenge and unavailable publisher responses never become missing-DOI evidence',async()=>{
+ const cases:[number,string,string][]=[[202,'','publisher_empty_response'],[200,' \n','publisher_empty_response'],[206,html(),'publisher_incomplete_response'],[202,html(),'publisher_incomplete_response'],[200,'<html><head><title>JavaScript is disabled</title></head><body>We need to verify that you are not a robot.</body></html>','publisher_access_challenge'],[200,'<html><head><title>Site Unavailable</title></head><body>Site unavailable</body></html>','publisher_unavailable']];
+ for(const [status,body,code] of cases)await assert.rejects(()=>readPublisherAbstract('https://ieeexplore.ieee.org/document/fixture',source,Date.now()+10000,()=>{},async()=>new Response(body,{status,headers:{'content-type':'text/html; charset=utf-8'}})),(e:any)=>{assert.equal(e.code,code);assert.equal(e.publisherResponse.httpStatus,status);assert.equal(e.publisherResponse.bytesRead,new TextEncoder().encode(body).length);assert.equal(e.publisherResponse.bodyComplete,true);assert.match(e.publisherResponse.bodyHash,/^[a-f0-9]{64}$/);assert.ok(e.retryAt>Date.now());return true});
+ const ordinary=await readPublisherAbstract('https://ieeexplore.ieee.org/document/fixture',source,Date.now()+10000,()=>{},async()=>new Response(html().replace('</article>','<aside>Site Unavailable</aside></article>'),{headers:{'content-type':'text/html'}}));assert.equal(ordinary.abstract,abstract);assert.equal(ordinary.response?.kind,'html_received');
+ await assert.rejects(()=>readPublisherAbstract('https://ieeexplore.ieee.org/document/fixture',source,Date.now()+10000,()=>{},async()=>new Response(html(),{headers:{'content-type':'text/html','content-range':'bytes 0-100/200'}})),(e:any)=>e.code==='publisher_incomplete_response');
+});
+
+test('publisher response diagnostics distinguish blocked transport, retain safe evidence and cool down the provider',async()=>{
+ const f=fixture();try{const {id,p}=await setup(f),second=await savePaper(f.db,{...p,doi:'10.9999/second',url:'https://ieeexplore.ieee.org/document/second',title:'Another TCAD transistor primary metadata study'},'2026-09-30');let pages=0;
+  const r=await mocked(()=>maintainStoredMetadata(f.db,env,{paperIds:[id,second.id],fields:['abstract'],apply:true,maxSearches:2}),async(url:any)=>{const u=new URL(String(url));if(u.hostname==='api.crossref.org'){const doi=decodeURIComponent(u.pathname.slice('/works/'.length));return Response.json({message:doi===raw().DOI?raw():{...raw(doi),title:['Another TCAD transistor primary metadata study']}})}pages++;return new Response('',{status:202,headers:{'content-type':'text/html'}})});
+  assert.equal(pages,1);assert.equal(r.searches,0);assert.equal(r.updatedPapers,0);assert.equal(r.informationGain.abstractsAdded,0);assert.equal(r.outcomes[0].status,'blocked');assert.equal(r.outcomes[0].reason,'publisher_empty_response');assert.equal(r.outcomes[0].publisherResponse.httpStatus,202);assert.equal(r.outcomes[1].reason,'publisher_cooldown');
+  const job=f.sql.prepare('SELECT state_json FROM research_metadata_jobs WHERE paper_id=?').get(id)!,state=JSON.parse(String(job.state_json));assert.equal(state.publisherResponse.bytesRead,0);state.publisherResponse.rawBody='SYNTHETIC_SENSITIVE_VALUE';state.publisherResponse.errorMessage='SYNTHETIC_SENSITIVE_VALUE';f.sql.prepare('UPDATE research_metadata_jobs SET state_json=? WHERE paper_id=?').run(JSON.stringify(state),id);
+  const diagnostic=await metadataDiagnostics(f.db,{paperIds:[id]});assert.equal(diagnostic.targetedJobs[0].publisherResponse.httpStatus,202);assert.ok(!JSON.stringify(diagnostic).includes('SYNTHETIC_SENSITIVE_VALUE'));assert.equal(f.sql.prepare('SELECT abstract FROM research_papers WHERE id=?').get(id)!.abstract,null);
+ }finally{f.sql.close()}
+});
+
+test('legacy negative publisher cache requires explicit bounded refresh without resetting paid tombstones',async()=>{
+ const f=fixture();try{const {id}=await setup(f),legacy:any={...await parsePublisherAbstract(headingHtml(),'https://ieeexplore.ieee.org/document/fixture')};delete legacy.parserVersion;const search={attempted:true,status:'unknown',requestId:'synthetic-durable-search'};
+  f.sql.prepare('INSERT INTO research_metadata_jobs VALUES(?,?,?,?,?,?,?,?,?)').run(id,owner,'["abstract"]','abstained',JSON.stringify({publisher:legacy,search}),'{}','{}','2000','2000');let pages=0;
+  await mocked(async()=>{const preview=await maintainStoredMetadata(f.db,env,{paperIds:[id],fields:['abstract']});assert.equal(preview.items[0].job.publisherRefreshRequired,true);const a=await maintainStoredMetadata(f.db,env,{paperIds:[id],fields:['abstract'],apply:true,verificationOnly:true,maxSearches:2});assert.equal(a.outcomes[0].reason,'publisher_refresh_required');assert.equal(a.outcomes[0].status,'deferred');assert.equal(pages,0);assert.deepEqual(JSON.parse(String(f.sql.prepare('SELECT state_json FROM research_metadata_jobs').get()!.state_json)).search,search);f.sql.exec("DELETE FROM research_settings WHERE key='crossref_http_next'");
+   const b=await maintainStoredMetadata(f.db,env,{paperIds:[id],fields:['abstract'],apply:true,refreshPublisher:true,maxSearches:2});assert.equal(b.informationGain.abstractsAdded,1,JSON.stringify(b));assert.equal(b.searches,0);assert.equal(pages,1);const state=JSON.parse(String(f.sql.prepare('SELECT state_json FROM research_metadata_jobs').get()!.state_json));assert.deepEqual(state.search,search);assert.equal(state.publisher.parserVersion,PUBLISHER_PARSER_VERSION);assert.equal(state.publisherRefresh.previousVersion,'legacy');assert.ok(!JSON.stringify(state).includes('<html>'));
+  },async(url:any)=>{const host=new URL(String(url)).hostname;if(host==='api.crossref.org')return Response.json({message:raw()});assert.equal(host,'ieeexplore.ieee.org');pages++;return new Response(html(),{headers:{'content-type':'text/html'}})});
+ }finally{f.sql.close()}
+});
+
+test('administrative records and uncertain issue-art forms are not paid research targets',async()=>{
+ for(const title of ['IEEE Sensors Council','EDS Meetings Calendar'])assert.equal(publicationKind({title,provenance:{}}),'non_research');
+ const title='Synthetic optical transistor study (Advanced Optical Materials 39/2026)';assert.equal(publicationKind({title,publisher:'Wiley',provenance:{}}),'needs_form_verification');assert.equal(publicationKind({title:'A sensor transport measurement with calendar-aware analysis',provenance:{}}),'research');
+ const f=fixture();try{const {id}=await setup(f,null,title);f.sql.prepare("UPDATE research_papers SET source_id='wiley-aom',publisher='Wiley' WHERE id=?").run(id);const before=f.sql.prepare('SELECT first_seen,provenance_json FROM research_papers WHERE id=?').get(id);const r=await mocked(()=>maintainStoredMetadata(f.db,env,{paperIds:[id],apply:true,maxSearches:2}),async()=>{throw Error('form verification must not dispatch')});assert.equal(r.outcomes[0].reason,'form_verification_required');assert.equal(r.updatedPapers,0);assert.equal(r.searches,0);assert.equal(f.sql.prepare('SELECT count(*) n FROM research_metadata_jobs').get()!.n,0);assert.deepEqual(f.sql.prepare('SELECT first_seen,provenance_json FROM research_papers WHERE id=?').get(id),before);
+ }finally{f.sql.close()}
 });
 
 test('old stored no-queue paper gains a real abstract; future date, reader and frozen evidence stay intact',async()=>{

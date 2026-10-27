@@ -6,10 +6,20 @@ import type {JournalSource} from './research-config.ts';
 
 const HOSTS:Record<string,string[]>={IEEE:['ieeexplore.ieee.org'],Wiley:['onlinelibrary.wiley.com','advanced.onlinelibrary.wiley.com'],Elsevier:['www.sciencedirect.com','sciencedirect.com','linkinghub.elsevier.com'],Nature:['www.nature.com','nature.com'],Science:['www.science.org','science.org'],IOP:['iopscience.iop.org'],ACS:['pubs.acs.org'],AIP:['pubs.aip.org'],SPIE:['www.spiedigitallibrary.org','spiedigitallibrary.org']};
 export const PUBLISHER_LIMITS={bytes:524288,requestMs:15000,redirects:2,abstractChars:12000};
-export function publicationKind(p:Pick<Paper,'title'|'provenance'>){
+export const PUBLISHER_PARSER_VERSION='primary-structured-2';
+const RESPONSE_KINDS=['html_received','http_error','redirect','empty_response','incomplete_response','access_challenge','unavailable','login_required','unsupported_format','too_large'];
+/** Fixed, bounded transport facts only; never expose response/error text. */
+export function publisherResponseSummary(value:any){
+ if(!value||!RESPONSE_KINDS.includes(value.kind)||!Number.isInteger(value.httpStatus)||value.httpStatus<100||value.httpStatus>599)return null;
+ return {kind:value.kind,httpStatus:value.httpStatus,mediaType:['text/html','application/xhtml+xml','other','missing'].includes(value.mediaType)?value.mediaType:'other',bytesRead:Number.isInteger(value.bytesRead)&&value.bytesRead>=0?Math.min(value.bytesRead,PUBLISHER_LIMITS.bytes+1):0,bodyComplete:value.bodyComplete===true,bodyHash:typeof value.bodyHash==='string'&&/^[a-f0-9]{64}$/.test(value.bodyHash)?value.bodyHash:null,observedAt:typeof value.observedAt==='string'&&/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value.observedAt)?value.observedAt:null};
+}
+export function publisherEvidenceNeedsRefresh(value:any,rejected=false){return !!value&&value.parserVersion!==PUBLISHER_PARSER_VERSION&&(!complete(String(value.abstract||''))||!Array.isArray(value.dois)||value.dois.length!==1||rejected);}
+export function publicationKind(p:Pick<Paper,'title'|'provenance'>&Partial<Pick<Paper,'publisher'>>){
  const t=p.title.replace(/\s+/g,' ').trim();
+ if(/^(?:IEEE Sensors Council|EDS Meetings Calendar)(?:\s*[:—-].*)?$/i.test(t))return 'non_research';
  if(/^(?:(?:inside(?:\s+(?:front|back))?|outside|front|back)\s+)?cover(?:\s+(?:image|picture|art|page))?(?:\s*[:—-]|\s*$)|^(?:\d{4}\s+)?calendar\b|^(?:table of contents|contents|editorial board|author index|subject index|index to|issue information|publication information|information for authors|list of reviewers|meeting report|news and views)\b/i.test(t))return 'non_research';
  if(/^(?:erratum|corrigendum|addendum|retraction|withdrawal)\b|^(?:(?:publisher|author)\s+)?correction(?:\s*[:—-]|\s+to\b|\s*$)/i.test(t))return 'correction';
+ if(p.publisher==='Wiley'&&/\((?:Adv\. Electron\. Mater\.|Advanced Optical Materials)\s+\d+\/\d{4}\)\s*$/i.test(t))return 'needs_form_verification';
  if(/\b(?:review|perspective|roadmap)\b/i.test(t)||p.provenance.recordType==='review')return 'review';
  return 'research';
 }
@@ -20,7 +30,7 @@ export function publisherURL(value:unknown,source:JournalSource){
 }
 const unique=(a:string[])=>[...new Set(a.filter(Boolean))],text=(v:any)=>typeof v==='string'?v.replace(/\s+/g,' ').trim():'';
 const complete=(v:string)=>v.length>=180&&v.length<=PUBLISHER_LIMITS.abstractChars&&!/(?:…|\.{3})\s*$|\b(?:show more|read more|preview only|abstract unavailable)\b/i.test(v);
-export type PublisherEvidence={initialUrl:string;url:string;redirects:string[];retrievedAt:string;documentHash:string;titles:string[];dois:string[];journals:string[];issns:string[];authors:string[];abstract:string|null;field:string|null;reason:string;contentTrust:'untrusted'};
+export type PublisherEvidence={initialUrl:string;url:string;redirects:string[];retrievedAt:string;documentHash:string;titles:string[];dois:string[];journals:string[];issns:string[];authors:string[];abstract:string|null;field:string|null;reason:string;contentTrust:'untrusted';parserVersion?:string;response?:ReturnType<typeof publisherResponseSummary>};
 /** Only primary scholarly metadata with an explicit structured abstract field.
  * Descriptions, references, highlights and arbitrary page text are not candidates. */
 export async function parsePublisherAbstract(html:string,url:string):Promise<PublisherEvidence>{
@@ -43,7 +53,7 @@ export async function parsePublisherAbstract(html:string,url:string):Promise<Pub
  // Body headings and CSS containers do not establish article ownership.
  // No heading fallback: only the structured primary fields above can qualify.
  const full=candidates.filter(c=>complete(c.value)),values=unique(full.map(c=>c.value.replace(/\s+/g,' '))),selected=values.length===1?full[0]:null;
- const evidence:PublisherEvidence={initialUrl:url,url,redirects:[],retrievedAt:new Date().toISOString(),documentHash:await fingerprint(html),titles:unique(titles),dois:unique(dois.map(normalizeDoi)),journals:unique(journals),issns:unique(issns),authors:unique(authors).slice(0,100),abstract:selected?.value||null,field:selected?.field||null,reason:!selected&&$('input[type="password"],#challenge-form,form[action*="login"]').length?'publisher_access_page':values.length>1?'abstract_conflict':selected?'candidate':candidates.length?'abstract_incomplete':'no_explicit_abstract',contentTrust:'untrusted'};
+ const evidence:PublisherEvidence={initialUrl:url,url,redirects:[],retrievedAt:new Date().toISOString(),documentHash:await fingerprint(html),titles:unique(titles),dois:unique(dois.map(normalizeDoi)),journals:unique(journals),issns:unique(issns),authors:unique(authors).slice(0,100),abstract:selected?.value||null,field:selected?.field||null,reason:!selected&&$('input[type="password"],#challenge-form,form[action*="login"]').length?'publisher_access_page':values.length>1?'abstract_conflict':selected?'candidate':candidates.length?'abstract_incomplete':'no_explicit_abstract',contentTrust:'untrusted',parserVersion:PUBLISHER_PARSER_VERSION};
  if(new TextEncoder().encode(JSON.stringify(evidence)).byteLength>131072)throw new AIError('publisher_metadata_too_large',409,'出版页元数据超过证据大小边界');return evidence;
 }
 export function verifyPublisherEvidence(e:PublisherEvidence,p:Paper,registry:Paper,source:JournalSource){
@@ -63,13 +73,21 @@ export async function readPublisherAbstract(value:string,source:JournalSource,de
  for(let hop=0;hop<=PUBLISHER_LIMITS.redirects;hop++){
   if(Date.now()+2000>=deadline)throw new AIError('deadline',409,'出版页读取时限已结束');onRequest();let r:Response;
   try{r=await fetcher(url,{headers:{Accept:'text/html,application/xhtml+xml'},redirect:'manual',signal:AbortSignal.timeout(Math.max(1,Math.min(PUBLISHER_LIMITS.requestMs,deadline-Date.now()-1000)))})}catch{throw new AIError('publisher_network',504,'出版页读取未完成')}
-  if(r.status>=300&&r.status<400){const location=r.headers.get('location');await r.body?.cancel();let next:string|null=null;try{next=location?publisherURL(new URL(location,url).href,source):null}catch{}if(!next||hop===PUBLISHER_LIMITS.redirects)throw new AIError('publisher_redirect_blocked',409,'出版页跳转未通过来源核验');redirects.push(next);url=next;continue;}
-  if(!r.ok){await r.body?.cancel();const raw=r.headers.get('retry-after')||'',n=Number(raw),retry=raw.trim()&&Number.isFinite(n)?Date.now()+Math.max(0,n)*1000:Date.parse(raw);throw Object.assign(new AIError('publisher_blocked',r.status===429?429:409,'出版页拒绝公开读取，未绕过限制'),{httpStatus:r.status,retryAt:r.status===429?Math.max(Date.now()+60000,Number.isFinite(retry)?Math.min(retry,8640000000000000):0):Date.now()+6*3600000})}
-  if(!/text\/html|application\/xhtml\+xml/i.test(r.headers.get('content-type')||'')){await r.body?.cancel();throw new AIError('publisher_format',409,'出版页没有返回可核验HTML')}
+  const mime=(r.headers.get('content-type')||'').split(';')[0]!.trim().toLowerCase(),observation=(kind:string,bytesRead=0,bodyComplete=false,bodyHash:string|null=null)=>publisherResponseSummary({kind,httpStatus:r.status,mediaType:['text/html','application/xhtml+xml'].includes(mime)?mime:mime?'other':'missing',bytesRead,bodyComplete,bodyHash,observedAt:new Date().toISOString()});
+  const unavailable=(code:string,kind:string,bytesRead=0,bodyComplete=false,bodyHash:string|null=null)=>Object.assign(new AIError(code,409,'出版入口本次没有提供可核验的完整论文页面，未绕过访问限制'),{httpStatus:r.status,publisherResponse:observation(kind,bytesRead,bodyComplete,bodyHash),publisherCooldown:true,retryAt:Date.now()+60000});
+  if(r.status>=300&&r.status<400){const location=r.headers.get('location');await r.body?.cancel();let next:string|null=null;try{next=location?publisherURL(new URL(location,url).href,source):null}catch{}if(!next||hop===PUBLISHER_LIMITS.redirects)throw unavailable('publisher_redirect_blocked','redirect');redirects.push(next);url=next;continue;}
+  if(!r.ok){await r.body?.cancel();const raw=r.headers.get('retry-after')||'',n=Number(raw),retry=raw.trim()&&Number.isFinite(n)?Date.now()+Math.max(0,n)*1000:Date.parse(raw);throw Object.assign(new AIError('publisher_blocked',r.status===429?429:409,'出版页拒绝公开读取，未绕过限制'),{httpStatus:r.status,publisherResponse:observation('http_error'),retryAt:r.status===429?Math.max(Date.now()+60000,Number.isFinite(retry)?Math.min(retry,8640000000000000):0):Date.now()+6*3600000})}
+  if(!/text\/html|application\/xhtml\+xml/i.test(r.headers.get('content-type')||'')){await r.body?.cancel();throw unavailable('publisher_format','unsupported_format')}
   if(Number(r.headers.get('content-length'))>PUBLISHER_LIMITS.bytes){await r.body?.cancel();throw new AIError('publisher_too_large',409,'出版页超过有界读取大小')}
-  const reader=r.body?.getReader();if(!reader)throw new AIError('publisher_format',409,'出版页为空');const chunks:Uint8Array[]=[];let size=0;
+  const reader=r.body?.getReader();if(!reader)throw unavailable('publisher_empty_response','empty_response',0,true,await fingerprint(''));const chunks:Uint8Array[]=[];let size=0;
   try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>PUBLISHER_LIMITS.bytes){await reader.cancel();throw new AIError('publisher_too_large',409,'出版页超过有界读取大小')}chunks.push(value)}}catch(e){if(e instanceof AIError)throw e;throw new AIError('publisher_network',504,'出版页读取未完成')}
-  const bytes=new Uint8Array(size);let i=0;for(const c of chunks){bytes.set(c,i);i+=c.length}const evidence=await parsePublisherAbstract(new TextDecoder().decode(bytes),url);if(evidence.reason==='publisher_access_page')throw new AIError('publisher_access_blocked',409,'出版页要求登录或访问验证，未绕过限制');return {...evidence,initialUrl:initial,redirects};
+  const bytes=new Uint8Array(size);let i=0;for(const c of chunks){bytes.set(c,i);i+=c.length}const html=new TextDecoder().decode(bytes),bodyHash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(b=>b.toString(16).padStart(2,'0')).join('');
+  if(!html.trim())throw unavailable('publisher_empty_response','empty_response',size,true,bodyHash);
+  if(r.status!==200||r.headers.has('content-range'))throw unavailable('publisher_incomplete_response','incomplete_response',size,true,bodyHash);
+  const $=load(html),title=text($('title').first().text()),visible=text($('body').text()||$.root().text());
+  if(/^(?:site|service) (?:is )?(?:temporarily )?unavailable[.!]?$/i.test(title)||visible.length<300&&/^(?:site|service) (?:is )?(?:temporarily )?unavailable[.!]?$/i.test(visible))throw unavailable('publisher_unavailable','unavailable',size,true,bodyHash);
+  if(/^(?:javascript is disabled|just a moment[.!]*|attention required[.!]*|access denied|robot verification|verify (?:you are human|your identity)|captcha)$/i.test(title)||$('#challenge-form,form[action*="/challenge"]').length)throw unavailable('publisher_access_challenge','access_challenge',size,true,bodyHash);
+  const evidence=await parsePublisherAbstract(html,url);if(evidence.reason==='publisher_access_page')throw unavailable('publisher_access_blocked','login_required',size,true,bodyHash);return {...evidence,initialUrl:initial,redirects,response:observation('html_received',size,true,bodyHash)};
  }
  throw new AIError('publisher_redirect_blocked',409,'出版页跳转过多');
 }

@@ -129,3 +129,7 @@ GitHub fork main 与原 Sites 生产源码是独立交付目标，推送 main �
 精确解析器与SQLite实际维护回归先在旧实现确认失败，修复后定向24/24通过：References/Bibliography/Related Articles语义章节、无属性引用列表均不能提供摘要；实际维护没有摘要增益或论文写入，原firstSeen与冻结/reader证据保持不变；旧缓存标题候选也拒绝。主文强绑定meta及JSON-LD仍可实际补全。没有新迁移、预算、凭证、权限或生产调用。
 
 本次完整Sites回归891/891（失败、取消、跳过均0，含定向24项），typecheck和changelog校验通过。
+
+## 出版来源核查与可用性修正（2026-10-27）
+
+详见[官网入口审计](publisher-source-audit.md)。本次没有恢复通用官网heading fallback或新增未取得正常HTML样本的选择器。显式维护区分空体、202/206/Content-Range、验证/不可用页面，记录脱敏响应事实；旧负缓存要求显式refreshPublisher且保留搜索墓碑。普通08/20采集只增强既有RSS摘要归属边界，不自动增加出版页HTTP请求；自动搜索+Crossref管线和既有AnySearch配置准入保持。行政条目排除、Wiley期号形态暂缓验证，不删除库存或重写冻结内容。

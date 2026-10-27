@@ -4,6 +4,7 @@ import {sourceMetadata,mergeMetadata} from './paper-metadata.ts';
 import {atomLink} from './atom-link.ts';
 import {atomPlainText} from './atom-text.ts';
 import {XMLParser} from 'fast-xml-parser';
+import {rssPrimaryAbstract} from './rss-primary-abstract.ts';
 import {clean} from './rss.ts';
 import {TOPICS,RULE_VERSION,type JournalSource} from './research-config.ts';
 const arr=(x:any):any[]=>x==null?[]:Array.isArray(x)?x:[x];
@@ -51,14 +52,12 @@ export function parsePublisherRSS(xml:string,s:JournalSource,documentUrl=s.rss||
   const match=raw.match(/Authors?\s*:\s*([\s\S]*?)(?:<br\s*\/?>|<\/p>|\n|$)/i);
   const descriptionAuthors=s.publisher==='Elsevier'?clean(raw).match(/Author\(s\):\s*(.+)$/i)?.[1]:null;
   const names=creatorValues.length>1?creatorValues:(creatorValues[0]||(match?clean(match[1]):'')||descriptionAuthors||'').split(descriptionAuthors||s.publisher==='Wiley'?/\s*[,;]\s*/:/\s*;\s*/).filter(Boolean);
-  const abs=raw.match(/Abstract\s*:\s*([\s\S]*)/i);
-  const section=plain===null&&raw.match(/<section\b[^>]*\bid=["']abstract["'][^>]*>([\s\S]*?)<\/section>/i);
-  const heading=plain===null&&raw.match(/(?:<h[1-6][^>]*>\s*Abstract\s*<\/h[1-6]>|<b>\s*Abstract\s*<\/b>)([\s\S]*)/i);
+  const primary=rssPrimaryAbstract(raw,plain);
   let publisherSummary:string|null=null;
   if(s.publisher==='Nature'){const bibliography=plain===null&&raw.match(/^\s*<p\b[^>]*>[\s\S]*?<\/p>/i)?.[0];publisherSummary=cleanBody(bibliography&&/Published online:|doi:/i.test(bibliography)?raw.slice(bibliography.length):raw)||null;abstract=null;}
-  else if(s.publisher==='Science'){abstract=section?clean(section[1]!.replace(/<h[1-6][^>]*>\s*Abstract\s*<\/h[1-6]>/i,''))||null:null;publisherSummary=(d.feed&&e.description==null?(atomPlainText(e.summary)??clean(e.summary)):clean(e.description??e.summary))||null;}
-  else if(abs)abstract=cleanBody(abs[1]);else if(s.publisher==='Wiley')abstract=heading?clean(heading[1]):null;
-  else if(!abstract||abstract.toLowerCase()==='null'||s.publisher==='Elsevier'||/^Publication date:/i.test(abstract))abstract=null;
+  else if(s.publisher==='Science'){abstract=primary.section;publisherSummary=(d.feed&&e.description==null?(atomPlainText(e.summary)??clean(e.summary)):clean(e.description??e.summary))||null;}
+  else if(primary.labelled)abstract=primary.labelled;else if(s.publisher==='Wiley')abstract=null;
+  else if(primary.rejectImplicit||!abstract||abstract.toLowerCase()==='null'||s.publisher==='Elsevier'||/^Publication date:/i.test(abstract))abstract=null;
   const pub=val(e.pubDate??e.published??e['dc:date']??e['prism:publicationDate'])||(s.publisher==='Elsevier'?clean(raw).match(/Publication date:\s*(.*?)\s+Source:/i)?.[1]||'':'');const date=feedDate(s.publisher==='Elsevier'&&!val(e.pubDate??e.published??e['dc:date'])&&pub?pub+' UTC':pub);
   const keywords=arr(e['prism:keyword']??e['author-keywords']).map(clean).filter(Boolean);const doiCandidate=val(e['prism:doi']??e.doi)||(/^doi:10\./i.test(val(e['dc:identifier']))?val(e['dc:identifier']).replace(/^doi:/i,''):'')||url.match(/10\.\d{4,9}\/[^?#\s]+/)?.[0];
   const doi=doiCandidate?normalizeDoi(doiCandidate):null;
