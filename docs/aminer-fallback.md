@@ -48,3 +48,6 @@
 成功响应中的 API Key、JWT、AMiner user_id（包括字段名及 URL 编码）反射都会拒绝，不缓存为论文。响应回执完成采用原配置 revision、enabled、data_use_authorized 的数据库条件更新；缓存重核验也再次检查当前许可。最终 paper、research_records 及后续变更/快照写入在同一原子事务内按持久详情回执和授权 revision 加条件，许可在 BEGIN 前撤回也不能写正文。普通队列停止该项、保持原无摘要 paper_json 并记录终态，不标 done。
 
 撤回数据使用许可与改设置在同一事务清除该 owner 的提供方回执正文，保留费用预占、操作 fingerprint/ID、状态和不重放墓碑；不自动退款、重搜或改写既有历史论文/冻结简报。单纯预算撤销不等于撤回数据许可：它递增配置版本阻断旧授权，本实现也保守拒绝版本变化中的新正文，但不会凭此删除先前合法缓存。首次 429 进入冷却；以后读取已确定失败的同一回执转终态，不永久 deferred，也不清墓碑换新付费操作。
+
+
+新建归属同样受上述完整正文及授权条件约束：当计划时论文不存在、提交前另一个写入者已插入相同 DOI/firstSeen，再撤许可时，不得把旧计划的 AMiner 正文写进 research_batch_members.snapshot_json。新建 membership 复用 content_hash、metadata_hash、metadata_revision、provenance 与 aminerGate 的同事务条件及参数；普通来源分支保持原行为。回归同时验证合法新建归属仍成功，拒绝时主论文、来源记录、队列与冻结快照均不新增 AMiner 正文，费用预占和墓碑保留。

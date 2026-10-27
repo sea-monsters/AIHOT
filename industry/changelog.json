@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-27T15:56:47Z",
+  "latestVersion": "2026-10-27T16:13:31Z",
   "releases": [
+    {
+      "id": "hkis-aminer-new-membership-authorization-20261027",
+      "at": "2026-10-27T16:13:31Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "将AMiner新建归属快照纳入最终授权条件",
+      "body": [
+        "修复计划无论文、提交前并发插入相同DOI和firstSeen再撤许可时，旧AMiner正文仍可能进入新建批次归属快照的竞态。",
+        "新建归属复用正文散列、元数据版本、来源证据和授权条件；回归验证撤回后论文、来源记录、队列与快照不漏正文，费用预占及不重放墓碑保留。",
+        "合法新建归属仍正常，已交付AnySearch学术核查保持；未改变生产开关、凭证、预算、调度或冻结历史。"
+      ],
+      "sources": [
+        {
+          "label": "新建归属及原子授权边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/aminer-fallback.md"
+        }
+      ]
+    },
     {
       "id": "hkis-anysearch-academic-title-preview-20261027",
       "at": "2026-10-27T15:56:47Z",
