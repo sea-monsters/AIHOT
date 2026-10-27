@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-27T03:22:26Z",
+  "latestVersion": "2026-10-27T03:46:52Z",
   "releases": [
+    {
+      "id": "hkis-publisher-abstract-primary-identity-20261027",
+      "at": "2026-10-27T03:46:52Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "限定主文摘要身份并修复补全恢复与来源保留",
+      "body": [
+        "出版页标题摘要仅接受明确主文Abstract容器，拒绝引用、推荐、弹窗及无主文上下文；JSON-LD摘要节点必须自带匹配的DOI、题名、期刊和作者，不能借用页面身份采用他文摘要。",
+        "已选缺项可由注册记录补足时不再派发付费搜索；新搜索、已完成回执和旧队列结果统一提取唯一安全DOI，核验故障后可以只重核验，不重复付费。",
+        "后续采集保留已核验出版页摘要；写入和详情页显示均核对当前摘要散列，清理或隐藏失配来源证据。未改变预算、凭证、权限和生产开关。"
+      ],
+      "sources": [
+        {
+          "label": "摘要来源边界与验证说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/anysearch.md"
+        }
+      ]
+    },
     {
       "id": "hkis-stored-metadata-publisher-abstract-20261027",
       "at": "2026-10-27T03:22:26Z",

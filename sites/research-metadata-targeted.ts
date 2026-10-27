@@ -7,6 +7,7 @@ import {digest} from './research-pipeline.ts';
 import {mergeCandidate} from './research-enrichment.ts';
 import {metadataSearchConfig} from './research-anysearch.ts';
 import {search} from './anysearch/provider.ts';
+import {publicResultUrl} from './anysearch/domain.ts';
 import {publicationKind,publisherURL,readPublisherAbstract,verifyPublisherEvidence,type PublisherEvidence} from './research-publisher-abstract.ts';
 
 const stamp=()=>new Date().toISOString(),parse=(v:any,f:any={})=>{try{return JSON.parse(v)}catch{return f}};
@@ -71,21 +72,26 @@ export async function maintainStoredMetadata(rawDb:any,env:any,body:any={}){
     const checkpoint=()=>jobSave(original.id,state,'pending');
     const fetchPublisher=async(url:string)=>{const gate=await db.prepare('SELECT value FROM research_settings WHERE key=?').bind('publisher_metadata_cooldown:'+source.publisher).first();if(Math.max(Date.parse(gate?.value||'')||0,state.publisherRetryAt||0)>Date.now())throw new AIError('publisher_cooldown',429,'出版来源处于冷却');try{return await readPublisherAbstract(url,source,deadline,()=>result.publisherCalls++)}catch(e){if(e instanceof AIError){const retryAt=(e as any).retryAt||Date.now()+60000;state.publisherRetryAt=retryAt;if((e as any).httpStatus===429||[401,403,418,451].includes((e as any).httpStatus))await db.prepare('INSERT INTO research_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=max(research_settings.value,excluded.value)').bind('publisher_metadata_cooldown:'+source.publisher,new Date(retryAt).toISOString()).run();}throw e;}};
     let candidate:PublisherEvidence|null=body.refreshPublisher?null:state.publisher||null,extra:Paper|null=null;
-    const knownLinks=p.provenance.webDiscovery?.links||[];const urls=[p.url,...knownLinks.map((l:any)=>l.url),...(state.search?.links||[])].map(u=>publisherURL(u,source)).filter(Boolean) as string[];
-    let doi=normalizeDoi(p.doi)||candidate?.dois?.length===1&&candidate.dois[0]||'';
+    const completedLinks=()=>state.search?.status==='completed'?(state.search.links||[]).filter((l:any)=>typeof l.title==='string'&&normalizedTitle(l.title)===normalizedTitle(p.title)&&publicResultUrl(l.url)):[];
+    const linkedDoi=()=>{const ds=[...new Set(completedLinks().flatMap((l:any)=>{try{const u=new URL(l.url);if(!['doi.org','dx.doi.org'].includes(u.hostname)&&!publisherURL(l.url,source))return [];const d=normalizeDoi(decodeURIComponent(u.pathname).replace(/^\/(?:doi\/(?:abs\/|full\/)?)?/,''));return d?[d]:[]}catch{return []}}))];return ds.length===1?String(ds[0]):''};
+    const knownLinks=p.provenance.webDiscovery?.links||[];const urls=[p.url,...knownLinks.map((l:any)=>l.url),...completedLinks().map((l:any)=>l.url)].map(u=>publisherURL(u,source)).filter(Boolean) as string[];
+    let doi=normalizeDoi(p.doi)||candidate?.dois?.length===1&&candidate.dois[0]||linkedDoi();
     if(doi){extra=await registry(db,p,doi,source,deadline,()=>result.registryCalls++);const discovered=publisherURL(extra.url,source);if(discovered)urls.unshift(discovered);}
     if(!candidate&&!body.verificationOnly&&urls.length&&(!extra||options.fields.includes('abstract')&&!before.abstract&&String(extra.abstract||'').trim().length<180)){
      const gate=await db.prepare('SELECT value FROM research_settings WHERE key=?').bind('publisher_metadata_cooldown:'+source.publisher).first();if(Date.parse(gate?.value||'')>Date.now())throw new AIError('publisher_cooldown',429,'出版来源处于冷却');
      candidate=await fetchPublisher(urls[0]!);state.publisher=candidate;await checkpoint();if(!doi&&candidate.dois.length===1)doi=candidate.dois[0]!;
     }
+    if(doi&&!extra)extra=await registry(db,p,doi,source,deadline,()=>result.registryCalls++);
     // At most one durable search operation per stored paper. A known completed
     // result is reused for free verification even after the short cache expires.
-    if((!doi||!candidate)&&!body.verificationOnly&&!state.search?.attempted&&result.searches<options.maxSearches){
+    const needsAbstract=()=>options.fields.includes('abstract')&&!before.abstract&&String(extra?.abstract||'').trim().length<180;
+    if((!doi||needsAbstract()&&!candidate)&&!body.verificationOnly&&!state.search?.attempted&&result.searches<options.maxSearches){
      state.search={...(state.search||{}),requestId:state.search?.requestId||crypto.randomUUID()};await checkpoint();
      const found=await search(db,config.ownerId,env,`"${p.title}" ${p.doi||source.issn}`,5,{pipeline:true,expectedRevision:config.revision,deadlineAt:deadline-2000,requestId:state.search.requestId,onDispatch:async()=>{state.search.attempted=true;state.search.status='pending';await checkpoint()},fetcher:(url,init)=>{result.searches++;return fetch(url,init)}});
      state.search={...state.search,attempted:true,status:'completed',links:found.results.filter((r:any)=>normalizedTitle(r.title)===normalizedTitle(p.title)).map((r:any)=>({url:r.url,title:r.title,retrievedAt:r.retrievedAt})).slice(0,5)};await checkpoint();
-     const ds=[...new Set(state.search.links.flatMap((l:any)=>{try{const d=normalizeDoi(decodeURIComponent(new URL(l.url).pathname).match(/10\.\d{4,9}\/[^\s<>"?#]+/)?.[0]);return d?[d]:[]}catch{return []}}))];if(!doi&&ds.length===1)doi=ds[0] as string;
-     const safe=state.search.links.map((l:any)=>publisherURL(l.url,source)).find(Boolean);if(!candidate&&safe){candidate=await fetchPublisher(safe);state.publisher=candidate;await checkpoint();if(!doi&&candidate.dois.length===1)doi=candidate.dois[0]!;}
+     if(!doi)doi=linkedDoi();
+     if(doi&&!extra)extra=await registry(db,p,doi,source,deadline,()=>result.registryCalls++);
+     const safe=completedLinks().map((l:any)=>publisherURL(l.url,source)).find(Boolean);if(!candidate&&safe&&(!doi||needsAbstract())){candidate=await fetchPublisher(safe);state.publisher=candidate;await checkpoint();if(!doi&&candidate.dois.length===1)doi=candidate.dois[0]!;}
     }
     if(!doi&&state.search?.attempted&&state.search.status!=='completed')throw new AIError('paid_search_unknown',409,'既有搜索结果未知或已过期，未重复付费请求');
     if(!doi)throw new AIError('primary_doi_missing',409,'缺少可验证的主文DOI');
@@ -93,9 +99,9 @@ export async function maintainStoredMetadata(rawDb:any,env:any,body:any={}){
     // A completed search from an earlier attempt can supply a DOI/URL without
     // another paid request. Newly known registry URL can be read once, for free.
     if(!candidate&&!body.verificationOnly&&options.fields.includes('abstract')&&!before.abstract&&String(extra.abstract||'').trim().length<180){const safe=publisherURL(extra.url,source)||(state.search?.links||[]).map((l:any)=>publisherURL(l.url,source)).find(Boolean);if(safe){candidate=await fetchPublisher(safe);state.publisher=candidate;await checkpoint();}}
-    if(body.verificationOnly&&!candidate&&options.fields.includes('abstract')&&String(extra.abstract||'').trim().length<180)throw new AIError('no_completed_publisher_evidence',409,'没有可重核验的已完成出版页证据');
-    if(!candidate&&!state.search?.attempted&&options.fields.includes('abstract')&&String(extra.abstract||'').trim().length<180)throw new AIError('search_budget_deferred',409,'没有已核验出版入口，本次未授权更多搜索');
-    if(!candidate&&state.search?.status==='unknown'&&String(extra.abstract||'').trim().length<180)throw new AIError('paid_search_unknown',409,'付费搜索结果未知，未重复搜索');
+    if(body.verificationOnly&&!candidate&&needsAbstract())throw new AIError('no_completed_publisher_evidence',409,'没有可重核验的已完成出版页证据');
+    if(!candidate&&!state.search?.attempted&&needsAbstract())throw new AIError('search_budget_deferred',409,'没有已核验出版入口，本次未授权更多搜索');
+    if(!candidate&&state.search?.status==='unknown'&&needsAbstract())throw new AIError('paid_search_unknown',409,'付费搜索结果未知，未重复搜索');
     let next=mergeCandidate(structuredClone(p),extra);next={...next,provenance:{...next.provenance}};if(!p.doi)next.provenance.doi='crossref';
     let abstractReason:string|null='no_verified_publisher_abstract';
     if(candidate){abstractReason=verifyPublisherEvidence(candidate,p,extra,source);state.verification={status:abstractReason?'rejected':'verified',reason:abstractReason,at:stamp(),registryUrl:'https://api.crossref.org/works/'+encodeURIComponent(doi)};

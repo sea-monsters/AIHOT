@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,readdirSync} from 'node:fs';
-import {initResearch,savePaper,researchApi} from './research.ts';
+import {initResearch,savePaper,researchApi,combine} from './research.ts';
 import {queueMetadata,enrichMetadata} from './research-enrichment.ts';
 import {maintainStoredMetadata,listMetadataTargets} from './research-metadata-targeted.ts';
 import {parsePublisherAbstract,verifyPublisherEvidence,readPublisherAbstract,publicationKind,publisherURL} from './research-publisher-abstract.ts';
@@ -10,6 +10,7 @@ import {RESEARCH_SOURCES} from './research-config.ts';
 import {fromCrossref} from './research-domain.ts';
 import {seal} from './ai/security.ts';
 import {credentialContext} from './anysearch/settings.ts';
+import {digest} from './research-pipeline.ts';
 const source=RESEARCH_SOURCES[0]!,env={HKIS_AI_ENCRYPTION_KEY:'1'.repeat(64),HKIS_OWNER_EMAIL:'owner@example.org'},owner='owner',key='SYNTHETIC_METADATA_KEY';
 const abstract='We investigate transistor interface transport using controlled simulations and measured carrier statistics. The calibrated model identifies the stated physical mechanism and reports reproducible limitations under the tested device conditions.';
 const raw=(doi='10.9999/target')=>({DOI:doi,type:'journal-article',title:['TCAD transistor transport with explicit metadata evidence'],ISSN:[source.issn],author:[{given:'Fixture',family:'Author'}],published:{'date-parts':[[2027,1,2]]}});
@@ -38,6 +39,54 @@ test('JSON-LD ScholarlyArticle.abstract is accepted; generic Article.description
  const base={ '@type':'ScholarlyArticle',headline:raw().title[0],identifier:{propertyID:'DOI',value:raw().DOI},author:{name:'Fixture Author'},isPartOf:{name:source.name,issn:source.issn},abstract};
  const e=await parsePublisherAbstract('<html><head><script type="application/ld+json">'+JSON.stringify(base)+'</script></head></html>','https://ieeexplore.ieee.org/document/fixture');assert.equal(e.abstract,abstract);assert.equal(e.field,'jsonld:ScholarlyArticle.abstract');assert.equal(verifyPublisherEvidence(e,fromCrossref(raw(),source)!,fromCrossref(raw(),source)!,source),null);
  const notAbstract=await parsePublisherAbstract('<html><head><script type="application/ld+json">'+JSON.stringify({...base,'@type':'Article',abstract:undefined,description:abstract})+'</script></head></html>','https://ieeexplore.ieee.org/document/fixture');assert.equal(notAbstract.abstract,null);
+});
+
+test('reference, related and dialog abstracts cannot borrow primary page identity',async()=>{
+ const main=html().replace('<section id="abstract"><h2>Abstract</h2><p>'+abstract+'</p></section>',''),registry=fromCrossref(raw(),source)!,other=abstract+' This is the cited paper, not the primary article.';
+ for(const wrapper of ['<section id="references"><div class="reference-item">CONTENT</div></section>','<section class="related-articles">CONTENT</section>','<div class="citation">CONTENT</div>','<dialog open>CONTENT</dialog>','<div role="dialog">CONTENT</div>'])for(const content of ['<h3>Abstract</h3><p>'+other+'</p>','<section id="abstract"><h2>Abstract</h2><p>'+other+'</p></section>']){
+  const e=await parsePublisherAbstract(main.replace('</article>',wrapper.replace('CONTENT',content)+'</article>'),'https://ieeexplore.ieee.org/document/fixture');assert.equal(e.abstract,null,wrapper);assert.notEqual(verifyPublisherEvidence(e,registry,registry,source),null);
+ }
+ const unbound=await parsePublisherAbstract(main.replace('</article>','</article><h2>Abstract</h2><p>'+other+'</p>'),'https://ieeexplore.ieee.org/document/fixture');assert.equal(unbound.abstract,null);
+ const valid=await parsePublisherAbstract(html(),'https://ieeexplore.ieee.org/document/fixture');assert.equal(valid.abstract,abstract);assert.equal(verifyPublisherEvidence(valid,registry,registry,source),null);
+});
+
+test('each JSON-LD abstract must carry its own matching primary scholarly identity',async()=>{
+ const main=html().replace('<section id="abstract"><h2>Abstract</h2><p>'+abstract+'</p></section>',''),registry=fromCrossref(raw(),source)!,other=abstract+' This belongs to a referenced article.';
+ const foreign={'@type':'ScholarlyArticle','@id':'https://doi.org/10.9999/cited',url:'https://doi.org/10.9999/cited',abstract:other};
+ for(const node of [{'@graph':[foreign]},{'@type':'WebPage',mainEntity:foreign},{'@type':'WebPage',mainEntity:{'@type':'ScholarlyArticle',abstract:other}},{'@graph':[{'@type':'ScholarlyArticle',headline:raw().title[0],abstract:other}]}]){
+  const e=await parsePublisherAbstract(main.replace('</head>','<script type="application/ld+json">'+JSON.stringify(node)+'</script></head>'),'https://ieeexplore.ieee.org/document/fixture');assert.equal(e.abstract,null);assert.notEqual(verifyPublisherEvidence(e,registry,registry,source),null);
+ }
+ const complete={'@type':'ScholarlyArticle',headline:raw().title[0],identifier:{propertyID:'DOI',value:raw().DOI},author:{name:'Fixture Author'},isPartOf:{name:source.name,issn:source.issn},abstract};
+ const conflict=await parsePublisherAbstract(main.replace('</head>','<script type="application/ld+json">'+JSON.stringify({...complete,'@id':'https://doi.org/10.9999/cited'})+'</script></head>'),'https://ieeexplore.ieee.org/document/fixture');assert.equal(conflict.abstract,null);
+});
+
+test('registry evidence satisfying selected fields never triggers paid search',async()=>{
+ for(const fields of [['abstract'],['authors'],['date']]){const f=fixture();try{const {id}=await setup(f);f.sql.prepare('UPDATE research_papers SET url=?,authors_json=?,date_precision=? WHERE id=?').run('https://doi.org/'+raw().DOI,'[]','month',id);let paid=0;
+  const r=await mocked(()=>maintainStoredMetadata(f.db,env,{paperIds:[id],fields,apply:true,maxSearches:2}),async(url:any)=>{if(new URL(String(url)).hostname==='api.crossref.org')return Response.json({message:{...raw(),...(fields.includes('abstract')?{abstract}:{})}});paid++;throw Error('registry already satisfies selected fields')});assert.equal(paid,0,JSON.stringify(r));assert.equal(r.searches,0);assert.equal(r.updatedPapers,1,JSON.stringify(r));
+ }finally{f.sql.close()}}
+});
+
+test('completed DOI-only search recovers through verificationOnly after registry failure without replay',async()=>{
+ const f=fixture();try{const {id}=await setup(f,null);f.sql.prepare('UPDATE research_papers SET url=? WHERE id=?').run('https://doi.org/unknown',id);let paid=0,registryCalls=0,unavailable=true;
+  await mocked(async()=>{const a=await maintainStoredMetadata(f.db,env,{paperIds:[id],fields:['doi','abstract'],apply:true,maxSearches:1});assert.equal(a.updatedPapers,0);assert.equal(paid,1);unavailable=false;f.sql.exec("DELETE FROM research_settings WHERE key LIKE 'crossref%';UPDATE anysearch_usage SET next_allowed=0;UPDATE anysearch_requests SET result_json=NULL,expires_at='2000'");
+   const b=await maintainStoredMetadata(f.db,env,{paperIds:[id],fields:['doi','abstract'],apply:true,verificationOnly:true,maxSearches:1});assert.equal(b.informationGain.doisAdded,1,JSON.stringify(b));assert.equal(b.informationGain.abstractsAdded,1);assert.equal(paid,1);assert.equal(registryCalls,2);assert.equal(b.publisherCalls,0);
+  },async(url:any)=>{const host=new URL(String(url)).hostname;if(host==='api.crossref.org'){registryCalls++;return unavailable?new Response('',{status:503}):Response.json({message:{...raw(),abstract}})}assert.equal(host,'api.anysearch.com');paid++;return Response.json({code:0,data:{results:[{title:raw().title[0],url:'https://doi.org/'+raw().DOI}]}})});
+ }finally{f.sql.close()}
+});
+
+test('imported completed links require a matching title and a unique safe DOI before free verification',async()=>{
+ for(const variant of ['valid','wrong_title','ambiguous','unknown']){const f=fixture();try{const {id,p}=await setup(f,null);f.sql.prepare('UPDATE research_papers SET url=? WHERE id=?').run('https://doi.org/unknown',id);const links=[{title:variant==='wrong_title'?'A different cited paper':p.title,url:'https://doi.org/'+raw().DOI}];if(variant==='ambiguous')links.push({title:p.title,url:'https://doi.org/10.9999/other'});
+  f.sql.prepare("INSERT INTO research_enrichment_queue(doi,source_id,paper_json,provider_json,status,next_attempt_at,updated_at) VALUES(?,?,?,?,'abstain','2000','2000')").run('id:legacy',source.id,JSON.stringify({...p,url:'https://doi.org/unknown',provenance:{...p.provenance,webDiscovery:{links}}}),JSON.stringify({anysearch:{attempted:true,status:variant==='unknown'?'attempted':'done'}}));let calls=0;
+  const r=await mocked(()=>maintainStoredMetadata(f.db,env,{paperIds:[id],fields:['doi','abstract'],apply:true,verificationOnly:true,maxSearches:2}),async(url:any)=>{assert.equal(new URL(String(url)).hostname,'api.crossref.org');calls++;return Response.json({message:{...raw(),abstract}})});assert.equal(r.searches,0);assert.equal(r.publisherCalls,0);assert.equal(calls,variant==='valid'?1:0);assert.equal(r.informationGain.doisAdded,variant==='valid'?1:0,JSON.stringify(r));
+ }finally{f.sql.close()}}
+});
+
+test('later collection preserves verified publisher abstract and clears mismatched evidence',async()=>{
+ const f=fixture();try{const {id}=await setup(f);const base=fromCrossref(raw(),source)!,evidence={url:'https://ieeexplore.ieee.org/document/fixture',verification:'doi_title_journal_author_crossref',complete:true,abstractHash:await digest(abstract)};
+  const verified={...base,abstract,discovery:'publisher-abstract',provenance:{...base.provenance,abstract:'publisher-abstract',publisherAbstractEvidence:evidence}};await savePaper(f.db,verified);const short={...base,abstract:'A short registry abstract that must not erase the verified publisher abstract.',provenance:{...base.provenance,abstract:'crossref'}};
+  assert.equal(combine(verified,short).abstract,abstract);await savePaper(f.db,short);let row=f.sql.prepare('SELECT abstract,provenance_json FROM research_papers WHERE id=?').get(id)!;assert.equal(row.abstract,abstract);assert.equal(JSON.parse(String(row.provenance_json)).publisherAbstractEvidence.abstractHash,await digest(row.abstract));
+  await savePaper(f.db,{...verified,abstract:abstract+' A distinct replacement.',provenance:{...verified.provenance}});row=f.sql.prepare('SELECT abstract,provenance_json FROM research_papers WHERE id=?').get(id)!;assert.equal(JSON.parse(String(row.provenance_json)).publisherAbstractEvidence,undefined);
+ }finally{f.sql.close()}
 });
 
 test('publisher fetch enforces public exact hosts, manual redirects, size and no auth/cookies',async()=>{

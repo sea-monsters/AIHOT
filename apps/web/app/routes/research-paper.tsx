@@ -1,5 +1,6 @@
 import {PaperWebEvidence} from '../components/PaperWebEvidence';
 import {PublisherAbstractEvidence} from '../components/PublisherAbstractEvidence';
+import {currentPublisherAbstractEvidence} from '../lib/publisher-abstract-evidence';
 import {PaperText} from '../components/PaperText';
 import {ActionButton} from '../components/ui/ResearchControls';
 import {DisclosureSummary} from '../components/ui/Interaction';
@@ -12,7 +13,7 @@ import {loadOr404} from '../lib/api.server';
 import {openAI} from '../lib/ai-client';
 import {paperScoreAvailability,paperScoreText} from '../lib/paper-item';
 import {SITE} from '@aihot/industry/site';
-export async function loader({params}:LoaderFunctionArgs){return loadOr404<any>('/api/site/research/papers/'+params.id)}
+export async function loader({params}:LoaderFunctionArgs){const p=await loadOr404<any>('/api/site/research/papers/'+params.id);if(p.provenance?.publisherAbstractEvidence)p.provenance.publisherAbstractEvidence=await currentPublisherAbstractEvidence(p);return p}
 export const headers=()=>({'Cache-Control':'no-store'});
 export function meta({data}:any){return [{title:`${data?.title||'论文'} · ${SITE.shortName}`},{name:'robots',content:'noindex, nofollow'}]}
 const from=(p:any,field:string)=>p.provenance[field]||'来源未提供';
