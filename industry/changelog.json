@@ -1,8 +1,27 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-27T01:34:41Z",
+  "latestVersion": "2026-10-27T03:22:26Z",
   "releases": [
+    {
+      "id": "hkis-stored-metadata-publisher-abstract-20261027",
+      "at": "2026-10-27T03:22:26Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "按已存论文定向补缺项并核验公开出版页原始摘要",
+      "body": [
+        "新增每次最多3个paperId的只读预检与有界维护，独立登记存量无队列记录，不受旧scope候选排位或历史月窗阻挡；保留真实firstSeen、未来卷期日、reader及冻结简报/日报，不把元数据更新算成新增。",
+        "只读取白名单公开出版页的显式Abstract或结构化abstract字段，经主文DOI、题名、期刊和作者核验后采用；拒绝搜索片段、泛description、参考文献DOI冒充、截断与冲突摘要，不绕登录或付费墙，不覆盖已有更好摘要。",
+        "默认每次付费搜索上限为0，必要时显式允许0至2次，仍共用原100次UTC日额度；不调用extract或付费模型。保存有限来源证据，已完成结果可只重核验，未知付费操作不重放，旧队列不再为显式维护任务二次搜索。",
+        "返回实际摘要/DOI/作者/日期增益和逐篇拒绝原因，HTTP成功不冒充补全成功。本条记录仓库实现，独立Sites适配、release guard、发布及真实批补由已授权流程另行验证。"
+      ],
+      "sources": [
+        {
+          "label": "定向维护API、来源边界及Sites适配说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/anysearch.md"
+        }
+      ]
+    },
     {
       "id": "hkis-anysearch-recovery-fairness-20261027",
       "at": "2026-10-27T01:34:41Z",

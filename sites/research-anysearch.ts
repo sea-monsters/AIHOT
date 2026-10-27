@@ -4,6 +4,7 @@ import {ENDPOINT,publicResultUrl,type WebEvidence} from './anysearch/domain.ts';
 import {normalizedTitle,normalizeDoi,fromCrossref,type Paper} from './research-domain.ts';
 import {RESEARCH_SOURCES} from './research-config.ts';
 import {readURL} from './research.ts';
+import {publicationKind} from './research-publisher-abstract.ts';
 import {phaseEvent,phaseTiming} from './research-telemetry.ts';
 
 export const ANYSEARCH_METADATA_LIMIT=2;
@@ -32,6 +33,11 @@ export async function enrichSearchEvidence(db:any,env:any,rows:any[],deadline:nu
  };
  let selected=0;
  for(const row of rows){
+  const stored=(await db.prepare('SELECT id FROM research_papers WHERE source_id=? AND (doi=? OR url=?) LIMIT 2').bind(row.source_id,row.p.doi,row.p.url).all()).results;
+  if(row.scope_pending||stored.length!==1||!['research','review'].includes(publicationKind(row.p))){row.searchIneligible=true;continue;}
+  // Explicit maintenance owns this paper's paid operation state. Scheduled
+  // queue scans must not create a second search outside that selected request.
+  if(await db.prepare('SELECT paper_id FROM research_metadata_jobs WHERE paper_id=?').bind(stored[0].id).first()){row.searchIneligible=true;continue;}
   if(row.localReady||row.deadlineDeferred||row.p.doi&&String(row.p.abstract||'').trim().length>=180)continue;
   // A durable attempt marker precedes dispatch. Unknown outcomes remain
   // tombstones across maintenance runs, credential edits and cache expiry.
@@ -87,6 +93,6 @@ export async function enrichSearchEvidence(db:any,env:any,rows:any[],deadline:nu
   await phaseEvent(db,{runId,phase:'metadata:anysearch'},timing,outcome,0,{dispatched:dispatched?1:0,sharedDailyLimit:100,requestLimit:ANYSEARCH_METADATA_LIMIT,remainingMs:Math.max(0,deadline-Date.now())});
   if(summary.reason==='provider_cooldown'||summary.reason==='provider_deferred')break;
  }
- for(const row of rows)if(!row.localReady&&!row.deadlineDeferred&&(!row.p.doi||String(row.p.abstract||'').trim().length<180)&&!row.providers.anysearch?.attempted&&row.providers.anysearch?.status!=='not_needed')row.searchPending=true;
+ for(const row of rows)if(!row.searchIneligible&&!row.scope_pending&&!row.localReady&&!row.deadlineDeferred&&(!row.p.doi||String(row.p.abstract||'').trim().length<180)&&!row.providers.anysearch?.attempted&&row.providers.anysearch?.status!=='not_needed')row.searchPending=true;
  return summary;
 }

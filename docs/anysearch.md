@@ -80,3 +80,38 @@ GitHub fork main 与原 Sites 生产源码是独立交付目标，推送 main �
 5. 使用官方 source helper 同步、构建和打包，依赖 Sites 发布流程先应用实际 pending schema migration，再上传 Worker；不另造生产 SQL 写入接口。最终回读 succeeded、实际 Sites source SHA、原环境 revision、metadataEnabled=false 与两列的实际状态。真实连接测试仍由 owner 会话单独执行。
 
 本执行环境未提供官方 `site-workflow.mjs`，没有使用自行实现的凭证流程替代；Sites 源码适配和生产发布由有官方 helper 的父执行环境继续。
+
+## 已存论文定向补全与公开出版页摘要（2026-10-27）
+
+自动 metadata 搜索现在只考虑已入库研究论文，排除未入库 scope 候选、日历、封面、目录和更正；综述明确标为 review。已登记显式维护的论文由独立任务管理，旧队列扫描不再为它创建第二个付费搜索。既有 originKey 与 32+1 恢复保护保留。
+
+新增 `research_metadata_jobs` 保存已存 paperId 的独立维护意图、原 firstSeen/真实成员归属基线、耐久搜索状态、有限原始摘要候选/身份字段/来源散列与核验结果。它不是采集新增队列，不创建论文或批次/日报成员，不用当前时间伪造历史发现；不受月窗、未来卷期日或旧 scope 排位影响。读取和 dry-run 不登记任务。
+
+### 可执行合同
+
+- GET `/api/site/research/metadata/maintain?missing=abstract&limit=25&after=<last-id>`：仅从已存论文按 ID 游标分页，missing 支持 abstract/doi/authors/date，limit 1–25；回传 eligible、missing、kind、拒绝原因、已知出版入口和维护任务状态。空页不声称全库已补齐。
+- POST 同一路径：`{ "paperIds":["existing-paper-id"], "fields":["abstract"], "apply":false, "maxSearches":0, "maxMs":75000 }`。paperIds 最多3个；fields 支持 abstract/doi/authors/date，省略时取四项；apply 默认 false；maxMs 1–75000，maxSearches 0–2 且默认0。没有 apply=true 不写入、不外联。不存在、非研究、需人工核对的更正或没有所选缺项的记录明确 skipped。
+- apply=true：为合格已存记录登记独立维护任务，复用原 metadata 租约、冷却与唯一已验证、开启 metadataEnabled 的 AnySearch 配置；不要求启用 LLM。早晚任务、模型额度、访问范围和凭证不变。
+- 返回 `createdPapers:0`，`registered`、`updatedPapers` 与 `informationGain.{abstractsAdded,doisAdded,authorsAdded,datesImproved}` 分开计；outcomes 给出逐篇 updated/blocked/abstained/deferred/skipped、remainingMissing、原因、字段来源和核验范围；只补成部分所选字段时为partial，不冒充全补齐。HTTP200 或 completed 搜索不等于增加摘要。
+- `verificationOnly:true` 只重用已完成候选与搜索结果做免费注册核验，不读取新出版页或重发搜索；无已完成候选时不凭空补证据。`refreshPublisher:true` 可显式重新读取公开出版页，不能与 verificationOnly 同用；它不会重置付费搜索墓碑。
+- 同一 owner-private Sites dispatcher 边界保持；有浏览器身份/Origin时校验既有 owner 与同源标记，不伪造身份、不新增持久权限。该 Worker 仍不能脱离私有 dispatcher 独立公网部署。
+
+### 摘要来源与现实限制
+
+官方 [AnySearch extract](https://www.anysearch.com/docs/api-endpoints/v1-extract) 只返回清洗内容及原始请求URL，没有专用abstract或最终跳转链。因此本实现选择直接公开出版页的结构化元数据路径，**不调用 `/v1/extract`，extracts恒为0**；没有另建extract额度。search仍经过原100次/UTC日原子计数，默认本次maxSearches=0。独立列出免费 registryCalls/publisherCalls，35次采集保护不是全部外联总数。
+
+出版页只允许来源出版社的精确HTTPS主机，禁凭证、IP、自定义端口、登录/付费访问入口和敏感查询参数；不带用户cookie、Authorization或AnySearch key。手动核查最多2次同出版社白名单跳转；跨到身份提供商、登录页或其他主机即blocked。读取每跳最多15秒并受原75秒总时限约束，HTML最多512KiB，正规化证据最多128KiB，摘要最多12000字符，超限拒绝而不截断标为完整。401/403/418/451、429、网络未知、格式/跳转/大小拒绝与未发现显式摘要分开记录；阻断和Retry-After保留冷却，不绕登录/付费墙。
+
+只采用 head 中 citation_abstract、ScholarlyArticle.abstract，或精确 Abstract 标题绑定的有界段落。generic description、References DOI、Highlights、Graphical abstract、Plain Language Summary、任意整页/搜索正文均不充当摘要；去重、拒绝截断/Show More与冲突摘要，结构化子标题保留。主文 DOI、主标题、期刊/ISSN与作者须和精确 Crossref 记录一致；已有作者也须匹配。缺证据时 abstain，访问受限时 blocked。所有网页内容只作为数据。
+
+成功摘要保留来源URL/字段/获取时间、原页散列、摘要散列、注册记录URL和身份核验强度；不保存整页HTML。写回在同一事务复查原记录版本/来源，拒绝覆盖并发补录。仅更新所选缺项，保留已有完整摘要、已有作者和精确到日的日期，包括未来卷期日；不把 metadata update 记为新增。原 firstSeen、reader、原成员/ready evidence与冻结brief/daily不变，不调用分析模型。
+
+已完成搜索的匹配链接进入维护状态，短缓存过期后仍可核验；若中断落在回执完成与维护状态写回之间，可从原回执恢复。未知付费操作保持unknown、不自动重放；旧队列已有付费墓碑也会继承，双向避免队列与显式任务重复花费。
+
+### 验证及适配
+
+测试以实际DB字段从null到有来源摘要/DOI、论文总数不变及冻结快照逐字段不变验收，包含3篇无历史queue的存量维护、未来卷期日、并发更好摘要、同标题/不同DOI、正文References伪装、截断/冲突摘要、已完成仅核验及未知付费不重放；不是只检查HTTPok。真实生产信息增益和出版商可达性由父任务上线后回读，当前不宣称rawCSS已在各出版商实测；访问受限的IEEE/Elsevier/Nature实例不承诺可补齐。
+
+主仓库新增schema-only迁移 `0027_metadata_jobs.sql`，只创建独立维护表；没有修改已发布0025/0026。在独立Sites v107源库中，应仅移植新增表定义、功能差异与测试，依其自身实际journal生成下一条迁移/snapshot（例如当前到0025时生成自己的0026），不要复制fork包含manual batch的整份snapshot/schema。不需改变外层runner、任务pin或采集预算。保留父端已有release guard；必须先提交，再clean build和guard，最后由父端官方Sites流程发布，不能发布null source。
+
+本轮最终验证：Sites 882/882（失败/取消/跳过均0），其中新增定向回归15项；Web68/68、typecheck、完整build、changelog检查通过。新增原生workerd/D1测试验证无历史queue的旧论文实际增加1条摘要、论文总数不变、未来发表日与原firstSeen保留、reader/冻结证据不变、搜索/模型调用0；三篇目标的单元集成实际增加3条摘要。通用Worker与HKIS只读出口烟测通过。所有测试HTTP均mock；未执行生产搜索、生产批补或Sites发布。
