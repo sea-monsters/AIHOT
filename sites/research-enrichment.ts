@@ -50,7 +50,14 @@ async function localSourceEvidence(db:any,p:any){
 /** Every candidate is retained. Read/transport limits never become deletion limits. */
 export async function planMetadataQueue(db:any,incoming:Paper,scopePending=false,run?:{runId:string;batchKey:string|null;firstSeen?:string;cohortKey?:string|null},now=stamp()){
   const lookupKey=normalizeDoi(incoming.doi)||'id:'+await digest({source:incoming.sourceId,url:incoming.url,title:normalizedTitle(incoming.title)});
-  const previous=await db.prepare('SELECT * FROM research_enrichment_queue WHERE doi=? AND source_id=?').bind(lookupKey,incoming.sourceId).first();
+  let previous=await db.prepare('SELECT * FROM research_enrichment_queue WHERE doi=? AND source_id=?').bind(lookupKey,incoming.sourceId).first();
+  // A verified DOI can rename the queue before the paper is saved. Retain
+  // its original discovery key as a durable alias, including captured RSS
+  // replay after interruption; never lose the paid-attempt tombstone.
+  if(!previous&&lookupKey.startsWith('id:')){
+   const aliases=(await db.prepare("SELECT * FROM research_enrichment_queue WHERE source_id=? AND json_extract(provider_json,'$.anysearch.originKey')=? LIMIT 2").bind(incoming.sourceId,lookupKey).all()).results;
+   if(aliases.length>1)throw new AIError('record_conflict',409,'发现标识对应多个补全记录，保留已有证据');previous=aliases[0]||null;
+  }
   const priorPaper=previous?parse(previous.paper_json,null):null;const p=priorPaper?mergeCandidate(incoming,priorPaper):incoming;
   const unchanged=!!priorPaper&&await digest(metadataFields(priorPaper))===await digest(metadataFields(p));
   const key=normalizeDoi(p.doi)||'id:'+await digest({source:p.sourceId,url:p.url,title:normalizedTitle(p.title)}),hash=await digest(metadataFields(p));
@@ -126,7 +133,7 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace
   const pendingBounds=[window.startDate+'/08',window.endDate+'/20'];
   // Opt-in applies to retained current-month terminal gaps too, in bounded
   // slices. Old frozen briefs/dailies remain independent immutable evidence.
-  if(await metadataSearchConfig(db))await db.prepare(`UPDATE research_enrichment_queue SET status='pending',next_attempt_at=? WHERE (doi,source_id) IN (SELECT doi,source_id FROM research_enrichment_queue WHERE status='abstain' AND ready_reason IN ('providers_terminal_missing_fields','providers_terminal_scope_unresolved') AND json_extract(provider_json,'$.anysearch.status') IS NULL AND origin_run_id IS NOT NULL AND daily_cohort_key>=? AND daily_cohort_key<=? ORDER BY first_seen,doi,source_id LIMIT ${METADATA_READ_LIMIT})`).bind(started,...pendingBounds).run();
+  if(await metadataSearchConfig(db))await db.prepare(`UPDATE research_enrichment_queue SET status='pending',next_attempt_at=? WHERE (doi,source_id) IN (SELECT doi,source_id FROM research_enrichment_queue WHERE status='abstain' AND ready_reason IN ('providers_terminal_missing_fields','providers_terminal_scope_unresolved') AND json_extract(provider_json,'$.anysearch.status') IS NULL AND (nullif(json_extract(paper_json,'$.doi'),'') IS NULL OR length(trim(coalesce(json_extract(paper_json,'$.abstract'),'')))<180) AND origin_run_id IS NOT NULL AND daily_cohort_key>=? AND daily_cohort_key<=? ORDER BY first_seen,doi,source_id LIMIT ${METADATA_READ_LIMIT})`).bind(started,...pendingBounds).run();
   const rows=(await db.prepare(`SELECT * FROM research_enrichment_queue WHERE status IN ('pending','deferred') AND next_attempt_at<=? ${day?'AND daily_cohort_key IN (?,?)':body.batchKey?'AND origin_batch_key=?':body.cohort==='pending'?pendingGate:''} ORDER BY CASE WHEN length(trim(coalesce(json_extract(paper_json,'$.abstract'),'')))>=180 AND json_type(json_extract(paper_json,'$.authors'))='array' AND json_array_length(json_extract(paper_json,'$.authors'))>0 AND json_extract(paper_json,'$.datePrecision')='day' THEN 0 ELSE 1 END,first_seen,doi,source_id LIMIT ${METADATA_READ_LIMIT}`).bind(started,...(day?[day+'/08',day+'/20']:body.batchKey?[body.batchKey]:body.cohort==='pending'?pendingBounds:[])).all()).results;
   const candidates=rows.map((r:any)=>({...r,p:parse(r.paper_json),providers:parse(r.provider_json)}));
   // Promote complete evidence already in D1 before considering any remote

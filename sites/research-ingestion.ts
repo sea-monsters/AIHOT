@@ -32,7 +32,7 @@ async function preload(db:any,entries:any[]){
  const ids=await Promise.all(inputs.map(async p=>match(papers,p)?.id||await rawHash(normalizeDoi(p.doi)||p.sourceId+':'+p.url))),refsQueue=await Promise.all(inputs.map(async p=>[await key(p),p.sourceId]));
  for(const p of inputs){const row=match(papers,p);if(row?.doi)refsQueue.push([row.doi,p.sourceId]);}
  const [queues,members,records]=await Promise.all([
-  db.prepare("SELECT q.* FROM research_enrichment_queue q JOIN json_each(?) c ON q.doi=json_extract(c.value,'$[0]') AND q.source_id=json_extract(c.value,'$[1]')").bind(JSON.stringify(refsQueue)).all(),
+  db.prepare("SELECT DISTINCT q.* FROM research_enrichment_queue q JOIN json_each(?) c ON q.source_id=json_extract(c.value,'$[1]') AND (q.doi=json_extract(c.value,'$[0]') OR json_extract(q.provider_json,'$.anysearch.originKey')=json_extract(c.value,'$[0]'))").bind(JSON.stringify(refsQueue)).all(),
   db.prepare('SELECT * FROM research_batch_members WHERE paper_id IN (SELECT value FROM json_each(?))').bind(JSON.stringify(ids)).all(),
   db.prepare('SELECT * FROM research_records WHERE paper_id IN (SELECT value FROM json_each(?))').bind(JSON.stringify(ids)).all()
  ]);
@@ -42,7 +42,7 @@ async function preload(db:any,entries:any[]){
   if(q.startsWith('SELECT * FROM research_papers WHERE doi=? OR'))return match(papers,{doi:args[0],url:args[1],title:args[2],sourceId:args[3]});
   if(q==='SELECT * FROM research_papers WHERE doi=?')return papers.find((r:any)=>r.doi===args[0])||null;
   if(q.includes('FROM research_batch_members WHERE paper_id=?'))return memberMap.get(args[0])||null;
-  return base.first();},all:()=>base.all(),run:()=>base.run()};}};
+  return base.first();},all:()=>q.includes("FROM research_enrichment_queue WHERE source_id=? AND json_extract(provider_json,'$.anysearch.originKey')=?")?Promise.resolve({results:[...queueMap.values()].filter((r:any)=>r.source_id===args[0]&&JSON.parse(r.provider_json||'{}').anysearch?.originKey===args[1]).slice(0,2)}):base.all(),run:()=>base.run()};}};
  return {cached,papers,queueMap,memberMap,recordMap,ids};
 }
 /** Capture keys can differ while resolving to one stored paper. Merge before

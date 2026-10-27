@@ -59,3 +59,24 @@ GitHub fork main 与原 Sites 生产源码是独立交付目标，推送 main �
 - Node/PostgreSQL 迁移尝试连接显式测试库 `postgres://127.0.0.1:5432/anysearch_test`，结果 `ECONNREFUSED`；未运行依赖该数据库的 `npm test`，不宣称该旧后端套件通过。没有生产数据库、凭证或预算改动。
 
 上述外联全部由 fixture/mock 接管；未执行真实 AnySearch 付费搜索、extract、完整采集或模型分析。真实 owner 登录、生产连接/搜索额度及 Sites 独立源库部署属于尚待完成的上线验收。
+
+## P2 中断恢复与终态公平性修复（2026-10-27）
+
+独立审查的两项问题均已用精确场景复现，并以同一回归验证修复：
+
+- 在队列 DOI-less 主键升级事务提交后、论文 DOI 写回前注入中断，释放过期租约，再通过真实 capture/drain RSS 摄入链路重入。旧实现会创建第二个没有墓碑的候选，清除短缓存并改变配置 revision 后实际搜索从 1 增为 2。现在在第一次派发前就把原发现键写入 `provider_json.anysearch.originKey`；改键后仍保留这个耐久别名。`planMetadataQueue` 与摄入预读同时解析该别名，原 RSS 重放继续合并规范 DOI 队列及其已有墓碑，不创建第二个候选。别名仍在原 provider JSON 内，无新增数据库列、额度或权限。
+- 构造 32 条较旧、有 DOI/充分摘要但缺作者的终态记录，加一条较新的缺 DOI/摘要终态记录；旧实现始终重开前 32 条，真正可检索项得到 0 次搜索。现在重开 SQL 同样要求“缺 DOI 或摘要不足 180 字符”，与实际搜索选择一致；回归证明新缺口被处理且旧不适用项不占扫描窗口。
+
+精确红测分别观察到重复搜索 `2 != 1` 和饥饿 `0 != 1`，修复后两项通过。最终全量 Sites 867/867 通过，失败/取消/跳过均 0；typecheck、完整 build、通用 Worker 烟测与原生 AnySearch metadata Worker 测试通过。没有生产搜索、迁移或部署。
+
+## 在独立 Sites v105 源库做最小适配
+
+已通过 Sites 官方回读确认 v105 来源 `d270c029dffb2abca854e4f45fb47e8cf873b912`，当时生产 `research_batches` 无 `mode`，`anysearch_settings` 无 `metadata_enabled`；父任务打开的独立源库迁移截至 0024。这与 fork main 的完整功能/迁移历史不同，不应整库覆盖。
+
+1. 对 AnySearch、enrichment、ingestion、pipeline、诊断与界面逐项移植本需求的差异。不要复制 fork 中未变更但包含手动 batch 的 `sites/research.ts`、归属或生命周期文件；不要把 `db/schema.ts` 整文件替换为 fork 版本。外层 runner、runtime 协议、任务 pin、环境配置和预算无需因本需求变更。
+2. 在 Sites 自己的实际 `db/schema.ts` 仅添加 AnySearch 的默认关闭列，再依据其 0024 journal/snapshot 生成下一条独立迁移，例如 `0025_anysearch_metadata.sql`，以及对应新 snapshot/journal。SQL 应只有 `ALTER TABLE anysearch_settings ADD metadata_enabled INTEGER DEFAULT 0 NOT NULL`。不要复制 fork 的 0026 snapshot（其中包含 fork 已有的 `mode`），也不要改写 fork 已提交的 0025/0026 历史。
+3. 若移植的是这一最小功能差异，没有新增 `research_batches.mode` 查询，就无需引入手动 batch 的 0025。若选择整体搬入含 mode 查询的 fork 代码，则必须同时解决其完整依赖与迁移；此方式不属于本需求的最小适配。
+4. 更新日志按稳定 ID 追加本需求条目，保留 v105 全部其他记录；设置页内容版本在其现值上递增，不回退到 fork 的数字。保留现有项目 manifest、owner-private 范围、凭证及服务边界。
+5. 使用官方 source helper 同步、构建和打包，依赖 Sites 发布流程先应用实际 pending schema migration，再上传 Worker；不另造生产 SQL 写入接口。最终回读 succeeded、实际 Sites source SHA、原环境 revision、metadataEnabled=false 与两列的实际状态。真实连接测试仍由 owner 会话单独执行。
+
+本执行环境未提供官方 `site-workflow.mjs`，没有使用自行实现的凭证流程替代；Sites 源码适配和生产发布由有官方 helper 的父执行环境继续。

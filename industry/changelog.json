@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-27T00:58:49Z",
+  "latestVersion": "2026-10-27T01:34:41Z",
   "releases": [
+    {
+      "id": "hkis-anysearch-recovery-fairness-20261027",
+      "at": "2026-10-27T01:34:41Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "修复检索补全中断后的墓碑丢失和终态队列饥饿",
+      "body": [
+        "DOI队列升级前保留原始发现键的耐久别名，RSS重新摄入仍找到同一规范队列与付费尝试墓碑；中断、短缓存过期或配置版本变化后不再创建第二个可计费候选。",
+        "终态缺口只重开缺DOI或摘要不足的记录，已有DOI和充分摘要但缺其他字段的旧记录不再反复占满32项窗口；加入精确中断和32加1饥饿场景回归。",
+        "未增加数据库列、权限、搜索额度或外层采集调用；Sites生产部署与真实连接测试仍需独立完成，保留默认关闭的补全开关。"
+      ],
+      "sources": [
+        {
+          "label": "复现、恢复规则及Sites最小适配边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/anysearch.md"
+        }
+      ]
+    },
     {
       "id": "hkis-anysearch-metadata-20261027",
       "at": "2026-10-27T00:58:49Z",

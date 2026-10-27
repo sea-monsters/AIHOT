@@ -39,20 +39,20 @@ export async function enrichSearchEvidence(db:any,env:any,rows:any[],deadline:nu
   if(selected>=ANYSEARCH_METADATA_LIMIT||Date.now()+5000>=deadline){row.searchPending=true;summary.deferred++;summary.reason=Date.now()+5000>=deadline?'deadline':'anysearch_pass_limit';continue;}
   selected++;
   const source=RESEARCH_SOURCES.find(s=>s.id===row.source_id);if(!source)continue;
-  const timing=phaseTiming(row.first_seen),requestId=crypto.randomUUID();let dispatched=false,outcome='success';
+  const timing=phaseTiming(row.first_seen),requestId=crypto.randomUUID(),originKey=row.providers.anysearch?.originKey||row.doi;let dispatched=false,outcome='success';
   try{
    // Full exact title is needed for identity verification; don't silently
    // truncate an overlong query into a broader paid search.
    const query=`"${row.p.title}" ${row.p.doi||source.issn}`;
    if(query.length>500){row.providers.anysearch={status:'not_needed',reason:'query_bounds',at:stamp()};continue;}
    const start=Date.now(),result=await search(db,config.ownerId,env,query,5,{pipeline:true,expectedRevision:config.revision,deadlineAt:deadline-2000,requestId,onDispatch:async()=>{
-    row.providers.anysearch={status:'attempted',attempted:true,at:stamp(),runId,requestId};await checkpoint(row);
+    row.providers.anysearch={status:'attempted',attempted:true,originKey,at:stamp(),runId,requestId};await checkpoint(row);
     if(Date.now()+2000>=deadline)throw new AIError('deadline',409,'补全时限已结束');
    },fetcher:(url,init)=>{dispatched=true;summary.calls++;return fetch(url,init);}});timing.httpMs+=Date.now()-start;
    if(result.cached)summary.cached++;
    const evidence=paperSearchEvidence(row.p,result.results);
    row.p={...row.p,provenance:{...row.p.provenance,webDiscovery:{provider:'anysearch',retrievedAt:result.retrievedAt,links:evidence.links,verification:'unverified',recordUrl:null}}};
-   row.providers.anysearch={status:'done',attempted:true,at:stamp(),runId,requestId,reason:evidence.conflict?'identity_conflict':evidence.links.length?'links_only':'no_matching_links'};
+   row.providers.anysearch={status:'done',attempted:true,originKey,at:stamp(),runId,requestId,reason:evidence.conflict?'identity_conflict':evidence.links.length?'links_only':'no_matching_links'};
    // Persist search evidence before the free exact-DOI verification; an
    // interrupted verification cannot trigger another paid search.
    await checkpoint(row);

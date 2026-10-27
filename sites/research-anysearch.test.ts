@@ -8,7 +8,10 @@ import {metadataSearchConfig,paperSearchEvidence} from './research-anysearch.ts'
 import {fromCrossref} from './research-domain.ts';
 import {RESEARCH_SOURCES} from './research-config.ts';
 import {monthWindow,metadataFields,digest} from './research-pipeline.ts';
-import {seal} from './ai/security.ts';
+import {seal,AIError} from './ai/security.ts';
+import {captureIngestion,drainIngestion} from './research-ingestion.ts';
+import {admitRun,fencedRunDatabase} from './research-lifecycle.ts';
+import {OperationTrace} from './research-operations.ts';
 import {credentialContext,saveSettings} from './anysearch/settings.ts';
 import {ENDPOINT,normalizeResults} from './anysearch/domain.ts';
 import {search,testConnection} from './anysearch/provider.ts';
@@ -18,7 +21,7 @@ const abstract='Measured TCAD transistor transport and interface traps using con
 function fixture(){
  const sql=new DatabaseSync(':memory:');sql.function('fixture_now',()=>new Date().toISOString());const clock=(q:string)=>q.replaceAll("strftime('%Y-%m-%dT%H:%M:%fZ','now')",'fixture_now()');
  for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(clock(readFileSync('drizzle/'+f,'utf8')));
- const db:any={prepare(q:string){const s=sql.prepare(clock(q));return {args:[] as any[],bind(...a:any[]){this.args=a;return this},async first(){return s.get(...this.args)||null},async all(){return {results:s.all(...this.args)}},runSync(){return {meta:{changes:Number(s.run(...this.args).changes)}}},async run(){return this.runSync()}}},async batch(ss:any[]){sql.exec('BEGIN');try{const result=ss.map(s=>s.runSync());sql.exec('COMMIT');return result}catch(e){sql.exec('ROLLBACK');throw e}}};return {sql,db};
+ const db:any={prepare(q:string){const s=sql.prepare(clock(q));return {q,args:[] as any[],bind(...a:any[]){this.args=a;return this},async first(){return s.get(...this.args)||null},async all(){return {results:s.all(...this.args)}},runSync(){return {meta:{changes:Number(s.run(...this.args).changes)}}},async run(){return this.runSync()}}},async batch(ss:any[]){sql.exec('BEGIN');try{const result=ss.map(s=>s.runSync());sql.exec('COMMIT');return result}catch(e){sql.exec('ROLLBACK');throw e}}};return {sql,db};
 }
 const raw=(suffix='one')=>({DOI:'10.9999/'+suffix,type:'journal-article',ISSN:[source.issn],title:['TCAD transistor transport study '+suffix],published:{'date-parts':[monthWindow().endDate.split('-').map(Number)]},author:[{given:'Fixture',family:'Author'}],abstract});
 const paper=(suffix='one')=>{const p=fromCrossref(raw(suffix),source)!;return {...p,doi:null,abstract:null,url:'https://ieeexplore.ieee.org/document/'+suffix,discovery:'publisher-rss',provenance:{...p.provenance,abstract:null,title:'publisher-rss',metadataEvidence:null}}};
@@ -110,4 +113,22 @@ test('off by default and active collection make no supplemental request or model
  for(const collect of [false,true]){const f=fixture();try{await initResearch(f.db);if(collect){await configured(f.db);f.sql.exec("INSERT INTO research_batches(key,date,slot,status,sources_json,started_at) VALUES('current','2026-10-27',8,'running','[]','x')")}else await configured(f.db,false);await queued(f);
    await mocked(async()=>{const result=await enrichMetadata(f.db,env);assert.equal(result.attempted,0)},async()=>{throw Error('no outbound permitted')});assert.equal(f.sql.prepare('SELECT count(*) n FROM anysearch_usage').get()!.n,0);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
   }finally{f.sql.close()}}
+});
+
+// Kill after the durable key-upgrade transaction, before enrichMetadata's final
+// savePaper. Re-enter through actual captured RSS ingestion, not only the helper.
+test('DOI upgrade interruption and original RSS replay preserve the paid-search tombstone',async()=>{
+ const f=fixture();try{await initResearch(f.db);await configured(f.db);const {p,id}=await queued(f),originalKey=f.sql.prepare('SELECT doi FROM research_enrichment_queue').get()!.doi;let searches=0,killed=false;const batch=f.db.batch.bind(f.db);
+  f.db.batch=async(ss:any[])=>{const result=await batch(ss);if(!killed&&ss.some(s=>s.q?.startsWith('UPDATE research_enrichment_queue SET doi=')&&s.args[0]==='10.9999/one'&&String(s.args[4]).startsWith('id:'))){killed=true;throw new AIError('collection_lease_lost',409,'Synthetic interruption after identity commit')}return result};
+  await mocked(async()=>{const first=await enrichMetadata(f.db,env);assert.equal(first.status,'interrupted');assert.equal(killed,true);assert.equal(searches,1);assert.equal(f.sql.prepare('SELECT doi FROM research_papers WHERE id=?').get(id)!.doi,null);const renamed=f.sql.prepare('SELECT doi,provider_json FROM research_enrichment_queue').get()!;assert.equal(renamed.doi,'10.9999/one');assert.equal(JSON.parse(renamed.provider_json as string).anysearch.originKey,originalKey);f.db.batch=batch;f.sql.exec("UPDATE research_runs SET lease_until='2000' WHERE source_id='__metadata__'");
+   const lease=await admitRun(f.db,source.id,null,'rss_fixture',new Date().toISOString());assert.ok(lease);await captureIngestion(f.db,source.id,'rss',[{paper:p,store:true,scope:false}],lease.id,null);const db=fencedRunDatabase(f.db,lease.id),trace=new OperationTrace(db,null,source.id,Date.now()+15000);await drainIngestion(db,lease.id,trace,Date.now()+15000,source.id);await f.db.prepare("UPDATE research_runs SET status='ok',finished_at=? WHERE id=?").bind(new Date().toISOString(),lease.id).run();await f.db.prepare('DELETE FROM research_settings WHERE key=? AND value=?').bind(lease.key,lease.lockValue).run();
+   f.sql.exec("UPDATE anysearch_settings SET revision=revision+1; UPDATE anysearch_usage SET next_allowed=0; UPDATE anysearch_requests SET expires_at='2000'; UPDATE research_enrichment_queue SET next_attempt_at='2000'");await enrichMetadata(f.db,env);assert.equal(searches,1);assert.equal(f.sql.prepare('SELECT count(*) n FROM research_enrichment_queue').get()!.n,1);assert.equal(f.sql.prepare('SELECT doi FROM research_papers WHERE id=?').get(id)!.doi,'10.9999/one');
+  },async(url:any)=>{if(new URL(String(url)).hostname==='api.anysearch.com'){searches++;return response([{title:p.title,url:'https://doi.org/10.9999/one'}])}return Response.json({message:raw()})});
+ }finally{f.sql.close()}
+});
+
+test('32 older terminal records outside search eligibility cannot starve one later eligible gap',async()=>{
+ const f=fixture();try{await initResearch(f.db);await configured(f.db);for(let i=0;i<32;i++){const p={...fromCrossref(raw('ineligible-'+i),source)!,authors:[]};await queueMetadata(f.db,[p],false,{runId:'original',batchKey:null,firstSeen:new Date(Date.now()-60000).toISOString()})}await queued(f);f.sql.exec("UPDATE research_enrichment_queue SET status='abstain',ready_reason='providers_terminal_missing_fields',provider_json='{\"crossref\":{\"status\":\"done\"},\"openalex\":{\"status\":\"no_record\"},\"semanticscholar\":{\"status\":\"no_record\"}}'");let searches=0;
+  await mocked(async()=>{await enrichMetadata(f.db,env);assert.equal(searches,1);assert.equal(f.sql.prepare("SELECT count(*) n FROM research_enrichment_queue WHERE json_extract(provider_json,'$.anysearch.attempted')=1").get()!.n,1)},async()=>{searches++;return response()});
+ }finally{f.sql.close()}
 });
