@@ -70,3 +70,8 @@ test('detail quality refuses truncated, conflicting, duplicated or oversized tex
 test('budget mutations require owner-browser and same-origin CSRF; no endpoint accepts service token alone',async()=>{
  const f=fixture();try{for(const path of ['settings','budget/grant','budget/revoke']){const url='https://local.test/api/site/aminer/'+path;const r=await aminerApi(new Request(url,{method:'POST',headers:{'content-type':'application/json','OAI-Sites-Authorization':'Bearer synthetic-service-only'},body:'{}'}),{...env,DB:f.db});assert.equal(r.status,403);}assert.equal(f.sql.prepare('SELECT count(*) n FROM aminer_budget_grants').get()!.n,0);}finally{f.sql.close()}
 });
+
+
+test('revocation fences in-flight grants from the old configuration revision without deleting prior receipts',async()=>{
+ const f=fixture();try{const c=await configured(f),body={revision:c.revision,requestId:crypto.randomUUID(),detailCalls:1,confirmedCostFen:1,unitCostFen:1,expectedAuthorizedFen:1,expiresAt:new Date(Date.now()+86400000).toISOString(),contract:AMINER_CONTRACT};const revoked=await revokeBudget(f.db,owner,env);assert.equal(revoked.revision,c.revision+1);await assert.rejects(()=>grantBudget(f.db,owner,env,body),(e:any)=>e.code==='settings_conflict');assert.equal(f.sql.prepare('SELECT count(*) n FROM aminer_budget_grants').get()!.n,1);assert.equal((await safeSettings(f.db,owner,env)).budget.remainingCalls,0);}finally{f.sql.close()}
+});

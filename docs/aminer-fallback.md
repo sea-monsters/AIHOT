@@ -30,7 +30,7 @@
 - `GET /api/site/aminer/settings`：安全状态，不向 AMiner 发请求。
 - `POST /api/site/aminer/settings`：`{revision, enabled, dataUseAuthorized, authorizationReference?, apiKey?, userId?, removeKey?}`。替换 Key 与 user_id 须同时提交。拒绝费用字段和任意 endpoint。保存设置不授权费用、不测试连接；改变 revision 会使旧额度停止派发，既有花费和回执保留。
 - `POST /api/site/aminer/budget/grant`：`{revision, requestId:UUID, detailCalls:1..20, confirmedCostFen:detailCalls, unitCostFen:1, expectedAuthorizedFen:当前累计授权分, contract:"aminer-official-2026-10-27", expiresAt:ISO}`。这是以后取得授权才能操作的独立费用入口，每笔有明确未来 7 天内截止日期；界面给 24 小时。相同 UUID/同参数幂等，不同金额冲突；累计授权分作原子条件，拒绝旧页面以新 UUID 重复增加。GET `/api/site/aminer/budget/grant?requestId=UUID` 仅回读本笔是否存在及安全总额，UI 在超时重试前先查询同一笔，未确认时锁住金额并保留原 UUID，不自动新建授权。每笔最多 20 次/0.20 元、最多两倍搜索尝试；后者是本地限制，不是官方 QPS 承诺。当前不创建任何真实授权。
-- `POST /api/site/aminer/budget/revoke`：`{}`，撤销剩余额度，不退还已预占的未知请求。
+- `POST /api/site/aminer/budget/revoke`：`{}`，撤销剩余额度并递增配置版本，阻断仍在途的旧版本授权，不退还已预占的未知请求。
 
 累计授权不按 UTC 日重置、不自动续期，不因换 Key、版本、清缓存或新一天恢复。最多保留 100 笔 grant、5000 条操作回执，到上限安全停用，不删除墓碑换额度。每个 owner+DOI+operation 有稳定持久请求 ID；预占与账本更新在原子 D1 batch 内完成后才派发。pending/unknown、超时、5xx、畸形/空响应不自动重发或退还。已完成回执可在写论文中断后重新核验，不再付费。字段更新、DOI 队列别名升级保留 attempted/originKey。AMiner HTTP 不跟随任何重定向；不转发 Cookie。认证错误停 provider，40306/HTTP429 沿 Retry-After 冷却；无数值官方 QPS 依据，1100ms 间隔和默认 60 秒冷却均是工程保护。
 
