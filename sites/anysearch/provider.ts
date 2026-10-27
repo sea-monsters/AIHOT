@@ -1,6 +1,6 @@
 import {AIError,unseal,redactPayload} from '../ai/security.ts';
 import {writeLog} from '../runtime-logs.ts';
-import {ENDPOINT,MAX_RESPONSE_BYTES,TIMEOUT_MS,DAILY_LIMIT,validateQuery,validateLimit,normalizeResults,fingerprint} from './domain.ts';
+import {ENDPOINT,MAX_RESPONSE_BYTES,TIMEOUT_MS,DAILY_LIMIT,validateQuery,validateLimit,validateTag,normalizeResults,fingerprint} from './domain.ts';
 import {rawSettings,credentialContext} from './settings.ts';
 export async function reserveRequest(db:any,id:string,now=Date.now(),searchAttempt=true){
  const day=new Date(now).toISOString().slice(0,10);
@@ -13,7 +13,8 @@ export function responseError(status:number){
  if(status===429)return new AIError('anysearch_rate_limit',429,'AnySearch 当前限流，请稍后主动重试');
  return new AIError('anysearch_http',502,`AnySearch 返回 HTTP ${status}，未获得搜索结果`);
 }
-export async function fetchJSON(path:'/v1/search'|'/v1/sub-domains?domain=code'|'/v1/sub-domains?domain=academic',key:string,signal:AbortSignal,query?:{query:string;max_results:number},fetcher:typeof fetch=fetch){
+export async function fetchJSON(path:'/v1/search'|'/v1/sub-domains?domain=code'|'/v1/sub-domains?domain=academic',key:string,signal:AbortSignal,query?:{query:string;max_results:number;tag?:'academic.paper'},fetcher:typeof fetch=fetch){
+ if(query?.tag!==undefined)validateTag(query.tag);
  if(!['/v1/search','/v1/sub-domains?domain=code','/v1/sub-domains?domain=academic'].includes(path)||!key)throw new AIError('endpoint_not_allowed',400,'拒绝非官方地址或匿名请求');
  let r:Response;try{r=await fetcher(ENDPOINT+path,{method:query?'POST':'GET',headers:{Accept:'application/json',Authorization:'Bearer '+key,...(query?{'Content-Type':'application/json'}:{})},body:query?JSON.stringify({...query,format:'json'}):undefined,redirect:'manual',signal})}catch{throw new AIError(signal.aborted?'anysearch_timeout':'anysearch_network',504,signal.aborted?'AnySearch 查询超过 20 秒，已停止，不会自动重试':'暂时无法连接 AnySearch，未自动重试')}
  if(r.status>=300&&r.status<400){await r.body?.cancel();throw new AIError('anysearch_redirect',502,'AnySearch 返回重定向，已停止以保护凭证')}
@@ -29,14 +30,16 @@ export async function fetchJSON(path:'/v1/search'|'/v1/sub-domains?domain=code'|
 }
 async function saveCooldown(db:any,id:string,error:unknown){if(error instanceof AIError&&error.code==='anysearch_rate_limit')await db.prepare('UPDATE anysearch_usage SET next_allowed=max(next_allowed,?) WHERE owner_id=?').bind((error as any).retryAt||Date.now()+60000,id).run();}
 async function configKey(db:any,id:string,env:any,agent=false,pipeline=false){const config=await rawSettings(db,id);if(!config?.key_ciphertext)throw new AIError('anysearch_not_configured',409,'请先在网站设置的 AnySearch 服务中保存独立 API key');if(config.endpoint!==ENDPOINT)throw new AIError('endpoint_not_allowed',400,'已保存 AnySearch 地址不属于官方地址');if(agent&&!config.enabled)throw new AIError('anysearch_disabled',409,'Agent 联网检索未启用，请在 AnySearch 设置中开启；也可以使用侧栏手动检索');if(pipeline&&(!config.metadata_enabled||config.test_status!=='ok'))throw new AIError('anysearch_disabled',409,'元数据补全尚未启用或连接未验证');return {config,key:await unseal(config.key_ciphertext,env,credentialContext(id))}}
-export async function search(db:any,id:string,env:any,query:unknown,maxResults:unknown=10,options:{agent?:boolean;pipeline?:boolean;expectedRevision?:number;deadlineAt?:number;onDispatch?:()=>Promise<void>;requestId?:string;fetcher?:typeof fetch}={}){
- const q=validateQuery(query),limit=validateLimit(maxResults),{config,key}=await configKey(db,id,env,options.agent,options.pipeline),now=new Date().toISOString();
+export async function search(db:any,id:string,env:any,query:unknown,maxResults:unknown=10,options:{agent?:boolean;pipeline?:boolean;expectedRevision?:number;deadlineAt?:number;onDispatch?:()=>Promise<void>;requestId?:string;fetcher?:typeof fetch;tag?:unknown;paperId?:string}={}){
+ const q=validateQuery(query),limit=validateLimit(maxResults),tag=validateTag(options.tag),{config,key}=await configKey(db,id,env,options.agent,options.pipeline),now=new Date().toISOString();
+ if(tag&&(!options.paperId||!/^[a-f0-9]{32}$/.test(options.paperId)))throw new AIError('invalid_academic_targets',400,'显式学术检索须绑定已存论文身份');
  if(options.expectedRevision!==undefined&&config.revision!==options.expectedRevision)throw new AIError('settings_conflict',409,'检索配置已变化');
  if(options.deadlineAt!==undefined&&Date.now()>=options.deadlineAt)throw new AIError('deadline',409,'检索时限已结束');
  if(q.includes(key))throw new AIError('invalid_query',400,'检索词中包含服务凭证，已阻止发送');
- const cacheKey=await fingerprint(`${id}|anysearch-v1|${config.revision}|${q}|${limit}`);
+ // Preserve legacy fingerprints; explicit academic routing has its own namespace.
+ const cacheKey=await fingerprint(tag?JSON.stringify({provider:'anysearch-academic-v1',owner:id,revision:config.revision,query:q,limit,tag,paperId:options.paperId}):`${id}|anysearch-v1|${config.revision}|${q}|${limit}`);
  // Cached text expires after 15 minutes; tombstones retain hashes only and prevent replay.
- await db.batch([db.prepare('UPDATE anysearch_requests SET result_json=NULL WHERE expires_at<? AND result_json IS NOT NULL').bind(now),db.prepare('DELETE FROM anysearch_requests WHERE id IN (SELECT id FROM anysearch_requests WHERE owner_id=? AND created_at<? ORDER BY created_at LIMIT 200)').bind(id,new Date(Date.now()-30*86400000).toISOString())]);
+ await db.prepare('UPDATE anysearch_requests SET result_json=NULL WHERE expires_at<? AND result_json IS NOT NULL').bind(now).run();
  const requestId=options.requestId||crypto.randomUUID();if(!/^[a-f0-9-]{36}$/i.test(requestId))throw new AIError('invalid_request_id',400,'检索请求标识无效');const rid=id+':'+requestId;
  const prior=await db.prepare('SELECT * FROM anysearch_requests WHERE id=? AND owner_id=?').bind(rid,id).first();
  const cachedResult=async()=>db.prepare("SELECT result_json,expires_at FROM anysearch_requests WHERE owner_id=? AND fingerprint=? AND status='completed' AND expires_at>? AND result_json IS NOT NULL ORDER BY created_at DESC LIMIT 1").bind(id,cacheKey,now).first();
@@ -53,7 +56,7 @@ export async function search(db:any,id:string,env:any,query:unknown,maxResults:u
   if(options.deadlineAt!==undefined&&Date.now()>=options.deadlineAt)throw new AIError('deadline',409,'检索时限已结束');
   const dispatchConfig=await rawSettings(db,id);if(dispatchConfig?.revision!==config.revision)throw new AIError('settings_conflict',409,'派发前检索配置已变化');
   if(options.deadlineAt!==undefined&&Date.now()>=options.deadlineAt)throw new AIError('deadline',409,'检索时限已结束');
-  const data=await fetchJSON('/v1/search',key,AbortSignal.timeout(Math.max(1,Math.min(TIMEOUT_MS,(options.deadlineAt??Infinity)-Date.now()))),{query:q,max_results:limit},options.fetcher),result={...await normalizeResults(data,limit),cached:false,query:q};
+  const data=await fetchJSON('/v1/search',key,AbortSignal.timeout(Math.max(1,Math.min(TIMEOUT_MS,(options.deadlineAt??Infinity)-Date.now()))),{query:q,max_results:limit,...(tag?{tag}:{})},options.fetcher),result={...await normalizeResults(data,limit,undefined,tag),cached:false,query:q,...(tag?{tag,paperId:options.paperId}:{})};
   await db.prepare("UPDATE anysearch_requests SET status='completed',result_json=? WHERE id=? AND owner_id=?").bind(JSON.stringify(result),rid,id).run();await writeLog(db,{component:'anysearch',event:'request_finished',severity:'info',outcome:'ok',requestId:rid,durationMs:Date.now()-Date.parse(now),metadata:{fetched:result.results.length}});return result;
  }catch(e){await saveCooldown(db,id,e);await db.prepare("UPDATE anysearch_requests SET status='failed',result_json=NULL WHERE id=? AND owner_id=?").bind(rid,id).run();await writeLog(db,{component:'anysearch',event:'request_failed',severity:'warning',outcome:'failed',requestId:rid,errorCode:e instanceof AIError?e.code:'anysearch_unavailable',durationMs:Date.now()-Date.parse(now)});throw e}
 }

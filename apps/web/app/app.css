@@ -1219,3 +1219,5 @@ html{scrollbar-gutter:stable}
 .paper-range-toggle{font-size:12px;min-height:36px;padding:4px 8px;border:1px solid var(--line-strong);border-radius:5px;color:var(--ink-2)}
 .paper-range-toggle[aria-pressed=true]{background:var(--selected);color:var(--accent-ink);border-color:var(--accent)}
 @media(max-width:640px){.paper-date-draft input{font-size:16px;min-height:44px}.paper-range-toggle{min-height:44px}.paper-calendar-help{font-size:12px}}
+
+.quick-search select{flex:0 0 68px;max-width:92px;min-width:0;border:0;background:transparent;color:var(--color-ink);font-size:12px;padding:7px 2px}.quick-search-mobile select{font-size:14px;min-height:44px}.web-search-form{flex-wrap:wrap}.web-search-form select{flex:0 0 100%;min-height:44px;padding:8px;border:1px solid var(--control-line);border-radius:7px;background:var(--field);color:var(--color-ink);font-size:14px}.web-search-form input{flex:1 1 0;width:auto}.web-search-dialog select:focus-visible{outline:2px solid var(--color-accent);outline-offset:3px}.web-result details{margin-top:8px;font-size:13px;color:var(--color-ink-3)}.web-result summary{cursor:pointer}

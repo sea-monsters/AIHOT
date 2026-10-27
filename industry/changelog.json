@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-27T15:48:47Z",
+  "latestVersion": "2026-10-27T15:56:47Z",
   "releases": [
+    {
+      "id": "hkis-anysearch-academic-title-preview-20261027",
+      "at": "2026-10-27T15:56:47Z",
+      "kind": "feature",
+      "basis": "record",
+      "title": "提供显式学术题名检索与只读操作回执",
+      "body": [
+        "桌面/手机及搜索弹窗提供学术论文模式，先绑定已存缺摘要paperId，再以完整题名显式academic.paper检索，每批最多2次；不依赖出版页fetch成功，不自动重放旧付费操作。",
+        "只读回执可核对缺失、完成或过期状态；contentPreview限长并显示来源文本长度与截断状态，标为不可信检索内容，不提升为论文摘要，不写库存或冻结简报。",
+        "共用既有AnySearch Key、每日100次上限与冷却，无新凭证、模型、extract或采集任务；本轮真实搜索为0，真实小样本另行核查。"
+      ],
+      "sources": [
+        {
+          "label": "显式学术检索合同与小样本步骤",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/anysearch-academic.md"
+        }
+      ]
+    },
     {
       "id": "hkis-aminer-authorization-atomic-write-20261027",
       "at": "2026-10-27T15:48:47Z",
