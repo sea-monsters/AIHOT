@@ -183,6 +183,13 @@
       "when": 1792547311323,
       "tag": "0025_manual_batches",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1793062219372,
+      "tag": "0026_anysearch_metadata",
+      "breakpoints": true
     }
   ]
 }

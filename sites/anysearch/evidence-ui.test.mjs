@@ -1,0 +1,10 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+import {mkdir,writeFile} from 'node:fs/promises';
+await mkdir('.sites-runtime',{recursive:true});
+await writeFile('.sites-runtime/anysearch-evidence-ui.tsx',`import React from 'react';import {renderToStaticMarkup} from 'react-dom/server';import {AnySearchSettings} from '../apps/web/app/components/AnySearchSettings';import {PaperWebEvidence} from '../apps/web/app/components/PaperWebEvidence';export const settings=()=>renderToStaticMarkup(<AnySearchSettings initialData={{hasKey:true,encryptionReady:true,endpoint:'https://api.anysearch.com',enabled:true,metadataEnabled:false,callsToday:1,revision:1}}/>);export const evidence=(data)=>renderToStaticMarkup(<PaperWebEvidence evidence={data}/>);`);
+await build({entryPoints:['.sites-runtime/anysearch-evidence-ui.tsx'],outfile:'.sites-runtime/anysearch-evidence-ui.mjs',bundle:true,platform:'node',format:'esm',packages:'external',jsx:'automatic',logLevel:'silent'});
+const {settings,evidence}=await import('../../.sites-runtime/anysearch-evidence-ui.mjs');
+test('settings independently label metadata opt-in, existing quota and quota-free capability tests',()=>{const html=settings();assert.match(html,/允许维护管线/);assert.match(html,/每轮补全最多 2 次搜索/);assert.match(html,/能力目录测试不计入/);assert.match(html,/不调用模型生成摘要/);assert.equal((html.match(/type="checkbox"/g)||[]).length,3)});
+test('paper links expose retrieval time and verification scope with no snippets or unsafe hrefs',()=>{assert.equal(evidence(null),'');const html=evidence({verification:'crossref_exact_doi_title_issn',links:[{kind:'search_link',url:'https://doi.org/10.9999/one',title:'<script>title</script>',source:'doi.org',retrievedAt:'2026-10-27T00:00:00Z',snippet:'MUST NOT SHOW'},{kind:'search_link',url:'javascript:alert(1)',title:'unsafe'}]});assert.match(html,/检索于 2026-10-27/);assert.match(html,/搜索片段不是论文摘要/);assert.match(html,/rel="noopener noreferrer"/);assert.match(html,/网页及其全文未因此得到验证/);assert.ok(!html.includes('MUST NOT SHOW'));assert.ok(!html.includes('javascript:'));assert.ok(!html.includes('<script>'))});

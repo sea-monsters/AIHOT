@@ -1,8 +1,27 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-25T08:01:43Z",
+  "latestVersion": "2026-10-27T00:58:49Z",
   "releases": [
+    {
+      "id": "hkis-anysearch-metadata-20261027",
+      "at": "2026-10-27T00:58:49Z",
+      "kind": "feature",
+      "basis": "record",
+      "title": "独立开启 AnySearch 元数据补全并区分免费能力测试",
+      "body": [
+        "维护阶段可沿用已有加密密钥查找缺 DOI、摘要来源与原文入口，新增独立开关且默认关闭；每轮最多2次搜索，共用原每日100次搜索上限，保留540秒与35调用采集保护，不启动整轮采集或额外付费模型。",
+        "只从题名匹配链接发现线索，经Crossref精确DOI、题名、期刊及已知作者核对后采用实际元数据；搜索片段不作论文摘要，详情独立标注来源、检索时间与核验范围，缺失继续保留。",
+        "派发前保存耐久尝试标记，未知结果不自动重放；共享429冷却、配置版本与绝对deadline保护继续生效，论文原ID、采集归属和冻结简报/日报快照不变。",
+        "能力目录连接测试改为academic域，不再扣本地搜索用量；真实搜索仍按供应商密钥配额计费。本条记录仓库实现，Sites需另行适配迁移与部署，生产连接和搜索额度由真实所有者单独验证。"
+      ],
+      "sources": [
+        {
+          "label": "接口依据、预算边界与上线验证步骤",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/anysearch.md"
+        }
+      ]
+    },
     {
       "id": "hkis-core-first-goals-20261025",
       "at": "2026-10-25T08:01:43Z",
