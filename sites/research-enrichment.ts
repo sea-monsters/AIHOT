@@ -1,3 +1,5 @@
+import {enrichAMinerEvidence} from './research-aminer.ts';
+import {available as aminerAvailable} from './aminer/settings.ts';
 import {runtimeDeadline,assertRuntimeBudget,type RuntimeBudget} from './research-runtime-budget.ts';
 import {enrichSearchEvidence,metadataSearchConfig} from './research-anysearch.ts';
 import {pendingWorkCounts,recoverIngestion} from './research-recovery.ts';
@@ -43,7 +45,7 @@ function localRecordMatches(p:any,row:any){
 }
 async function localSourceEvidence(db:any,p:any){
  if(!adequateMetadata(p)||!p.doi)return null;
- const rows=(await db.prepare("SELECT fields_json,channel FROM research_records WHERE source_id=? AND channel IN ('crossref','publisher-rss','openalex','semanticscholar') AND paper_id IN (SELECT id FROM research_papers WHERE doi=?) ORDER BY retrieved_at DESC LIMIT 8").bind(p.sourceId,p.doi).all()).results;
+ const rows=(await db.prepare("SELECT fields_json,channel FROM research_records WHERE source_id=? AND channel IN ('crossref','publisher-rss','openalex','semanticscholar','aminer') AND paper_id IN (SELECT id FROM research_papers WHERE doi=?) ORDER BY retrieved_at DESC LIMIT 8").bind(p.sourceId,p.doi).all()).results;
  return rows.find((row:any)=>localRecordMatches(p,row))||null;
 }
 
@@ -55,7 +57,7 @@ export async function planMetadataQueue(db:any,incoming:Paper,scopePending=false
   // its original discovery key as a durable alias, including captured RSS
   // replay after interruption; never lose the paid-attempt tombstone.
   if(!previous&&lookupKey.startsWith('id:')){
-   const aliases=(await db.prepare("SELECT * FROM research_enrichment_queue WHERE source_id=? AND json_extract(provider_json,'$.anysearch.originKey')=? LIMIT 2").bind(incoming.sourceId,lookupKey).all()).results;
+   const aliases=(await db.prepare("SELECT * FROM research_enrichment_queue WHERE source_id=? AND (json_extract(provider_json,'$.anysearch.originKey')=? OR json_extract(provider_json,'$.aminer.originKey')=?) LIMIT 2").bind(incoming.sourceId,lookupKey,lookupKey).all()).results;
    if(aliases.length>1)throw new AIError('record_conflict',409,'发现标识对应多个补全记录，保留已有证据');previous=aliases[0]||null;
   }
   const priorPaper=previous?parse(previous.paper_json,null):null;const p=priorPaper?mergeCandidate(incoming,priorPaper):incoming;
@@ -65,7 +67,7 @@ export async function planMetadataQueue(db:any,incoming:Paper,scopePending=false
   const member=stored?await db.prepare('SELECT run_id,batch_key,daily_cohort_key,first_seen FROM research_batch_members WHERE paper_id=?').bind(stored.id).first():null;
   const firstSeen=member?.first_seen||stored?.first_seen||run?.firstSeen||now,originBatchKey=member?.batch_key??run?.batchKey??null,manual=isManualBatchKey(originBatchKey),cohort=manual?null:(member?.daily_cohort_key??run?.cohortKey??dailyCohortKey(firstSeen));
   const freshCrossref=p.discovery==='crossref'||stored?.metadata_checked_at&&Date.parse(stored.metadata_checked_at)>Date.now()-6*3600000;
-  const priorProviders=parse(previous?.provider_json),providers={...(freshCrossref?{crossref:{status:'done',at:now,reason:'fresh_discovery'}}:{}),...(priorProviders.anysearch?.attempted?{anysearch:priorProviders.anysearch}:{})};
+  const priorProviders=parse(previous?.provider_json),providers={...(freshCrossref?{crossref:{status:'done',at:now,reason:'fresh_discovery'}}:{}),...(priorProviders.anysearch?.attempted?{anysearch:priorProviders.anysearch}:{}),...(priorProviders.aminer?.attempted?{aminer:priorProviders.aminer}:{})};
   const statement=db.prepare(`INSERT INTO research_enrichment_queue(doi,source_id,paper_json,input_hash,scope_pending,status,next_attempt_at,updated_at,first_seen,origin_run_id,origin_batch_key,daily_cohort_key,provider_json)
    VALUES(?,?,?,?,?,CASE WHEN (SELECT count(*) FROM research_enrichment_queue WHERE status IN ('pending','deferred','blocked') AND NOT(origin_run_id IS NULL AND daily_cohort_key IS NULL))<2000 THEN 'pending' ELSE 'overflow' END,?,?,?,?,?,?,?) ON CONFLICT(doi,source_id) DO UPDATE SET
    paper_json=excluded.paper_json,scope_pending=min(research_enrichment_queue.scope_pending,excluded.scope_pending),
@@ -134,6 +136,7 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace
   // Opt-in applies to retained current-month terminal gaps too, in bounded
   // slices. Old frozen briefs/dailies remain independent immutable evidence.
   if(await metadataSearchConfig(db))await db.prepare(`UPDATE research_enrichment_queue SET status='pending',next_attempt_at=? WHERE (doi,source_id) IN (SELECT doi,source_id FROM research_enrichment_queue WHERE status='abstain' AND ready_reason IN ('providers_terminal_missing_fields','providers_terminal_scope_unresolved') AND json_extract(provider_json,'$.anysearch.status') IS NULL AND (nullif(json_extract(paper_json,'$.doi'),'') IS NULL OR length(trim(coalesce(json_extract(paper_json,'$.abstract'),'')))<180) AND EXISTS(SELECT 1 FROM research_papers stored WHERE stored.source_id=research_enrichment_queue.source_id AND (stored.doi=json_extract(research_enrichment_queue.paper_json,'$.doi') OR stored.url=json_extract(research_enrichment_queue.paper_json,'$.url'))) AND origin_run_id IS NOT NULL AND daily_cohort_key>=? AND daily_cohort_key<=? ORDER BY first_seen,doi,source_id LIMIT ${METADATA_READ_LIMIT})`).bind(started,...pendingBounds).run();
+  const aminerAccess=await aminerAvailable(db);if(aminerAccess.ready&&aminerAccess.searchReady)await db.prepare(`UPDATE research_enrichment_queue SET status='pending',next_attempt_at=? WHERE (doi,source_id) IN (SELECT doi,source_id FROM research_enrichment_queue WHERE status='abstain' AND ready_reason='providers_terminal_missing_fields' AND coalesce(json_extract(provider_json,'$.aminer.attempted'),0)=0 AND length(trim(coalesce(json_extract(paper_json,'$.abstract'),'')))<180 AND nullif(json_extract(paper_json,'$.doi'),'') IS NOT NULL AND origin_run_id IS NOT NULL AND daily_cohort_key>=? AND daily_cohort_key<=? ORDER BY first_seen,doi,source_id LIMIT ${METADATA_READ_LIMIT})`).bind(started,...pendingBounds).run();
   const rows=(await db.prepare(`SELECT * FROM research_enrichment_queue WHERE status IN ('pending','deferred') AND next_attempt_at<=? ${day?'AND daily_cohort_key IN (?,?)':body.batchKey?'AND origin_batch_key=?':body.cohort==='pending'?pendingGate:''} ORDER BY CASE WHEN EXISTS(SELECT 1 FROM research_papers stored WHERE stored.source_id=research_enrichment_queue.source_id AND (stored.doi=json_extract(research_enrichment_queue.paper_json,'$.doi') OR stored.url=json_extract(research_enrichment_queue.paper_json,'$.url'))) THEN 0 ELSE 1 END,CASE WHEN length(trim(coalesce(json_extract(paper_json,'$.abstract'),'')))>=180 AND json_type(json_extract(paper_json,'$.authors'))='array' AND json_array_length(json_extract(paper_json,'$.authors'))>0 AND json_extract(paper_json,'$.datePrecision')='day' THEN 0 ELSE 1 END,first_seen,doi,source_id LIMIT ${METADATA_READ_LIMIT}`).bind(started,...(day?[day+'/08',day+'/20']:body.batchKey?[body.batchKey]:body.cohort==='pending'?pendingBounds:[])).all()).results;
   const candidates=rows.map((r:any)=>({...r,p:parse(r.paper_json),providers:parse(r.provider_json)}));
   // Promote complete evidence already in D1 before considering any remote
@@ -229,6 +232,7 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace
    const supplemental=await enrichSearchEvidence(db,env,candidates,deadline,lease.id,mergeCandidate);result.providers.anysearch=supplemental;result.attempted+=supplemental.calls+supplemental.verificationCalls;
    if(supplemental.reason)result.reason=supplemental.reason==='anysearch_pass_limit'?'pending_metadata':supplemental.reason;
   }
+  const aminerSupplement=await enrichAMinerEvidence(db,env,candidates,deadline,lease.id,row=>SERVICES.every(service=>TERMINAL.has(row.providers[service]?.status)||(row.providers[service]?.status==='deferred'&&row.providers[service]?.reason==='connection_unavailable')));result.providers.aminer=aminerSupplement;result.attempted+=aminerSupplement.calls;if(aminerSupplement.deferred){result.status='partial';result.reason=result.reason||'pending_metadata';}
   const commitTiming=phaseTiming(candidates[0]?.first_seen||started),commitStarted=Date.now();
   for(const row of candidates){
    const source=RESEARCH_SOURCES.find(s=>s.id===row.source_id),terminal=SERVICES.every(s=>TERMINAL.has(row.providers[s]?.status)),sufficient=adequateMetadata(row.p);
@@ -241,6 +245,8 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace
    }else if(day&&(day<commitWindow.startDate||day>commitWindow.endDate)){
     status='abstain';reason='expired_update_window';result.abstained=(result.abstained||0)+1;
     await db.prepare("UPDATE research_papers SET metadata_status='abstain' WHERE doi=? AND source_id=? AND metadata_status IN ('ready','pending')").bind(row.p.doi,row.source_id).run();
+   }else if(row.aminerPending){
+    status='deferred';reason='aminer_pending';result.deferred++;
    }else if(row.searchPending){
     status='deferred';reason='anysearch_pending';result.deferred++;
    }else if(row.scope_pending&&source&&!sourceAccepts(row.p,source)){
@@ -262,7 +268,7 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace
     if(existing)await db.prepare("UPDATE research_papers SET provenance_json=json_set(provenance_json,'$.webDiscovery',json(?)) WHERE id=? AND provenance_json=?").bind(JSON.stringify(row.p.provenance.webDiscovery),existing.id,existing.provenance_json).run();
    }
    row.input_hash=await digest(metadataFields(row.p));
-   const retry=new Date(Math.max(Date.now()+60000,...[...SERVICES,'anysearch'].map(s=>Date.parse(row.providers[s]?.retryAt||'')||0))).toISOString();
+   const retry=new Date(Math.max(Date.now()+60000,...[...SERVICES,'anysearch','aminer'].map(s=>Date.parse(row.providers[s]?.retryAt||'')||0))).toISOString();
    await db.prepare('UPDATE research_enrichment_queue SET paper_json=?,input_hash=?,provider_json=?,status=?,scope_pending=?,ready_reason=?,next_attempt_at=?,updated_at=? WHERE doi=? AND source_id=?').bind(JSON.stringify(row.p),row.input_hash,JSON.stringify(row.providers),status,row.scope_pending?1:0,reason,retry,stamp(),row.doi,row.source_id).run();
   }
   result.remainingMetadata=(await db.prepare(`SELECT count(*) n FROM research_enrichment_queue WHERE status IN ('pending','deferred','blocked','overflow') ${day?'AND daily_cohort_key IN (?,?)':body.batchKey?'AND origin_batch_key=?':body.cohort==='pending'?pendingGate:''}`).bind(...(day?[day+'/08',day+'/20']:body.batchKey?[body.batchKey]:body.cohort==='pending'?pendingBounds:[])).first()).n;

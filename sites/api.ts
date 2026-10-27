@@ -1,3 +1,4 @@
+import {aminerApi} from './aminer/api.ts';
 import {operationsApi} from './research-operations.ts';
 import {briefApi} from './research-briefs.ts';
 import {dailyVisitsApi} from './daily-visits.ts';
@@ -46,6 +47,7 @@ export async function siteApi(request:Request,env:any):Promise<Response>{
   return json(path==='/api/site/changelog'?CHANGELOG:{changelogVersion:CHANGELOG.latestVersion});
  }
  if(path==='/api/site/research/reader-state'||path==='/api/site/research/reader-state/batch'||path==='/api/site/research/reader-state/favorites')return paperReaderApi(request,env);
+ if(path.startsWith('/api/site/aminer/'))return aminerApi(request,env);
  if(path.startsWith('/api/site/anysearch/'))return anysearchApi(request,env);
  if(new URL(request.url).pathname.startsWith('/api/site/scholarly/'))return scholarlyApi(request,env);
  if(new URL(request.url).pathname==='/api/site/logs')return logsApi(request,env);
