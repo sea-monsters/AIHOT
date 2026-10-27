@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-27T12:56:08Z",
+  "latestVersion": "2026-10-27T13:15:25Z",
   "releases": [
+    {
+      "id": "hkis-rss-root-boundary-stop-headings-20261027",
+      "at": "2026-10-27T13:15:25Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "阻断RSS根级引用回退及后续正文混入摘要",
+      "body": [
+        "References、Bibliography、Related Articles根级或后代语义标签及已拒绝的嵌套摘要不能重新进入默认description摘要回退。",
+        "已标记摘要在任意后续标题层级前停止，避免Introduction或他文正文拼入；Atom混合章节无法可靠截界时保留缺失，同时保留正常科学句子中的related/highlights措辞。",
+        "沿用适配端最终独立审查补丁，不改变请求、预算、权限或生产开关；保留正常RSS/Atom摘要及库存和冻结记录。"
+      ],
+      "sources": [
+        {
+          "label": "RSS来源边界与支持范围",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/publisher-source-audit.md"
+        }
+      ]
+    },
     {
       "id": "hkis-publisher-response-rss-ownership-20261027",
       "at": "2026-10-27T12:56:08Z",

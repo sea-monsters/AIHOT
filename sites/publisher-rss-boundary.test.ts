@@ -28,3 +28,47 @@ test('RSS labels following a secondary heading and truncated teaser descriptions
  for(const publisher of ['IEEE','Wiley'])assert.equal(paper(publisher,`<h3>Abstract</h3><p>${primary}… Show More</p>`).abstract,null);
  assert.equal(paper('Science',`<section id="abstract"><h2>Abstract</h2><p>${primary}…</p></section>`).abstract,null);
 });
+
+test('RSS root-level secondary labels cannot re-enter the implicit abstract fallback',()=>{
+ for(const publisher of ['IEEE','Wiley','Science'])for(const tag of ['p','div'])for(const label of ['References','Bibliography','Related Articles']){
+  const p=paper(publisher,`<${tag}>${label}</${tag}><h3>Abstract</h3><p>${foreign}</p>`);
+  assert.equal(p.abstract,null,publisher+' '+tag+' '+label);assert.equal(p.provenance.abstract,null);
+ }
+ for(const publisher of ['IEEE','Wiley','Science']){
+  assert.equal(paper(publisher,`<div><h3>Abstract</h3><p>${foreign}</p></div>`).abstract,null,publisher+' nested label');
+  for(const label of ['References','Bibliography','Related Articles']){
+   const xml=`<feed><entry><title>Synthetic transistor transport study</title><link href="https://doi.org/10.9999/rss-boundary"/><summary type="text">${label}\nAbstract: ${foreign}</summary></entry></feed>`;
+   const p=parsePublisherRSS(xml,RESEARCH_SOURCES.find(s=>s.publisher===publisher)!)[0]!;
+   assert.equal(p.abstract,null,publisher+' Atom '+label);assert.equal(p.provenance.abstract,null);
+  }
+ }
+});
+
+test('RSS labelled abstracts stop before every following heading level',()=>{
+ for(const publisher of ['IEEE','Wiley'])for(const tag of ['h1','h2','h3','h4','h5','h6'])for(const label of ['Introduction','Other Paper']){
+  assert.equal(paper(publisher,`<h3>Abstract</h3><p>${primary}</p><${tag}>${label}</${tag}><p>${foreign}</p>`).abstract,primary,publisher+' '+tag+' '+label);
+ }
+});
+
+test('RSS nested secondary labels and mixed Atom text cannot lend foreign content',()=>{
+ for(const publisher of ['IEEE','Wiley','Science'])for(const tag of ['p','div','span'])for(const label of ['References','Bibliography','Related Articles']){
+  const nested=`<div><${tag}>${label}</${tag}><p>${foreign}</p></div>`;
+  assert.equal(paper(publisher,nested).abstract,null,publisher+' nested '+tag+' '+label);
+  if(publisher!=='Science')assert.equal(paper(publisher,`<h3>Abstract</h3><p>${primary}</p>${nested}`).abstract,primary);
+  assert.equal(paper(publisher,`<section id="abstract"><h2>Abstract</h2><p>${primary}</p>${nested}</section>`).abstract,null);
+  for(const separator of [':\n','\n']){
+   const xml=`<feed><entry><title>Synthetic transistor transport study</title><link href="https://doi.org/10.9999/rss-boundary"/><summary type="text">Abstract: ${primary}\n${label}${separator}${foreign}</summary></entry></feed>`;
+   const p=parsePublisherRSS(xml,RESEARCH_SOURCES.find(s=>s.publisher===publisher)!)[0]!;
+   assert.equal(p.abstract,null,publisher+' mixed Atom '+label);assert.equal(p.provenance.abstract,null);
+  }
+ }
+});
+
+test('Atom scientific related/highlights wording is not a secondary section label',()=>{
+ for(const publisher of ['IEEE','Wiley'])for(const wording of ['The current is related to trap density.','The model highlights a reproducible dependence.']){
+  const text=primary+' '+wording;
+  const xml=`<feed><entry><title>Synthetic transistor transport study</title><link href="https://doi.org/10.9999/rss-boundary"/><summary type="text">Abstract: ${text}</summary></entry></feed>`;
+  assert.equal(parsePublisherRSS(xml,RESEARCH_SOURCES.find(s=>s.publisher===publisher)!)[0]!.abstract,text);
+  for(const label of ['Related:','Highlights:'])assert.equal(parsePublisherRSS(xml.replace(text,text+' '+label+' '+foreign),RESEARCH_SOURCES.find(s=>s.publisher===publisher)!)[0]!.abstract,null);
+ }
+});
