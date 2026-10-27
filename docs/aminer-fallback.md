@@ -41,3 +41,10 @@
 运行文件：`sites/aminer/{api,auth,domain,provider,settings}.ts`、`sites/research-aminer.ts`、`sites/{api,research,research-enrichment,research-metadata-targeted}.ts`；UI 为 `AMinerSettings.tsx`、`AMinerAbstractEvidence.tsx`、`lib/aminer-abstract-evidence.ts`、`routes/{ai-settings,research-paper}.tsx` 及设置页内容版本。同步本说明和 changelog 新条目。外层采集脚本、原 cron/manifest、密钥、预算和访问范围不变。
 
 发布由父任务官方 Sites 流程执行，先提交再 clean build/release guard，迁移后回读真实 source SHA/发布 succeeded。只验设置 hasKey=false、enabled=false、remainingCalls=0 及旧流程不退化；不得借验收开关、创建 grant、测试真实搜索或补全。真实 AMiner 信息增益仍待未来凭证、用途许可、费用授权和小样本验收；离线 mock 增益不代表生产增益。
+
+
+## 撤回许可与原子写入复核
+
+成功响应中的 API Key、JWT、AMiner user_id（包括字段名及 URL 编码）反射都会拒绝，不缓存为论文。响应回执完成采用原配置 revision、enabled、data_use_authorized 的数据库条件更新；缓存重核验也再次检查当前许可。最终 paper、research_records 及后续变更/快照写入在同一原子事务内按持久详情回执和授权 revision 加条件，许可在 BEGIN 前撤回也不能写正文。普通队列停止该项、保持原无摘要 paper_json 并记录终态，不标 done。
+
+撤回数据使用许可与改设置在同一事务清除该 owner 的提供方回执正文，保留费用预占、操作 fingerprint/ID、状态和不重放墓碑；不自动退款、重搜或改写既有历史论文/冻结简报。单纯预算撤销不等于撤回数据许可：它递增配置版本阻断旧授权，本实现也保守拒绝版本变化中的新正文，但不会凭此删除先前合法缓存。首次 429 进入冷却；以后读取已确定失败的同一回执转终态，不永久 deferred，也不清墓碑换新付费操作。

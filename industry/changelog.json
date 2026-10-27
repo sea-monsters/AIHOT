@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-27T15:18:58Z",
+  "latestVersion": "2026-10-27T15:48:47Z",
   "releases": [
+    {
+      "id": "hkis-aminer-authorization-atomic-write-20261027",
+      "at": "2026-10-27T15:48:47Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "阻断AMiner撤许可竞态与私人账户标识反射",
+      "body": [
+        "成功响应同时屏蔽Key、JWT和AMiner user_id反射；回执缓存及论文、来源记录最终事务受原配置版本、启用和数据许可约束，撤回后保留费用预占与墓碑、不缓存新正文。",
+        "覆盖在途响应、fresh/cached定向写入及普通队列最终事务竞态，拒绝后不标新增摘要或done，不改冻结证据；已确定的429失败回执再次处理转终态，不重发或永久pending。"
+      ],
+      "sources": [
+        {
+          "label": "许可撤回、回执与最终写入边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/aminer-fallback.md"
+        }
+      ]
+    },
     {
       "id": "hkis-aminer-official-fallback-preparation-20261027",
       "at": "2026-10-27T15:18:58Z",
