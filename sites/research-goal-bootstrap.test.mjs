@@ -51,6 +51,7 @@ const fixtureResponse=async(input,options)=>{
   if(spec.manifestMs)clock+=spec.manifestMs;
   return Response.json(description,{headers:replyHeaders});
  }
+ if(path===serverContract.RUNTIME_READBACK_PATH)return Response.json({status:'ok',readbackContract:'collection-readback-v1',known:false},{headers:replyHeaders});
  assert.equal(method,'POST');
  for(const name of Object.values(serverContract.RUNTIME_HEADERS))assert.ok(headers.get(name),'required frozen proof');
  assert.equal(headers.get('x-hkis-bootstrap-source'),spec.expectedPin);
@@ -186,7 +187,10 @@ test('every actual AM/PM POST unknown stops immediately with no replay or second
   const phase=last.path.endsWith('/scoring')?(last.body.maxPapers===0?'local':'paid'):last.path.split('/').at(-1);assert.equal(phase,fail);
   assert.equal(last.injectedFailure,failureKind);assert.equal(sequence.filter(request=>request.injectedFailure).length,1);
   assert.equal(new Set(sequence.map(request=>request.operationId)).size,sequence.length,'no operation is replayed');
-  assert.equal(result.stats.requests.filter(request=>request.method==='GET').length,1);
+  const reads=result.stats.requests.filter(request=>request.method==='GET');
+  assert.equal(reads.filter(request=>request.path.endsWith('/manifest')).length,1,'never refreeze after unknown POST');
+  const boundRead=fail==='collect';assert.equal(reads.length,boundRead?2:1,slot+'/'+fail+'/'+failureKind);
+  if(boundRead)assert.equal(reads.at(-1).path,'/api/hkis/runtime/v1/readback');
  }
 });
 test('wrong previous-cohort echoes stop instead of spending on a different metadata/scoring/daily target',async()=>{

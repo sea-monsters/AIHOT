@@ -57,7 +57,7 @@ export async function planMetadataQueue(db:any,incoming:Paper,scopePending=false
   // its original discovery key as a durable alias, including captured RSS
   // replay after interruption; never lose the paid-attempt tombstone.
   if(!previous&&lookupKey.startsWith('id:')){
-   const aliases=(await db.prepare("SELECT * FROM research_enrichment_queue WHERE source_id=? AND (json_extract(provider_json,'$.anysearch.originKey')=? OR json_extract(provider_json,'$.aminer.originKey')=?) LIMIT 2").bind(incoming.sourceId,lookupKey,lookupKey).all()).results;
+   const aliases=typeof db.findMetadataAliases==='function'?await db.findMetadataAliases(incoming.sourceId,lookupKey):(await db.prepare("SELECT * FROM research_enrichment_queue WHERE source_id=? AND (json_extract(provider_json,'$.anysearch.originKey')=? OR json_extract(provider_json,'$.aminer.originKey')=?) LIMIT 2").bind(incoming.sourceId,lookupKey,lookupKey).all()).results;
    if(aliases.length>1)throw new AIError('record_conflict',409,'发现标识对应多个补全记录，保留已有证据');previous=aliases[0]||null;
   }
   const priorPaper=previous?parse(previous.paper_json,null):null;const p=priorPaper?mergeCandidate(incoming,priorPaper):incoming;

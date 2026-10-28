@@ -3,6 +3,7 @@
 export const RUNTIME_CONTRACT='hkis-runtime-v1';
 export const RUNTIME_ROOT='/api/hkis/runtime/v1';
 export const RUNTIME_MANIFEST_PATH=RUNTIME_ROOT+'/manifest';
+export const RUNTIME_READBACK_PATH=RUNTIME_ROOT+'/readback';
 export const RUNTIME_CAPABILITIES=['frozen-writes-v1','bounded-collection-v1','scheduled-cohorts-v1','unknown-stop-v1','collection-first-v1'] as const;
 export const RUNTIME_CODES=['runtime_manifest_invalid','runtime_protocol_unsupported','runtime_capability_unsupported','runtime_budget_invalid','runtime_freeze_required','runtime_changed','runtime_expired','runtime_operation_rejected','runtime_disabled','runtime_source_unavailable','runtime_goal_changed'] as const;
 export const RUNTIME_PATHS:Record<string,string>={

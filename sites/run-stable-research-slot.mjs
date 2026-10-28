@@ -16,6 +16,18 @@ function privateInput(){return new Promise((resolve,reject)=>{
  const timer=setTimeout(()=>{cleanup();text='';reject(Object.assign(Error(),{code:'stdin_timeout'}))},30000);
  process.stdin.on('data',data);process.stdin.on('end',end);process.stdin.on('error',error);
 })}
+export async function waitForWriteWindow(slot,started,budgetMs,{now=Date.now,wait=ms=>new Promise(resolve=>setTimeout(resolve,ms)),onWait=()=>{}}={}){
+ const fail=code=>{throw Object.assign(Error('Write window unavailable'),{code})};
+ if(![8,20].includes(slot))fail('batch_window');const first=now(),local=new Date(first+8*3600000);
+ if(local.getUTCHours()===slot)return {waitedMs:0};
+ const target=new Date(local);target.setUTCHours(slot,0,0,0);const targetAt=target.getTime()-8*3600000,lead=targetAt-first;
+ if(lead<=0||lead>300000)fail('batch_window');
+ // Waiting spends the original 540s. Reserve manifest15 + core105, without resetting its clock.
+ if(targetAt-started>budgetMs-120000)fail('automation_budget_exhausted');
+ let last=first;while(now()<targetAt){const clock=now();if(clock<last)fail('batch_window');if(clock-started>=budgetMs-120000)fail('automation_budget_exhausted');const left=targetAt-clock;onWait({targetAt:new Date(targetAt).toISOString(),waitRemainingMs:left,remainingMs:Math.max(0,budgetMs-(clock-started))});await wait(Math.min(30000,left));const after=now();if(after<=clock)fail('batch_window');last=after;}
+ if(new Date(now()+8*3600000).getUTCHours()!==slot||now()-started>=budgetMs-15000)fail('batch_window');
+ return {waitedMs:Math.max(0,now()-first)};
+}
 export async function privateStableSlotMain(){
  const processStarted=Date.now(),automationId=crypto.randomUUID(),bootstrapSource=checkoutSource(),events=[];
  let input=null,stage='stdin',postsAttempted=0,requestsAttempted=0;
@@ -31,13 +43,13 @@ export async function privateStableSlotMain(){
   if(typeof globalThis.fetch!=='function'||Number(process.versions.node.split('.')[0])<24)fail('runtime_capability_missing');
   if(!runtimeSource(input.expectedBootstrapSource)||input.expectedBootstrapSource!==bootstrapSource)fail('runner_source_mismatch');
   if(input.diagnosticOnly!==undefined&&typeof input.diagnosticOnly!=='boolean')fail('invalid_input');
-  const slot=input.slot,hour=new Date(Date.now()+8*3600000).getUTCHours();
-  if(![8,20].includes(slot)||!input.diagnosticOnly&&slot!==hour)fail('batch_window');
+  const slot=input.slot;if(![8,20].includes(slot))fail('batch_window');
   const started=Date.parse(input.automationStartedAt);
   if(!Number.isFinite(started)||new Date(started).toISOString()!==input.automationStartedAt||started>processStarted)fail('invalid_automation_start');
   const budgetMs=input.budgetMs===undefined?RUNTIME_CEILINGS.totalMs:input.budgetMs,collectionCalls=input.collectionCalls===undefined?RUNTIME_CEILINGS.collectionCalls:input.collectionCalls;
   if(budgetMs!==RUNTIME_CEILINGS.totalMs||collectionCalls!==RUNTIME_CEILINGS.collectionCalls)fail('runtime_budget_invalid');
   if(Date.now()-started>=budgetMs-15000)fail('automation_budget_exhausted');
+  if(!input.diagnosticOnly)await waitForWriteWindow(slot,started,budgetMs,{onWait:e=>emit({phase:'preflight',state:'waiting',code:'waiting_for_window',...e})});
   const onDiagnostic=e=>{if(e.state==='started'){requestsAttempted++;if(e.method==='POST')postsAttempted++}emit(e)};
   const probe=await createResearchClient(origin,input.token,{automationId,onDiagnostic})(RUNTIME_MANIFEST_PATH,undefined,Math.min(15000,budgetMs-(Date.now()-started)));
   if(probe.status!=='ok'||probe.diagnostic?.applicationReached!==true||probe.diagnostic.runtimeContract!==RUNTIME_CONTRACT)fail('server_contract_unconfirmed');

@@ -1,8 +1,27 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-27T16:13:31Z",
+  "latestVersion": "2026-10-28T13:59:11Z",
   "releases": [
+    {
+      "id": "hkis-collection-cache-window-readback-20261028",
+      "at": "2026-10-28T13:59:11Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "修复采集缓存退化并限定未知请求的安全收尾",
+      "body": [
+        "双provider稳定标识预载恢复有界数据库读取，保留付费尝试墓碑、冲突拒绝和原始归属。",
+        "提前触发仅在指定窗口前安全等待，仍计原540秒；缺少应用证明的503不再误报版本切换。",
+        "未知collect仅查询本次冻结操作，证据明确结束且无活跃工作才允许既有本地finish，不重发collect或启动付费阶段。",
+        "需分别更新Site API和bootstrap pin，并通过隔离云端全链路验收后发布；本条不表示生产已更新，不恢复历史中断批次。"
+      ],
+      "sources": [
+        {
+          "label": "修复边界、版本矩阵及云端验收",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/collection-blockage-fix.md"
+        }
+      ]
+    },
     {
       "id": "hkis-aminer-new-membership-authorization-20261027",
       "at": "2026-10-27T16:13:31Z",

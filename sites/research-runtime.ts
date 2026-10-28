@@ -1,3 +1,4 @@
+import {collectionReadback} from './research-readback.ts';
 import {frozenRuntimeBudget,assertRuntimeBudget} from './research-runtime-budget.ts';
 import {AIError,owner,readBody} from './ai/security.ts';
 import {researchApi} from './research.ts';
@@ -6,7 +7,7 @@ import {writeLog} from './runtime-logs.ts';
 import {recordRunPlan,assertMaintenanceTarget} from './research-run-plan.ts';
 import {reportDay} from './research-cohorts.ts';
 import {briefApi} from './research-briefs.ts';
-import {RUNTIME_CONTRACT,RUNTIME_MANIFEST_PATH,RUNTIME_PATHS,RUNTIME_HEADERS,RuntimeContractError,runtimeDescription,validateFrozenRuntime,runtimeOperationBody} from './research-runtime-contract.ts';
+import {RUNTIME_CONTRACT,RUNTIME_MANIFEST_PATH,RUNTIME_READBACK_PATH,RUNTIME_PATHS,RUNTIME_HEADERS,RuntimeContractError,runtimeDescription,validateFrozenRuntime,runtimeOperationBody} from './research-runtime-contract.ts';
 
 // Service access is authenticated by the private Sites dispatcher, exactly as
 // for the existing scheduled API. Dispatch consumes the service header and
@@ -31,12 +32,13 @@ export async function researchRuntimeApi(request:Request,env:any){
  };
  try{
   runtimeOwner(request,env);
-  if(url.search||url.hash)throw new RuntimeContractError('runtime_operation_rejected');
+  if(url.hash||url.search&&url.pathname!==RUNTIME_READBACK_PATH)throw new RuntimeContractError('runtime_operation_rejected');
   const path=Object.entries(RUNTIME_PATHS).find(([,runtime])=>runtime===url.pathname)?.[0];
   if(url.pathname===RUNTIME_MANIFEST_PATH){
    if(request.method!=='GET')return respond({code:'method_not_allowed'},405);
    description=await runtimeDescription(revision);return respond(description);
   }
+  if(url.pathname===RUNTIME_READBACK_PATH){if(request.method!=='GET')return respond({code:'method_not_allowed'},405);description=await runtimeDescription(revision);const frozen=await validateFrozenRuntime(request,revision);return respond(await collectionReadback(env.DB,url.searchParams,frozen,automationId));}
   if(!path)return respond({code:'not_found'},404);
   if(request.method!=='POST')return respond({code:'method_not_allowed'},405);
   // No initialization, reconciliation, D1 log or provider call precedes this.

@@ -1,4 +1,4 @@
-import {validateRuntimeManifest} from './research-runtime-contract.ts';
+import {validateRuntimeManifest,RUNTIME_READBACK_PATH} from './research-runtime-contract.ts';
 export const SLOT_LIMITS={totalMs:540000,collection8Ms:260000,collection20Ms:330000,longRequestReserveMs:110000,collectionSliceMs:75000,collectionCalls:35,collectionConcurrency:3,localScoringMinMs:30000,paidScoringMinMs:120000};
 const safeOperationId=(v:any)=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)?v.toLowerCase():null;
 type Call=(path:string,body?:any,timeoutMs?:number)=>Promise<any>;
@@ -133,14 +133,33 @@ async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started
  const deadline=Math.min(started+limits.totalMs-2000,localEnd.getTime()-8*3600000),remaining=()=>Math.max(0,deadline-now()),today=new Date(started+8*3600000).toISOString().slice(0,10);
  const steps:any[]=[],goals:any=Object.fromEntries(['collection','metadata_current','rules_current','metadata_previous','rules_previous','assessment','daily','brief'].map(k=>[k,{status:'pending',reason:null,sourceDay:k.endsWith('_current')?today:null,reportDate:null}]));
  if(slot===20)for(const k of ['metadata_previous','rules_previous','daily'])goals[k]={status:'not_due',reason:'not_due',sourceDay:null,reportDate:null};
- let batchKey:string|null=null,preparationMs=0,collectionBudgetMs=0,collectionDeadline=0,collectionStoppedAt:number|null=null,collectionCalls=0,collectionRequests=0,collectionCallsKnown=true,collectionStopReason:string|null=null,coverage=coverageEvidence(null),target:any=null;
+ let batchKey:string|null=null,preparationMs=0,collectionBudgetMs=0,collectionDeadline=0,collectionStoppedAt:number|null=null,collectionCalls=0,collectionRequests=0,collectionCallsKnown=true,collectionStopReason:string|null=null,coverage=coverageEvidence(null),target:any=null,collectionReadback:any=null;
  const mark=(key:string,status:string,reason:any=null)=>Object.assign(goals[key],{status,reason});
- const outcome=(status:string,reason:any=null)=>{for(const [key,g] of Object.entries(goals) as any){if(g.status==='pending'){g.status='deferred';g.reason=['unknown','blocked'].includes(status)?'not_dispatched_after_stop':key==='collection'?'core_not_started':'maintenance_budget'}g.nextAction??=['unknown','blocked'].includes(g.status)?'review_committed_state':['partial','deferred'].includes(g.status)?'next_scheduled_window':g.status==='external'?'separate_authorized_workflow':'none'}return {status,reason,batchKey,preparationMs,collectionBudgetMs,collectionContract:'bounded-v1',collectionCalls:collectionCallsKnown?collectionCalls:null,collectionRequests,remainingCollectionCalls:collectionCallsKnown?limits.collectionCalls-collectionCalls:null,remainingCollectionMs:Math.max(0,collectionDeadline-(collectionStoppedAt??now())),collectionStopReason,coverageStatus:coverage.status,coverage,elapsedMs:now()-started,remainingMs:remaining(),goals,steps}};
+ const outcome=(status:string,reason:any=null)=>{for(const [key,g] of Object.entries(goals) as any){if(g.status==='pending'){g.status='deferred';g.reason=['unknown','blocked'].includes(status)?'not_dispatched_after_stop':key==='collection'?'core_not_started':'maintenance_budget'}g.nextAction??=['unknown','blocked'].includes(g.status)?'review_committed_state':['partial','deferred'].includes(g.status)?'next_scheduled_window':g.status==='external'?'separate_authorized_workflow':'none'}return {status,reason,batchKey,preparationMs,collectionBudgetMs,collectionContract:'bounded-v1',collectionCalls:collectionCallsKnown?collectionCalls:null,collectionRequests,remainingCollectionCalls:collectionCallsKnown?limits.collectionCalls-collectionCalls:null,remainingCollectionMs:Math.max(0,collectionDeadline-(collectionStoppedAt??now())),collectionStopReason,coverageStatus:coverage.status,coverage,elapsedMs:now()-started,remainingMs:remaining(),collectionReadback,goals,steps}};
  const invoke=async(phase:string,path:string,body:any,limit:number)=>{
   if(remaining()<=0){steps.push({phase,status:'deferred',reason:'deadline'});return {status:'deferred',reason:'deadline'};}
   const at=now();let v:any;try{v=await call(path,body,Math.max(1,Math.min(limit,remaining())))}catch{v={status:'unknown',reason:'response_unconfirmed'}}
   steps.push({phase,status:v?.status||v?.batchStatus||(v?.brief?'ok':'unknown'),reason:v?.reason||reasonOf(v),blocked:v?.blocked||null,cohort:body?.cohort||null,startedMs:at-started,endedMs:now()-started,runId:v?.runId,requestId:v?.requestId,sentRequestId:v?.sentRequestId,operationIdMismatch:v?.operationIdMismatch===true,...Object.fromEntries(['ready','abstained','deferred','scopePending','remainingQueued','remainingMetadata','attempted','reservedUnsent'].map(k=>[k,v?.[k]??null]))});
   return v;
+ };
+ const readbackUnknownCollect=async(v:any)=>{
+  collectionCallsKnown=false;collectionStoppedAt=now();collectionStopReason='outcome_unknown';mark('collection','unknown','collection_contract_unconfirmed');
+  const operationId=safeOperationId(v?.sentRequestId);
+  if(!operationId||v?.operationIdMismatch||v?.diagnostic?.code==='runtime_changed'||remaining()<3000)return outcome('unknown','collection_outcome_unknown_do_not_finish_in_flight');
+  const read=await invoke('collection_readback',RUNTIME_READBACK_PATH+'?batchKey='+encodeURIComponent(batchKey!)+'&operationId='+operationId,undefined,Math.min(15000,remaining()-1000));
+  if(read?.status!=='ok'||read.readbackContract!=='collection-readback-v1'||read.batchKey!==batchKey||read.operationId!==operationId||read.known!==true){collectionReadback={known:false,operationId,conclusion:'not_confirmed',mayFinish:false};return outcome('unknown','collection_readback_unconfirmed')}
+  collectionReadback={known:true,operationId,conclusion:read.conclusion,mayFinish:read.mayFinish===true,batchStatus:read.batch?.batchStatus,pendingItems:read.work?.pendingItems,pendingRecords:read.work?.pendingRecords,active:read.work?.active===true};
+  if(read.conclusion==='terminal'&&['finished','interrupted'].includes(read.batch?.batchStatus)){mark('collection','partial','collection_response_reconciled');return outcome('partial','collection_response_reconciled')}
+  if(read.conclusion!=='settled'||read.mayFinish!==true){mark('collection','unknown',read.conclusion==='in_flight'?'collection_readback_in_flight':'collection_readback_needs_review');return outcome('unknown',read.conclusion==='in_flight'?'collection_readback_in_flight':'collection_readback_needs_review')}
+  // The original collect is never replayed. Only a proved-settled operation
+  // permits the existing bounded local finish; optional/paid stages remain stopped.
+  let finish:any=null;for(let slice=0;slice<4;slice++){
+   if(remaining()<15000)return outcome('unknown','collection_finish_unconfirmed');
+   finish=await invoke('finish','/api/site/research/batch/finish',{batchKey,maxMs:Math.min(6000,remaining()-3000),deadlineAt:new Date(deadline).toISOString()},15000);const p=finish?.recovery;
+   if(finish?.code!=='ingestion_pending'||p?.known!==true||p?.confirmed!==true||!Number.isInteger(p.processedItems)||p.processedItems<=0||!Number.isInteger(p.remainingItems)||p.remainingItems<=0)break;
+  }
+  if(!finish||goalBarrier(finish)||finish.batchStatus!=='finished')return outcome('unknown','collection_finish_unconfirmed');
+  coverage=coverageEvidence(finish);mark('collection','partial','collection_response_reconciled');return outcome('partial','collection_response_reconciled');
  };
  const recover=async()=>{for(let slice=0;slice<4;slice++){
   if(remaining()<15000)return {status:'deferred',reason:'deadline'};
@@ -179,7 +198,7 @@ async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started
    const maxMs=Math.min(limits.collectionSliceMs,left-15000),maxCalls=limits.collectionCalls-collectionCalls;collectionRequests++;
    const v=await invoke('collection','/api/site/research/batch/collect',{batchKey,maxMs,maxCalls,concurrency:limits.collectionConcurrency},maxMs+15000);
    if(!v||v.status==='unknown'||v.batchKey!==batchKey||!Array.isArray(v.results)||!Number.isInteger(v.calls)||v.calls<0||v.calls>maxCalls||v.calls!==v.results.length||!v.collectionControl||typeof v.collectionControl.stop!=='boolean'||typeof v.stopReason!=='string'){
-    collectionCallsKnown=false;mark('collection','unknown','collection_contract_unconfirmed');return outcome('unknown','collection_outcome_unknown_do_not_finish_in_flight');
+    return readbackUnknownCollect(v);
    }
    collectionCalls+=v.calls;
    if(v.results.some((r:any)=>!r||r.status==='unknown')){mark('collection','unknown','collection_interrupted_readback_reconcile');return outcome('unknown','collection_interrupted_readback_reconcile')}

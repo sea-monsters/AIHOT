@@ -15,8 +15,10 @@ const harness=join(root,'harness.mjs');
 await writeFile(harness,`
 import {privateStableSlotMain} from ${JSON.stringify(pathToFileURL(join(repo,'sites/run-stable-research-slot.mjs')).href)};
 import {runtimeDescription,RUNTIME_CONTRACT,RUNTIME_HEADERS,RUNTIME_MANIFEST_PATH} from ${JSON.stringify(pathToFileURL(join(repo,'sites/research-runtime-contract.ts')).href)};
-Date.now=()=>Date.parse('2026-10-24T12:00:00.000Z');
-const scenario=process.argv[2];let attempts=0,posts=0,frozenWrites=0;const source='a'.repeat(40),description=await runtimeDescription(source);
+const scenario=process.argv[2];let clock=Date.parse(scenario==='early'?'2026-10-24T11:57:55.000Z':'2026-10-24T12:00:00.000Z');Date.now=()=>clock;
+// Advance only the wait timers installed after stdin arrives; input timeout remains real.
+if(scenario==='early')process.stdin.once('data',()=>{const nativeTimeout=globalThis.setTimeout;globalThis.setTimeout=(fn,ms,...args)=>nativeTimeout(()=>{clock+=ms;fn(...args)},1)});
+let attempts=0,posts=0,frozenWrites=0;const source='a'.repeat(40),description=await runtimeDescription(source);
 if(scenario==='major')description.manifest.protocolMajor=2;
 if(scenario==='capability')description.manifest.requiredCapabilities.push('execute-remote-code');
 if(scenario==='extra')description.manifest.runnerUrl='https://evil.invalid/payload.mjs';
@@ -25,7 +27,7 @@ if(scenario==='lowbudget')description.manifest.limits.collectionCalls=2;
 if(scenario==='lowtime')description.manifest.limits.totalMs=300000;
 if(scenario==='hash')description.configHash='0'.repeat(64);
 globalThis.fetch=async(url,options)=>{
- attempts++;if(options.method==='POST')posts++;
+ attempts++;if(options.method==='POST')posts++;if(scenario==='early'&&clock<Date.parse('2026-10-24T12:00:00.000Z'))throw Error('HTTP before write window');
  if(new URL(url).origin!=='https://fixture.chatgpt.site'||options.redirect!=='error')throw Error('Transport boundary');
  if(scenario==='old')return new Response('Unsupported',{status:503});
  const headers={'x-hkis-operation-id':options.headers['x-hkis-operation-id'],'x-hkis-automation-id':options.headers['x-hkis-automation-id'],'x-hkis-execution-contract':'hkis-execution-v1','x-hkis-runtime-contract':RUNTIME_CONTRACT,'x-hkis-config-hash':description.configHash,'x-hkis-source-revision':source};
@@ -60,3 +62,9 @@ test('foreign origins, missing credentials, unpinned bootstrap and task budget i
  for(const [input,code] of [[{baseUrl:'https://evil.invalid'},'invalid_site_origin'],[{token:''},'service_access_missing'],[{expectedBootstrapSource:'0'.repeat(40)},'runner_source_mismatch'],[{budgetMs:540001},'runtime_budget_invalid'],[{collectionCalls:36},'runtime_budget_invalid'],[{collectionCalls:2},'runtime_budget_invalid'],[{budgetMs:300000},'runtime_budget_invalid'],[{budgetMs:null},'runtime_budget_invalid'],[{collectionCalls:null},'runtime_budget_invalid'],[{expectedSiteSource:'a'.repeat(40)},'invalid_input']]){const r=await run('normal',input);assert.equal(r.code,2);assert.equal(r.stats.attempts,0);assert.equal(r.events.at(-1).code,code)}
 });
 test('diagnostic-only bootstrap performs exactly one authenticated GET and never probes write capability',async()=>{const r=await run('normal',{diagnosticOnly:true});assert.equal(r.code,0);assert.deepEqual(r.stats,{attempts:1,posts:0,frozenWrites:0});assert.ok(r.out.includes('"postCapabilityVerified":false'))});
+
+test('19:57:55 trigger waits before all HTTP and retains its original frozen start and 540-second budget',async()=>{
+ const r=await run('early',{automationStartedAt:'2026-10-24T11:57:55.000Z'});assert.equal(r.code,0);assert.equal(r.stats.posts,6);
+ assert.ok(r.events.some(e=>e.code==='waiting_for_window'&&e.waitRemainingMs===125000&&e.remainingMs===540000));
+ const frozen=r.events.find(e=>e.state==='frozen');assert.equal(frozen.startedAt,'2026-10-24T11:57:55.000Z');assert.equal(frozen.effectiveLimits.totalMs,540000);
+});

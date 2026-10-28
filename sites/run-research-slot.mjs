@@ -1,4 +1,4 @@
-import {RUNTIME_CODES,RUNTIME_PATHS,RUNTIME_HEADERS,RUNTIME_CONTRACT,runtimeHash,frozenRuntimeHeaders} from './research-runtime-contract.ts';
+import {RUNTIME_CODES,RUNTIME_PATHS,RUNTIME_READBACK_PATH,RUNTIME_HEADERS,RUNTIME_CONTRACT,runtimeHash,frozenRuntimeHeaders} from './research-runtime-contract.ts';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {EXECUTION_CONTRACT,RUNNER_VERSION,executionRoutes,diagnosticId,sourceRevision,diagnosticCode,diagnosticCount,safeSlotResult} from './research-diagnostics.ts';
@@ -24,9 +24,9 @@ export function createResearchClient(origin,token,options={}){
   const id=crypto.randomUUID(),method=body===undefined?'GET':'POST',route=typeof path==='string'?path.split('?')[0]:'',started=now(),base={requestId:id,method,path:Object.hasOwn(executionRoutes,route)?route:null,phase:executionRoutes[route]||'other'};
   if(!Object.hasOwn(executionRoutes,route)||path.includes('#')||body!==undefined&&path.includes('?')){emit({...base,state:'not_dispatched',code:'request_path_rejected'});return {status:'deferred',code:'request_path_rejected',requestId:id,sentRequestId:null};}
   if(typeof globalThis.fetch!=='function'){emit({...base,state:'not_dispatched',code:'runtime_capability_missing'});return {status:'deferred',code:'runtime_capability_missing',requestId:id,sentRequestId:null};}
-  const frozen=options.runtime;
-  if(frozen&&(!Object.hasOwn(RUNTIME_PATHS,route)||now()>=Date.parse(frozen.startedAt)+frozen.manifest.limits.totalMs)){const code=Object.hasOwn(RUNTIME_PATHS,route)?'runtime_expired':'request_path_rejected';emit({...base,state:'not_dispatched',code});return {status:'deferred',code};}
-  const transportPath=frozen?RUNTIME_PATHS[route]:path,actualTimeout=frozen?Math.max(1,Math.min(timeoutMs,Date.parse(frozen.startedAt)+frozen.manifest.limits.totalMs-now())):timeoutMs;
+  const frozen=options.runtime,readback=route===RUNTIME_READBACK_PATH&&body===undefined;
+  if(frozen&&(!Object.hasOwn(RUNTIME_PATHS,route)&&!readback||now()>=Date.parse(frozen.startedAt)+frozen.manifest.limits.totalMs)){const code=Object.hasOwn(RUNTIME_PATHS,route)||readback?'runtime_expired':'request_path_rejected';emit({...base,state:'not_dispatched',code});return {status:'deferred',code};}
+  const transportPath=frozen&&!readback?RUNTIME_PATHS[route]:path,actualTimeout=frozen?Math.max(1,Math.min(timeoutMs,Date.parse(frozen.startedAt)+frozen.manifest.limits.totalMs-now())):timeoutMs;
   emit({...base,state:'started',at:new Date(started).toISOString()});
   let response=null,applicationReached=false;
   try{
@@ -37,7 +37,8 @@ export function createResearchClient(origin,token,options={}){
    const runtimeMatched=!frozen||response.headers.get('x-hkis-runtime-contract')===RUNTIME_CONTRACT&&response.headers.get('x-hkis-config-hash')===frozen.configHash&&response.headers.get('x-hkis-source-revision')===frozen.sourceRevision;
    const result=applicationReached&&runtimeMatched?await slotOutcome(response,route):{status:'unknown',reason:'response_unconfirmed'};
    if(!applicationReached||!runtimeMatched)try{await response.body?.cancel();}catch{}
-   const responseId=safeOperationId(result.requestId),code=!runtimeMatched?'runtime_changed':!response.ok?(applicationReached?diagnosticCode(result.code||'application_outcome_unknown'):[401,403].includes(response.status)?'http_rejection_unattributed':response.status>=500?'gateway_outcome_unknown':'response_invalid'):!applicationReached?'application_evidence_missing':result.reason==='response_unconfirmed'?'response_invalid':result.status==='unknown'?'application_outcome_unknown':result.code||result.reason||result.blocked||null;
+   const runtimeProofPresent=applicationReached&&response.headers.get('x-hkis-runtime-contract')===RUNTIME_CONTRACT&&!!runtimeHash(response.headers.get('x-hkis-config-hash'))&&!!sourceRevision(response.headers.get('x-hkis-source-revision'));
+   const responseId=safeOperationId(result.requestId),code=runtimeProofPresent&&!runtimeMatched?'runtime_changed':applicationReached&&frozen&&!runtimeProofPresent?'runtime_evidence_missing':!response.ok?(applicationReached?diagnosticCode(result.code||'application_outcome_unknown'):[401,403].includes(response.status)?'http_rejection_unattributed':response.status>=500?'gateway_outcome_unknown':'response_invalid'):!applicationReached?'application_evidence_missing':result.reason==='response_unconfirmed'?'response_invalid':result.status==='unknown'?'application_outcome_unknown':result.code||result.reason||result.blocked||null;
    const diagnostic={...base,state:result.status==='unknown'?'unknown':response.ok?'returned':'rejected',at:new Date(now()).toISOString(),durationMs:diagnosticCount(now()-started),httpStatus:response.status,applicationReached,code:code?diagnosticCode(code):null,sourceRevision:applicationReached?sourceRevision(response.headers.get('x-hkis-source-revision')):null,runtimeContract:applicationReached&&response.headers.get('x-hkis-runtime-contract')===RUNTIME_CONTRACT?RUNTIME_CONTRACT:null,configHash:applicationReached?runtimeHash(response.headers.get('x-hkis-config-hash')):null};
    emit(diagnostic);return {...result,requestId:responseId||id,sentRequestId:id,operationIdMismatch:!!responseId&&responseId!==id,diagnostic};
   }catch(e){
