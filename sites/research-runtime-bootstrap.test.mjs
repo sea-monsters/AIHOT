@@ -17,7 +17,8 @@ import {privateStableSlotMain} from ${JSON.stringify(pathToFileURL(join(repo,'si
 import {runtimeDescription,RUNTIME_CONTRACT,RUNTIME_HEADERS,RUNTIME_MANIFEST_PATH} from ${JSON.stringify(pathToFileURL(join(repo,'sites/research-runtime-contract.ts')).href)};
 const scenario=process.argv[2];let clock=Date.parse(scenario==='early'?'2026-10-24T11:57:55.000Z':'2026-10-24T12:00:00.000Z');Date.now=()=>clock;
 // Advance only the wait timers installed after stdin arrives; input timeout remains real.
-if(scenario==='early')process.stdin.once('data',()=>{const nativeTimeout=globalThis.setTimeout;globalThis.setTimeout=(fn,ms,...args)=>nativeTimeout(()=>{clock+=ms;fn(...args)},1)});
+if(scenario==='early'){const originalEmit=process.stdin.emit;process.stdin.emit=function(event,...values){if(event==='data'){const nativeTimeout=globalThis.setTimeout;globalThis.setTimeout=(fn,ms,...args)=>nativeTimeout(()=>{clock+=ms;fn(...args)},1);process.stdin.emit=originalEmit}return originalEmit.call(this,event,...values)}};
+if(scenario==='early')await new Promise(resolve=>setTimeout(resolve,5)); // asynchronous module setup must not consume stdin
 let attempts=0,posts=0,frozenWrites=0;const source='a'.repeat(40),description=await runtimeDescription(source);
 if(scenario==='major')description.manifest.protocolMajor=2;
 if(scenario==='capability')description.manifest.requiredCapabilities.push('execute-remote-code');
@@ -64,7 +65,7 @@ test('foreign origins, missing credentials, unpinned bootstrap and task budget i
 test('diagnostic-only bootstrap performs exactly one authenticated GET and never probes write capability',async()=>{const r=await run('normal',{diagnosticOnly:true});assert.equal(r.code,0);assert.deepEqual(r.stats,{attempts:1,posts:0,frozenWrites:0});assert.ok(r.out.includes('"postCapabilityVerified":false'))});
 
 test('19:57:55 trigger waits before all HTTP and retains its original frozen start and 540-second budget',async()=>{
- const r=await run('early',{automationStartedAt:'2026-10-24T11:57:55.000Z'});assert.equal(r.code,0);assert.equal(r.stats.posts,6);
+ const r=await run('early',{automationStartedAt:'2026-10-24T11:57:55.000Z'});assert.equal(r.code,0,r.out);assert.equal(r.stats.posts,6);
  assert.ok(r.events.some(e=>e.code==='waiting_for_window'&&e.waitRemainingMs===125000&&e.remainingMs===540000));
  const frozen=r.events.find(e=>e.state==='frozen');assert.equal(frozen.startedAt,'2026-10-24T11:57:55.000Z');assert.equal(frozen.effectiveLimits.totalMs,540000);
 });
