@@ -15,9 +15,9 @@ const harness=join(root,'harness.mjs');
 await writeFile(harness,`
 import {privateStableSlotMain} from ${JSON.stringify(pathToFileURL(join(repo,'sites/run-stable-research-slot.mjs')).href)};
 import {runtimeDescription,RUNTIME_CONTRACT,RUNTIME_HEADERS,RUNTIME_MANIFEST_PATH} from ${JSON.stringify(pathToFileURL(join(repo,'sites/research-runtime-contract.ts')).href)};
-const scenario=process.argv[2];let clock=Date.parse(scenario==='early'?'2026-10-24T11:57:55.000Z':'2026-10-24T12:00:00.000Z');Date.now=()=>clock;
+const scenario=process.argv[2];let clock=Date.parse(scenario==='early'?'2026-10-24T11:57:55.000Z':scenario==='diagnostic_outside_window'?'2026-10-24T13:02:00.000Z':'2026-10-24T12:00:00.000Z');Date.now=()=>clock;
 // Advance only the wait timers installed after stdin arrives; input timeout remains real.
-if(scenario==='early'){const originalEmit=process.stdin.emit;process.stdin.emit=function(event,...values){if(event==='data'){const nativeTimeout=globalThis.setTimeout;globalThis.setTimeout=(fn,ms,...args)=>nativeTimeout(()=>{clock+=ms;fn(...args)},1);process.stdin.emit=originalEmit}return originalEmit.call(this,event,...values)}};
+if(scenario==='early'||scenario==='old'||scenario.startsWith('manifest_')){const originalEmit=process.stdin.emit;process.stdin.emit=function(event,...values){if(event==='data'){const nativeTimeout=globalThis.setTimeout;globalThis.setTimeout=(fn,ms,...args)=>nativeTimeout(()=>{clock+=ms;fn(...args)},1);process.stdin.emit=originalEmit}return originalEmit.call(this,event,...values)}};
 if(scenario==='early')await new Promise(resolve=>setTimeout(resolve,5)); // asynchronous module setup must not consume stdin
 let attempts=0,posts=0,frozenWrites=0;const source='a'.repeat(40),description=await runtimeDescription(source);
 if(scenario==='major')description.manifest.protocolMajor=2;
@@ -32,7 +32,17 @@ globalThis.fetch=async(url,options)=>{
  if(new URL(url).origin!=='https://fixture.chatgpt.site'||options.redirect!=='error')throw Error('Transport boundary');
  if(scenario==='old')return new Response('Unsupported',{status:503});
  const headers={'x-hkis-operation-id':options.headers['x-hkis-operation-id'],'x-hkis-automation-id':options.headers['x-hkis-automation-id'],'x-hkis-execution-contract':'hkis-execution-v1','x-hkis-runtime-contract':RUNTIME_CONTRACT,'x-hkis-config-hash':description.configHash,'x-hkis-source-revision':source};
- if(new URL(url).pathname===RUNTIME_MANIFEST_PATH)return Response.json(description,{headers});
+ if(new URL(url).pathname===RUNTIME_MANIFEST_PATH){
+  if(scenario==='manifest_denied')return new Response('Denied',{status:403});
+  if(scenario==='manifest_timeout_twice'||scenario==='manifest_timeout_then_ok'&&attempts===1){clock+=30000;throw new DOMException('Synthetic timeout','TimeoutError')}
+  if(scenario==='manifest_gateway_then_ok'&&attempts===1){clock+=30000;return new Response('Unattributed gateway',{status:503})}
+  if(scenario==='manifest_slow_success')clock+=25000;
+  if(scenario==='manifest_rollback_success'||scenario==='manifest_rollback_timeout'||scenario==='manifest_rollback_second'&&attempts===2){clock-=60000;if(scenario==='manifest_rollback_timeout')throw new DOMException('Synthetic timeout','TimeoutError')}
+  if(scenario==='manifest_rollback_second'&&attempts===1){clock+=30000;throw new DOMException('Synthetic timeout','TimeoutError')}
+  if(scenario==='manifest_tls')throw Object.assign(new TypeError('Synthetic TLS rejection'),{cause:{code:'CERT_HAS_EXPIRED'}});
+  if(scenario==='manifest_redirect')throw new TypeError('Synthetic redirect rejected');
+  return Response.json(description,{headers});
+ }
  if(options.method==='POST'){
   for(const h of Object.values(RUNTIME_HEADERS))if(!options.headers[h])throw Error('Missing freeze');
   if(options.headers[RUNTIME_HEADERS.bootstrapSource]!==${JSON.stringify(sha)}||options.headers[RUNTIME_HEADERS.sourceRevision]!==source||options.headers['x-hkis-request']!=='1')throw Error('Freeze boundary');frozenWrites++;
@@ -54,7 +64,7 @@ test('pinned clean dependency-free bootstrap freezes the server manifest and car
  const r=await run('normal');assert.equal(r.code,0);assert.equal(r.stats.posts,6);assert.equal(r.stats.frozenWrites,6);assert.ok(r.events.some(v=>v.state==='frozen'&&v.bootstrapSource===sha));assert.ok(!r.out.includes('expectedSiteSource'));
 });
 test('old servers, unknown major/capabilities/fields, excessive budgets and bad hashes stop before POST',async()=>{
- for(const [scenario,code] of [['old','server_contract_unconfirmed'],['major','runtime_protocol_unsupported'],['capability','runtime_capability_unsupported'],['extra','runtime_manifest_invalid'],['budget','runtime_budget_invalid'],['lowbudget','runtime_budget_invalid'],['lowtime','runtime_budget_invalid'],['hash','runtime_manifest_invalid']]){const r=await run(scenario);assert.equal(r.code,2,scenario);assert.equal(r.stats.posts,0,scenario);assert.equal(r.events.at(-1).code,code,scenario)}
+ for(const [scenario,code] of [['old','gateway_outcome_unknown'],['major','runtime_protocol_unsupported'],['capability','runtime_capability_unsupported'],['extra','runtime_manifest_invalid'],['budget','runtime_budget_invalid'],['lowbudget','runtime_budget_invalid'],['lowtime','runtime_budget_invalid'],['hash','runtime_manifest_invalid']]){const r=await run(scenario);assert.equal(r.code,2,scenario);assert.equal(r.stats.posts,0,scenario);assert.equal(r.events.at(-1).code,code,scenario)}
 });
 test('changed deployment or unknown POST ends immediately without replay, finish or new manifest fetch',async()=>{
  for(const scenario of ['changed','unknown']){const r=await run(scenario);assert.equal(r.code,2);assert.deepEqual(r.stats,{attempts:2,posts:1,frozenWrites:1})}
@@ -68,4 +78,19 @@ test('19:57:55 trigger waits before all HTTP and retains its original frozen sta
  const r=await run('early',{automationStartedAt:'2026-10-24T11:57:55.000Z'});assert.equal(r.code,0,r.out);assert.equal(r.stats.posts,6);
  assert.ok(r.events.some(e=>e.code==='waiting_for_window'&&e.waitRemainingMs===125000&&e.remainingMs===540000));
  const frozen=r.events.find(e=>e.state==='frozen');assert.equal(frozen.startedAt,'2026-10-24T11:57:55.000Z');assert.equal(frozen.effectiveLimits.totalMs,540000);
+});
+
+test('pinned bootstrap recovers one transient manifest timeout or gateway failure before the first POST, without renewing the original start',async()=>{
+ for(const scenario of ['manifest_timeout_then_ok','manifest_gateway_then_ok']){const r=await run(scenario);assert.equal(r.code,0,r.out);assert.deepEqual(r.stats,{attempts:8,posts:6,frozenWrites:6});const retry=r.events.find(e=>e.code==='manifest_retry');assert.equal(retry.attempt,2);assert.equal(retry.remainingMs,510000);assert.equal(retry.timeoutMs,30000);const frozen=r.events.find(e=>e.state==='frozen');assert.equal(frozen.startedAt,'2026-10-24T12:00:00.000Z');assert.equal(frozen.effectiveLimits.totalMs,540000)}
+});
+test('manifest recovery exhausted or authentication denied stops before all POST, never creates a third GET',async()=>{
+ for(const [scenario,attempts,code,ms] of [['manifest_timeout_twice',2,'request_timeout',61000],['manifest_denied',1,'http_rejection_unattributed',0],['manifest_tls',1,'transport_failed',0],['manifest_redirect',1,'transport_failed',0]]){const r=await run(scenario);assert.equal(r.code,2);assert.deepEqual(r.stats,{attempts,posts:0,frozenWrites:0});const last=r.events.at(-1);assert.equal(last.code,code);assert.equal(last.manifestAttempts,attempts);if(ms)assert.equal(last.manifestElapsedMs,ms);else assert.ok(last.manifestElapsedMs>=0&&last.manifestElapsedMs<1000);assert.equal(last.manifestFailureCode,code)}
+});
+test('25-second manifest response freezes once and retains the measured preflight in the final report',async()=>{const r=await run('manifest_slow_success');assert.equal(r.code,0,r.out);assert.deepEqual(r.stats,{attempts:7,posts:6,frozenWrites:6});assert.ok(r.out.includes('"manifestPreflight":{"attempts":1,"elapsedMs":25000,"failureCode":null}'));});
+test('out-of-window diagnostics still confirm only GET, never granting scheduled write admission',async()=>{
+ const input={automationStartedAt:'2026-10-24T13:02:00.000Z'},yes=await run('diagnostic_outside_window',{...input,diagnosticOnly:true});assert.equal(yes.code,0,yes.out);assert.deepEqual(yes.stats,{attempts:1,posts:0,frozenWrites:0});
+ const no=await run('diagnostic_outside_window',input);assert.equal(no.code,2);assert.equal(no.events.at(-1).code,'batch_window');assert.deepEqual(no.stats,{attempts:0,posts:0,frozenWrites:0});
+});
+test('clock rollback during either manifest GET emits its direct cause and never freezes or dispatches POST',async()=>{
+ for(const [scenario,attempts] of [['manifest_rollback_success',1],['manifest_rollback_timeout',1],['manifest_rollback_second',2]]){const r=await run(scenario);assert.equal(r.code,2,r.out);assert.deepEqual(r.stats,{attempts,posts:0,frozenWrites:0});const last=r.events.at(-1);assert.equal(last.code,'automation_clock_changed');assert.equal(last.manifestFailureCode,'automation_clock_changed');assert.ok(last.manifestElapsedMs>=0);assert.equal(r.events.some(e=>e.state==='frozen'),false)}
 });

@@ -1,8 +1,135 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-28T13:59:11Z",
+  "latestVersion": "2026-10-31T15:26:35Z",
   "releases": [
+    {
+      "id": "hkis-isolated-evidence-checkpoints-20261031",
+      "at": "2026-10-31T15:26:35Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "隔离测试清理旧模型配置并分阶段保存证据",
+      "body": [
+        "隔离reset同时清理旧ai_settings模拟配置，新增旧配置与FK历史共同存在的回归；不修改生产设置或使用真实密钥。",
+        "driver逐场景原子保存安全的setup、pipeline结果及snapshot字段后再断言，读回或断言失败仍保留已有证据和安全错误记录。",
+        "结果未知时不重发setup、不自动更换generation；本次仍仅测试工具候选，云端验收及发布由授权流程继续。"
+      ],
+      "sources": [
+        {
+          "label": "分阶段证据与隔离配置回归",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/execution-state.md"
+        }
+      ]
+    },
+    {
+      "id": "hkis-isolated-owner-diagnostics-20261031",
+      "at": "2026-10-31T15:00:31Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "对齐隔离绑定并保留安全进程诊断",
+      "body": [
+        "测试核心仅在双隔离guard通过后使用固定synthetic owner配置，不注入用户身份头；本地移除owner binding以匹配实际隔离部署，并核验manifest可用。",
+        "bootstrap缺少终态时保留受控原因码、退出码及输出字节数；拒绝token反射，不回传原始stdout/stderr或任意输出字段。",
+        "本次仅修改隔离夹具、测试工具和文档，生产核心与权限不变；云端结果未知时保持暂停，不重放setup或上线。"
+      ],
+      "sources": [
+        {
+          "label": "隔离绑定与安全bootstrap诊断",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/execution-state.md"
+        }
+      ]
+    },
+    {
+      "id": "hkis-isolated-fixture-reset-20261031",
+      "at": "2026-10-31T14:52:50Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "修正隔离夹具的旧数据清理与错误诊断",
+      "body": [
+        "隔离测试reset在同一事务中先清FK子表、最后清论文，保留外键约束；新增旧论文及读者状态子记录、连续两轮setup回归。",
+        "driver对非JSON夹具响应只保留route与HTTP状态，不回显响应正文，不自动重放setup或替换generation。",
+        "本次仅修改测试夹具、driver和文档，不修改生产采集逻辑，不代表云端已验收或上线。"
+      ],
+      "sources": [
+        {
+          "label": "隔离reset与错误诊断验收",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/execution-state.md"
+        }
+      ]
+    },
+    {
+      "id": "hkis-reconciliation-receipt-review-20261031",
+      "at": "2026-10-31T14:41:50Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "明确等待对账状态并收紧隔离验收",
+      "body": [
+        "已登记且等待对账的批次明确显示等待对账/收尾，避免与执行未登记混淆。",
+        "隔离driver逐场景核验根回执状态、known与结束标记，以及精确finish次数；额外收尾、缺回执或错误终态均使验收失败。",
+        "本次仍为本地候选，保留原预算、调度和冻结数据，真实Sites云验收通过前不推送或上线。"
+      ],
+      "sources": [
+        {
+          "label": "执行证据及严格隔离验收合同",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/execution-state.md"
+        }
+      ]
+    },
+    {
+      "id": "hkis-execution-intent-state-20261031",
+      "at": "2026-10-31T14:28:00Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "关联采集窗口、调用回执与简报状态",
+      "body": [
+        "根请求在实际动作前原子登记意图，重复请求只读回执；登记结果未知时停止派发，已提交的终态回执通过读回核对，不盲重发。",
+        "沿用既有批次、来源租约、冻结证据和后处理待办，新增只读状态投影；区分未登记、执行、覆盖、等待环境或用户及简报发布，没有入口证据时明确调用未知。",
+        "本次为待验收候选，提供隔离Worker/D1故障注入工件；必须完成精确版本的真实隔离Sites云验收才可推送及上线，不改变调度、预算、凭证与权限。"
+      ],
+      "sources": [
+        {
+          "label": "执行证据、幂等边界与云验收说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/execution-state.md"
+        }
+      ]
+    },
+    {
+      "id": "hkis-manifest-clock-fence-20261029",
+      "at": "2026-10-29T13:38:00Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "在manifest读取前后核验时钟和晚到响应",
+      "body": [
+        "修正GET期间时钟倒退可能虚增剩余预算的候选边界；首读成功、首读超时及第二次返回均先验证时钟再决定是否继续。",
+        "以墙上和单调时钟中较大的耗时扣除原预算；达到总截止、跨写窗口或超过单次截止的成功响应不被接受。",
+        "新增三种读取期间倒退及临界晚到回归，异常时保持POST为零；旧候选仍未发布，须通过隔离云验收和原任务合同更新。"
+      ],
+      "sources": [
+        {
+          "label": "读取时钟边界与验证门槛",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/collection-blockage-fix.md"
+        }
+      ]
+    },
+    {
+      "id": "hkis-manifest-read-recovery-20261029",
+      "at": "2026-10-29T12:55:25Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "限定manifest只读恢复并保留直接失败诊断",
+      "body": [
+        "候选bootstrap将首个manifest只读截止从15秒改为30秒，仅明确瞬态错误允许在原540秒内再读一次，保持核心预留和窗口限制。",
+        "鉴权拒绝、TLS、重定向、无效manifest与未知POST不重试；终态保留读取次数、耗时和直接失败类别。",
+        "实际manifest分支不访问D1；未将线上超时归因为未经证实的冷启动，也未改预算或权限。",
+        "必须完成隔离云验收、原任务一次读取合同和固定SHA的支持更新后才能使用；本维护记录不表示生产已修复。"
+      ],
+      "sources": [
+        {
+          "label": "读取边界、任务合同和发布门槛",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/collection-blockage-fix.md"
+        }
+      ]
+    },
     {
       "id": "hkis-collection-cache-window-readback-20261028",
       "at": "2026-10-28T13:59:11Z",

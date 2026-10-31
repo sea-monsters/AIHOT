@@ -44,3 +44,27 @@ manifest major、capabilities、config hash 和 540 秒/35 source-call 上限不
 - 回滚与旧/新 API/bootstrap 组合均需实测；关闭测试站外网和付费能力，不使用生产密钥或数据。真实 Sites 网关取消不能用 mock 或 Miniflare 代替；若平台不支持安全注入，明确保留缺口并暂停对应上线结论。
 
 本轮不新增迁移，不改变 D1 schema、凭证、owner 访问、interval、provider 冷却、付费预算或调度。可回滚源码和 bootstrap pin；保留所有已提交论文、回执、captured work 和冻结证据，禁止数据库回滚或自动恢复旧批次。大规模模块解耦另行设计、测试和发布。
+
+## 2026-10-29：冻结前 manifest 首读超时
+
+本次晚批执行记录为首个 manifest GET 在 15 秒超时、应用到达未确认、POST=0；这与此前提前触发、collect 未知响应不同。父端之后的两次只读成功分别耗时约 8.54 秒、18.18 秒，后者已超过旧截止，证明旧截止可能截断可成功读取；不证明 TLS、授权网关、网络、Worker 冷启动中哪个环节导致延迟。
+
+manifest 分支仅做既有私有身份边界检查、源码/配置说明及散列计算，不访问 D1、不初始化研究库、不写日志表、不访问供应商。完整 Worker 仍静态加载共享 API/SSR 模块；仅移动函数中的 DB 初始化无法解决尚未证实的模块加载成本。本次不做无测量支持的大规模加载/部署重构，也不声称冷启动已优化。
+
+候选 bootstrap 只在冻结前、第一次 POST 前改变读取策略：首 GET 最多 30 秒；仅未确认应用到达的 timeout、明确瞬态网络码（EAI_AGAIN/ECONNRESET/ETIMEDOUT/UND_ERR_CONNECT_TIMEOUT/UND_ERR_SOCKET），或未归属网关 502/503/504，可间隔 1 秒再 GET 一次、最多 30 秒。两次最坏约 61 秒均扣原 540 秒；重试后仍须保留 105 秒核心工作余量，并在同一写窗口。时钟异常、余量不足均停止。30 秒是覆盖已有 18.18 秒实测及 20/25 秒故障测试的工程边界，不是外部 SLA。
+
+既有 `diagnosticOnly:true` 保持全天 GET-only，不套采集写窗口；同样受原540秒约束，成功也不授权POST。普通调度模式仍须在指定写窗口，不借诊断模式扩展采集权限。
+
+每次GET前后（含异常返回）及退避前后都检查墙上时钟与单调时钟；任一净倒退或两种已耗时间相差超过1秒即以 `automation_clock_changed` 停止。1秒仅为时钟采样差的检测容差，剩余预算始终按二者较大的已耗时间计算，不据此延展截止。成功响应超过该次30秒限制、达到原总截止或跨出写窗口均不接受，也不冻结/继续POST。异常退出的耗时同样使用单调时间保留，避免倒退后被记成虚假的短耗时。
+
+401/403、TLS、重定向、未知类别的网络失败、已确认应用错误、畸形 manifest、hash/能力/版本不符均不重试。新逻辑未放入通用 write client，未知 POST 规则不变。成功报告含 `manifestPreflight:{attempts,elapsedMs,failureCode:null}`；失败终态保留 manifestAttempts、manifestElapsedMs、manifestFailureCode。持续超时最终保留 request_timeout，而非只报笼统预检失败。
+
+### 原 v4 任务合同必须同时更新
+
+仅替换固定 bootstrap SHA 不足：原“manifest 只读一次”与候选内建恢复冲突。通过云验收和支持的原任务更新流程后，将该条最小替换为：
+
+> 冻结前仅在同一次 runner 内读取固定 manifest GET，最多两次；每次不超过30秒。仅首次未确认应用到达的超时、上述明确瞬态网络码或未归属502/503/504，才允许间隔1秒再次读取；第二次后不再重试。两次共享原 automationId、automationStartedAt、540秒、原点、service access和同一个已审查bootstrap SHA；GET各有独立requestId用于诊断。余量不足以保留105秒核心工作或离开指定写窗口则停止。鉴权拒绝、TLS/redirect及无效manifest不重试。外层仍不得重启runner、换automationId/起点/版本继续尝试；任何未知POST仍立即停止，不重发或补跑。
+
+随后把 expectedBootstrapSource 与实际 checkout pin 一起改为已验收的完整候选 SHA。若原任务更新被拒绝，停止并报告；不新建重复任务、不绕过所有权。旧48d pin不会随Site发布改变，本候选在任务合同、pin及云验收完成前不得投入正式采集。
+
+验证新增真实 loopback HTTP 20/25秒首响应及实际30秒 AbortSignal 后恢复，固定私有 dispatcher + manifest handler/D1零访问；额外用mock覆盖连续两次超时、五分钟提前等待叠加预算、跨窗口/时钟异常和TLS拒绝。`node sites/test-runtime-dispatch-bootstrap.mjs --candidate --manifest-recovery` 验证完整干净bootstrap与实际编译Worker的同一故障路径。以上均不等于已部署隔离Sites的真实网关验收；此前异常场景、完整bootstrap云验证、原任务合同/pin更新仍是发布门槛。

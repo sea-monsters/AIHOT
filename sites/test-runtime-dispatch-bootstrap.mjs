@@ -10,11 +10,12 @@ import {privateSitesDispatch,PRIVATE_SITES_TEST_TOKEN} from './fixtures/private-
 
 // Historical approved bootstrap, not the source revision of this server build.
 const candidate=process.argv.includes('--candidate'),pin=candidate?execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim():'2d2d07f903593274e801dd18307827a6f0043ae9',origin='https://fixture.chatgpt.site';
-const early=process.argv.includes('--early-am'),preparedAt='2026-10-23T23:58:22.000Z',writeAt='2026-10-24T00:00:54.151Z';
+const early=process.argv.includes('--early-am'),recovery=process.argv.includes('--manifest-recovery'),preparedAt='2026-10-23T23:58:22.000Z',writeAt='2026-10-24T00:00:54.151Z';
+if(recovery&&(!candidate||early))throw Error('Manifest recovery smoke requires --candidate without --early-am');
 const root=await mkdtemp(join(tmpdir(),'hkis-fixed-bootstrap-')),checkout=join(root,'checkout');
 const clock=`const NativeDate=Date;globalThis.Date=class extends NativeDate{constructor(...a){super(...(a.length?a:[${JSON.stringify(writeAt)}]))}static now(){return NativeDate.parse(${JSON.stringify(writeAt)})}};\n`;
 const mf=new Miniflare(convertV4MiniflareOptions({...(early?{modules:[{type:'ESModule',path:'worker.mjs',contents:clock+await readFile('dist/server/index.js','utf8')}],d1Databases:['DB']}:{modules:true,scriptPath:'dist/server/index.js'}),compatibilityDate:'2026-09-01',compatibilityFlags:['nodejs_compat'],bindings:{HKIS_OWNER_EMAIL:'owner@example.invalid'},outboundService:async()=>{throw Error('No external I/O')}}));
-let reached=0,recoveries=0,withheld=0;
+let reached=0,recoveries=0,withheld=0,manifestIngress=0;
 const dispatch=privateSitesDispatch(async request=>{
  assert.equal(request.headers.has('OAI-Sites-Authorization'),false);assert.equal(request.headers.has('oai-authenticated-user-id'),false);assert.equal(request.headers.has('oai-authenticated-user-email'),false);
  if(early&&request.method==='POST'&&!request.url.endsWith('/recover')){withheld++;return new Response('Synthetic unknown: stop before further work',{status:503})}
@@ -26,6 +27,7 @@ const dispatch=privateSitesDispatch(async request=>{
 });
 // Loopback is a synthetic transport adapter, never a real service credential.
 const server=createServer(async(req,res)=>{try{
+ if(recovery&&++manifestIngress===1){await new Promise(resolve=>{const timer=setTimeout(resolve,35000);res.once('close',()=>{clearTimeout(timer);resolve()})});if(res.destroyed)return;res.writeHead(503);res.end('Synthetic delayed dispatch');return}
  const headers=new Headers();for(const [key,value] of Object.entries(req.headers))if(typeof value==='string')headers.set(key,value);
  let body='';for await(const chunk of req)body+=chunk;
  const response=await dispatch(origin+req.url,{method:req.method,headers,...(body?{body}:{})});res.writeHead(response.status,Object.fromEntries(response.headers));res.end(await response.text());
@@ -38,13 +40,13 @@ try{
  assert.equal(execFileSync('git',['status','--porcelain'],{cwd:checkout,encoding:'utf8'}).trim(),'');
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const port=server.address().port;
  const script=`import {privateStableSlotMain} from ${JSON.stringify(pathToFileURL(join(checkout,'sites/run-stable-research-slot.mjs')).href)};
- ${early?'Date.now=()=>Date.parse('+JSON.stringify(writeAt)+');':''}
+ ${early?'Date.now=()=>Date.parse('+JSON.stringify(writeAt)+');':recovery?"const wall=performance.now();Date.now=()=>Date.parse('2026-10-24T12:00:00.000Z')+Math.floor(performance.now()-wall);":''}
  const nativeFetch=globalThis.fetch;globalThis.fetch=(url,options)=>{const u=new URL(url);if(u.origin!==${JSON.stringify(origin)}||options.redirect!=='error')throw Error('Fixture origin');return nativeFetch('http://127.0.0.1:${port}'+u.pathname,options)};
  privateStableSlotMain().catch(e=>{process.stderr.write(String(e.code||'fixture_failed'));process.exitCode=2});`;
- const input={baseUrl:origin,allowedOrigins:[origin],token:PRIVATE_SITES_TEST_TOKEN,automationStartedAt:early?preparedAt:new Date().toISOString(),slot:early?8:20,expectedBootstrapSource:pin,diagnosticOnly:!early,budgetMs:540000,collectionCalls:35};
+ const input={baseUrl:origin,allowedOrigins:[origin],token:PRIVATE_SITES_TEST_TOKEN,automationStartedAt:early?preparedAt:recovery?'2026-10-24T12:00:00.000Z':new Date().toISOString(),slot:early?8:20,expectedBootstrapSource:pin,diagnosticOnly:!early,budgetMs:540000,collectionCalls:35};
  const result=await new Promise((resolve,reject)=>{
   const child=spawn(process.execPath,['--input-type=module','-e',script],{cwd:checkout,stdio:['pipe','pipe','pipe']});let stdout='',stderr='';
-  const timer=setTimeout(()=>{child.kill('SIGKILL');reject(Error('Pinned bootstrap fixture timeout'))},20000);
+  const timer=setTimeout(()=>{child.kill('SIGKILL');reject(Error('Pinned bootstrap fixture timeout'))},recovery?65000:20000);
   child.stdout.on('data',v=>stdout+=v);child.stderr.on('data',v=>stderr+=v);child.on('error',reject);child.on('close',code=>{clearTimeout(timer);resolve({code,stdout,stderr})});child.stdin.end(JSON.stringify(input)+'\n');
  });
  assert.ok(!(result.stdout+result.stderr).includes(PRIVATE_SITES_TEST_TOKEN));assert.equal(result.code,candidate?(early?2:0):2,result.stderr);
@@ -53,8 +55,8 @@ try{
  const report=JSON.parse(lines.at(-1));
  assert.equal(report.frozen.bootstrapSource,pin);assert.equal(report.frozen.sourceRevision,execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim());assert.ok(events.some(e=>e.applicationReached===true));
  if(early){assert.equal(report.status,'unknown');assert.equal(report.diagnostics.postsAttempted,2);assert.equal(report.diagnostics.requestsAttempted,3);assert.equal(report.frozen.startedAt,preparedAt);assert.equal(report.elapsedMs,152151);assert.equal(report.remainingMs,385849);assert.equal(recoveries,1);assert.equal(reached,2);assert.equal(withheld,1);assert.deepEqual(report.steps.map(s=>s.phase),['local_recovery','plan']);assert.equal(report.steps[0].status,'ok');const db=await mf.getD1Database('DB');for(const table of ['research_batches','research_papers','ai_receipts'])assert.equal((await db.prepare('SELECT count(*) n FROM '+table).first()).n,0)}
- else{assert.equal(report.status,'ok');assert.equal(report.postsAttempted,0);assert.equal(report.requestsAttempted,1);assert.equal(reached,1)}
+ else{assert.equal(report.status,'ok');assert.equal(report.postsAttempted,0);assert.equal(report.requestsAttempted,recovery?2:1);assert.equal(reached,1);if(recovery){assert.equal(manifestIngress,2);assert.equal(report.manifestPreflight.attempts,2);assert.ok(report.manifestPreflight.elapsedMs>=30000);assert.ok(events.some(e=>e.code==='manifest_retry'))}}
  }
  const before=reached,denied=await dispatch(origin+'/api/hkis/runtime/v1/manifest');assert.equal(denied.status,403);assert.equal(reached,before);
- console.log('PINNED BOOTSTRAP DISPATCH OK: approved '+pin+', compiled server '+execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()+', '+(early?'07:58:22 preparation / 08:00:54 first recovery200, original budget retained, intentional next-phase unknown stops without replay':'consumed service header, one GET, zero POST')+', zero provider/model, no secret output');
+ console.log('PINNED BOOTSTRAP DISPATCH OK: approved '+pin+', compiled server '+execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()+', '+(early?'07:58:22 preparation / 08:00:54 first recovery200, original budget retained, intentional next-phase unknown stops without replay':recovery?'real first 30s timeout, one same-automation GET recovery, compiled manifest success, zero POST':'consumed service header, one GET, zero POST')+', zero provider/model, no secret output');
 }finally{server.closeAllConnections();if(server.listening)await new Promise(resolve=>server.close(resolve));await mf.dispose();await rm(root,{recursive:true,force:true})}

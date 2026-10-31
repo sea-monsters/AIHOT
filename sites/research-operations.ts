@@ -5,7 +5,7 @@ import {isManualBatchKey} from './research-attribution.ts';
 export const OPERATION_DAYS=30,OPERATION_CAP=10000,OPERATION_CLEANUP=200,OPERATION_PAGE_SIZE=100;
 const phases=new Set(['sync','batch_start','batch_collect','batch_finish','metadata','scoring','daily','crossref_gate','crossref_connect','crossref_read','crossref_parse','crossref_capture','crossref_preload','crossref_commit','rss_connect','rss_read','rss_parse','rss_capture','rss_preload','rss_commit','collection_commit','local_finalize','local_recovery','maintenance_prepare']);
 const reasons=new Set(['client_canceled','request_deadline','network_timeout','network_failed','parse_failed','database_unknown','lease_expired','collection_lease_lost','record_conflict','work_pending','capture_capacity','capture_too_large','batch_in_flight','batch_finalizing','collection_canceled','collection_unknown','collection_in_progress','metadata_in_progress','processing_in_progress','pending_metadata','pending_scoring','pending_collection','ingestion_pending','ingestion_recovery_unknown','ingestion_origin_review_required','no_prepare_eligible','already_ready','maintenance_gate_blocked','maintenance_prepare_unconfirmed','identity_review_required','origin_review_required','metadata_required','identity_ambiguous','invalid_selection','invalid_diagnostics','scoring_state_changed','dispatch_not_sent','commit_ack_reconciled','processing_lease_lost_readback','lock_busy','deadline','provider_cooldown','budget_exceeded','not_configured','ai_disabled','key_unavailable','connection_test_required','owner_required','batch_window','daily_window','batch_not_finished','invalid_batch','batch_closed','invalid_deadline','interval_owner_ambiguous']);
-for(const reason of ['origin_rejected','request_marker_required','request_rejected','invalid_request','invalid_json','request_too_large','method_not_allowed','not_found','database_unavailable','research_unavailable','owner_setup_required','page_budget','time_budget','sources_exhausted','crossref_cooldown','crossref_rate_limit','batch_interrupted','head_deferred','head_pass_pending','backfill_pending','latest_pending','history_pending','coverage_incomplete','collection_stopped','collection_failed','operation_failed','provider_deferred','provider_pending','configuration_changed','no_dispatchable_source','sync_call_budget','slice_deadline','slice_call_limit'])reasons.add(reason);
+for(const reason of ['operation_admission_unconfirmed','operation_receipt_unconfirmed','operation_already_recorded','operation_request_conflict','operation_journal_full','origin_rejected','request_marker_required','request_rejected','invalid_request','invalid_json','request_too_large','method_not_allowed','not_found','database_unavailable','research_unavailable','owner_setup_required','page_budget','time_budget','sources_exhausted','crossref_cooldown','crossref_rate_limit','batch_interrupted','head_deferred','head_pass_pending','backfill_pending','latest_pending','history_pending','coverage_incomplete','collection_stopped','collection_failed','operation_failed','provider_deferred','provider_pending','configuration_changed','no_dispatchable_source','sync_call_budget','slice_deadline','slice_call_limit'])reasons.add(reason);
 const sources=new Set(RESEARCH_SOURCES.map(s=>s.id));
 const isStoredBatchKey=(value:any)=>isManualBatchKey(value)||/^\d{4}-\d{2}-\d{2}\/(08|20)$/.test(value||'');
 const clamp=(n:any,max=1e9)=>Number.isFinite(n)?Math.max(0,Math.min(max,Math.floor(n))):0;
@@ -23,7 +23,7 @@ export function operationFailure(e:any,signal?:AbortSignal,phase?:string){
 }
 export async function cleanupOperations(db:any){const cutoff=new Date(Date.now()-OPERATION_DAYS*86400000).toISOString();await db.batch([
  db.prepare('DELETE FROM research_operations WHERE id IN (SELECT id FROM research_operations WHERE observed_at<? ORDER BY observed_at,id LIMIT ?)').bind(cutoff,OPERATION_CLEANUP),
- db.prepare('DELETE FROM research_operations WHERE id IN (SELECT id FROM research_operations ORDER BY observed_at DESC,id DESC LIMIT ? OFFSET ?)').bind(OPERATION_CLEANUP,OPERATION_CAP-64),
+ db.prepare("DELETE FROM research_operations WHERE id IN (SELECT id FROM research_operations WHERE id NOT LIKE 'request:%' ORDER BY observed_at DESC,id DESC LIMIT ? OFFSET max(0,?-(SELECT count(*) FROM research_operations WHERE id LIKE 'request:%')))").bind(OPERATION_CLEANUP,OPERATION_CAP-64),
  db.prepare('DELETE FROM runtime_logs WHERE id IN (SELECT id FROM runtime_logs WHERE created_at<? ORDER BY created_at,id LIMIT ?)').bind(cutoff,OPERATION_CLEANUP),
  db.prepare('DELETE FROM runtime_logs WHERE id IN (SELECT id FROM runtime_logs ORDER BY id DESC LIMIT ? OFFSET ?)').bind(OPERATION_CLEANUP,OPERATION_CAP-1)
 ]);}
@@ -108,12 +108,46 @@ export function requestOutcome(result:any,phase:string,httpStatus:number){
  return {unknown,outcome,reason:result?.reason||result?.deferredReason||result?.blocked||result?.code||operation.reason};
 }
 
+// A root intent is not an action payload cache. Only its hash and fixed receipt
+// survive; paid-provider tombstones remain in their existing provider ledgers.
+function canonical(value:any):string{
+ if(Array.isArray(value))return '['+value.map(canonical).join(',')+']';
+ if(value&&typeof value==='object')return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+canonical(value[k])).join(',')+'}';
+ return JSON.stringify(value)??'null';
+}
+async function intentHash(phase:string,body:any,request?:Request){
+ const value=canonical({phase,body:body??{},automationId:operationRequestId(request?.headers.get('x-hkis-automation-id'))});
+ return [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
 export async function operationCall(db:any,phase:string,body:any,action:(trace:OperationTrace)=>Promise<any>,httpRequest?:Request){
- // Single-source sync is still clamped by INGEST_LIMITS.requestMs to 20s.
  const budget=phase==='sync'?20000:phase==='metadata'||phase==='batch_collect'?75000:phase==='scoring'?240000:phase==='daily'?190000:15000,trace=new OperationTrace(db,body?.batchKey||null,body?.sourceId||null,Date.now()+Math.min(budget,Number(body?.maxMs)||budget));
  trace.requestId=operationRequestId(httpRequest?.headers.get('x-hkis-operation-id'))||trace.requestId;
- try{await trace.begin(phase);}catch{}const request=trace.current;trace.requestOperationId=request?.id||null;trace.current=null;
- const finish=async(state:string,reason:any,result?:any)=>{const child=trace.current;trace.current=request;trace.db=db;if(request&&result?.runId)try{await db.prepare('UPDATE research_operations SET run_id=? WHERE id=?').bind(result.runId,request.id).run()}catch{}await trace.end(state,reason,Number(result?.attempted)||0,Number(result?.scanned)||0);trace.current=child;};
- try{const result=await action(trace),{state,reason}=operationOutcome(result,phase);await finish(state,reason,result);return {...result,requestId:trace.requestId};}
+ const id='request:'+trace.requestId,hash=await intentHash(phase,body,httpRequest),at=new Date().toISOString();
+ try{
+  try{await cleanupOperations(db)}catch{}trace.cleaned=true;
+  const inserted=await db.prepare("INSERT OR IGNORE INTO research_operations(id,request_id,intent_hash,batch_key,source_id,phase,state,severity,known,started_at,observed_at,remaining_ms) SELECT ?,?,?,?,?,?,'started','info',0,?,?,? WHERE (SELECT count(*) FROM research_operations)<? AND NOT EXISTS(SELECT 1 FROM research_operations WHERE request_id=? AND phase IN ('sync','batch_start','batch_collect','batch_finish','metadata','scoring','daily','local_recovery','maintenance_prepare'))").bind(id,trace.requestId,hash,isStoredBatchKey(trace.batchKey)?trace.batchKey:null,sources.has(trace.sourceId!)?trace.sourceId:null,phase,at,at,trace.remaining(),OPERATION_CAP,trace.requestId).run();
+  if(inserted.meta?.changes!==1){
+   const prior=await db.prepare("SELECT id,intent_hash,phase,state,known,reason,ended_at,batch_key FROM research_operations WHERE request_id=? AND phase IN ('sync','batch_start','batch_collect','batch_finish','metadata','scoring','daily','local_recovery','maintenance_prepare') ORDER BY started_at,id LIMIT 1").bind(trace.requestId).first();
+   if(!prior)return {status:'deferred',known:true,reason:'operation_journal_full',requestId:trace.requestId};
+   if(prior.intent_hash!==hash||prior.phase!==phase)return {status:'blocked',known:true,reason:'operation_request_conflict',requestId:trace.requestId};
+   // Never replay a POST, including one whose committed local acknowledgement
+   // was lost. The scoped runtime readback can reconcile collection separately.
+   return {status:'unknown',known:false,reason:'operation_already_recorded',requestId:trace.requestId,receipt:{phase:prior.phase,state:prior.state,known:prior.known===1,endedAt:prior.ended_at,batchKey:prior.batch_key}};
+  }
+ }catch{return {status:'unknown',known:false,reason:'operation_admission_unconfirmed',requestId:trace.requestId};}
+ const request={id,time:Date.parse(at),phase};trace.requestOperationId=id;trace.rows=1;
+ const finish=async(state:string,reason:any,result?:any)=>{
+  const child=trace.current;trace.current=request;trace.db=db;
+  try{
+   const writes=[];if(result?.runId||isStoredBatchKey(result?.batchKey))writes.push(db.prepare('UPDATE research_operations SET run_id=coalesce(?,run_id),batch_key=coalesce(?,batch_key) WHERE id=? AND ended_at IS NULL').bind(typeof result?.runId==='string'?result.runId:null,isStoredBatchKey(result?.batchKey)?result.batchKey:null,id));
+   writes.push(trace.endStatement(db,state,reason,Number(result?.attempted)||0,Number(result?.scanned)||0));
+   await db.batch(writes);return true;
+  }catch{
+   // An acknowledgement failure is not proof of rollback. Read the immutable
+   // terminal receipt; if it is still uncertain, surface uncertainty, not success.
+   try{const row=await db.prepare('SELECT state,known,ended_at FROM research_operations WHERE id=?').bind(id).first();return !!row?.ended_at&&row.state===state&&row.known===(state==='unknown'?0:1)}catch{return false}
+  }finally{trace.current=child}
+ };
+ try{const result=await action(trace),{state,reason}=operationOutcome(result,phase),confirmed=await finish(state,reason,result);return confirmed?{...result,requestId:trace.requestId}:{status:'unknown',known:false,reason:'operation_receipt_unconfirmed',requestId:trace.requestId};}
  catch(e){await finish(e instanceof AIError&&e.status<500?'deferred':'unknown',e instanceof AIError?e.code:'database_unknown');throw e;}
 }

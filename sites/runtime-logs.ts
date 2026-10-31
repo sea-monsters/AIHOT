@@ -23,6 +23,7 @@ export async function safeLogEntry(input:any){
  if(['GET','POST','HEAD','OTHER'].includes(input.metadata?.httpMethod))metadata.httpMethod=input.metadata.httpMethod;
  if(Object.values(executionRoutes).includes(input.metadata?.executionPhase))metadata.executionPhase=input.metadata.executionPhase;
  if(input.metadata?.diagnosticContract===EXECUTION_CONTRACT)metadata.diagnosticContract=EXECUTION_CONTRACT;
+ if([8,20].includes(input.metadata?.slot))metadata.slot=input.metadata.slot;
  if(input.metadata?.runtimeContract==='hkis-runtime-v1')metadata.runtimeContract='hkis-runtime-v1';
  for(const key of ['configHash'])if(typeof input.metadata?.[key]==='string'&&/^[a-f0-9]{64}$/.test(input.metadata[key]))metadata[key]=input.metadata[key];
  const bootstrap=sourceRevision(input.metadata?.bootstrapSource);if(bootstrap)metadata.bootstrapSource=bootstrap;

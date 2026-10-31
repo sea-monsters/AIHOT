@@ -30,6 +30,9 @@ const spec=JSON.parse(process.argv[2]);
 const NativeDate=Date;
 let clock=NativeDate.parse(spec.writeAt);
 globalThis.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:[clock]))}static now(){return clock}};
+// This suite simulates elapsed work. Keep both clocks on that same timeline;
+// real HTTP delay/timeout tests retain native performance.now separately.
+Object.defineProperty(globalThis.performance,'now',{value:()=>clock-NativeDate.parse(spec.writeAt),configurable:true});
 const runner=await import(spec.legacyRunner?${JSON.stringify(pathToFileURL(join(legacy,'sites/run-stable-research-slot.mjs')).href)}:${JSON.stringify(pathToFileURL(join(candidate,'sites/run-stable-research-slot.mjs')).href)});
 const serverContract=await import(spec.legacyManifest?${JSON.stringify(pathToFileURL(join(legacy,'sites/research-runtime-contract.ts')).href)}:${JSON.stringify(pathToFileURL(join(candidate,'sites/research-runtime-contract.ts')).href)});
 const description=await serverContract.runtimeDescription('a'.repeat(40));
@@ -199,14 +202,14 @@ test('wrong previous-cohort echoes stop instead of spending on a different metad
 test('early AM/PM preparation retains the original start and consumes the whole elapsed budget',async()=>{
  for(const slot of [8,20]){const result=await run({slot,startedAt:slot===8?'2026-10-24T23:58:22.000Z':'2026-10-25T11:58:22.000Z',writeAt:slot===8?'2026-10-25T00:00:54.151Z':'2026-10-25T12:00:54.151Z'});collected(result);assert.equal(result.report.elapsedMs,152151);assert.equal(result.report.remainingMs,538000-152151,'effective deadline retains the fixed 2s server margin');assert.equal(result.report.frozen.startedAt,slot===8?'2026-10-24T23:58:22.000Z':'2026-10-25T11:58:22.000Z');assert.ok(posts(result).every(request=>request.atMs===152151));}
 });
-test('manifest fetch consumes original budget and cannot reset the run before its first write',async()=>{
- const result=await run({startedAt:'2026-10-24T23:58:22.000Z',writeAt:'2026-10-25T00:00:54.151Z',manifestMs:373000});assert.equal(result.code,2);assert.equal(posts(result).length,0);assert.equal(result.stats.requests.length,1);assert.equal(result.events.at(-1).code,'automation_budget_exhausted');
+test('manifest returning after its own deadline cannot reset the run, retry or dispatch its first write',async()=>{
+ const result=await run({startedAt:'2026-10-24T23:58:22.000Z',writeAt:'2026-10-25T00:00:54.151Z',manifestMs:373000});assert.equal(result.code,2);assert.equal(posts(result).length,0);assert.equal(result.stats.requests.length,1);const last=result.events.at(-1);assert.equal(last.code,'request_timeout');assert.equal(last.manifestFailureCode,'request_timeout');assert.equal(last.manifestAttempts,1);assert.equal(last.manifestElapsedMs,373000);
 });
 test('less than the declared 105s core minimum may register AM work but never starts or collects',async()=>{
  const result=await run({startedAt:'2026-10-24T23:51:45.000Z'});assert.equal(names(result).includes('start'),false);assert.equal(names(result).includes('collect'),false);assert.ok(names(result).includes('plan'));assert.equal(goal(result,'collection').status,'deferred');assert.equal(result.report.remainingMs,43000,'remaining core time excludes the fixed 2s margin');
 });
 test('confirmed collection consuming the remaining budget never starts a late maintenance/provider stage',async()=>{
- const result=await run({collectMs:540001}),sequence=names(result);assert.ok(sequence.includes('collect'));assert.equal(sequence.at(-1),'collect');assert.equal(sequence.includes('metadata'),false);assert.equal(sequence.includes('scoring'),false);assert.equal(sequence.includes('daily'),false);assert.equal(result.report.remainingMs,0);
+ const result=await run({collectMs:540001}),sequence=names(result);assert.ok(sequence.includes('collect'),JSON.stringify(result.events));assert.equal(sequence.at(-1),'collect');assert.equal(sequence.includes('metadata'),false);assert.equal(sequence.includes('scoring'),false);assert.equal(sequence.includes('daily'),false);assert.equal(result.report.remainingMs,0);
 });
 test('confirmed empty daily and completed archived targets remain known without regenerating the previous cohort',async()=>{
  const empty=await run({dailyVariant:'empty'});collected(empty);assert.equal(empty.code,0);assert.equal(goal(empty,'daily').status,'ok');assert.equal(goal(empty,'daily').reason,'no_new_ready_in_cohort');assert.equal(posts(empty).find(request=>request.path.endsWith('/daily')).response.attempted,0);

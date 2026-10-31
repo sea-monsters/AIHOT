@@ -51,7 +51,7 @@ export async function researchRuntimeApi(request:Request,env:any){
   const budget=frozenRuntimeBudget(frozen,maintenance);
   delete body.sourceDay;
   const headers=new Headers(request.headers);for(const name of Object.values(RUNTIME_HEADERS))headers.delete(name);headers.set('x-hkis-operation-id',id);
-  await writeLog(env.DB,{component:'research',event:'request_started',outcome:'started',requestId:id,correlationId:automationId,metadata:{route:path,runtimeContract:RUNTIME_CONTRACT,sourceRevision:revision,configHash:frozen.configHash,bootstrapSource:frozen.bootstrapSource,runStartedAt:frozen.startedAt}});
+  await writeLog(env.DB,{component:'research',event:'request_started',outcome:'started',requestId:id,correlationId:automationId,metadata:{route:path,runtimeContract:RUNTIME_CONTRACT,sourceRevision:revision,configHash:frozen.configHash,bootstrapSource:frozen.bootstrapSource,runStartedAt:frozen.startedAt,slot:frozen.slot}});
   assertRuntimeBudget(budget);
   if(path==='/api/site/research/run/plan')return respond(await recordRunPlan(env.DB,body.slot,new Date()));
   const operationRequest=new Request(new URL(path,url.origin),{method:'POST',headers,body:JSON.stringify(body),signal:request.signal});
