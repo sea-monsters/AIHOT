@@ -25,13 +25,22 @@ export async function readBody(request:Request,maxBytes=24000){
 // Exact public endpoints prevent private-network, metadata, DNS-rebinding and redirect SSRF.
 // Custom deployments may add an exact reviewed HTTPS base URL via server runtime configuration.
 export const KIMI_CODE_ENDPOINT='https://api.kimi.com/coding/v1';
-export const PUBLIC_ENDPOINTS=['https://api.openai.com/v1','https://api.deepseek.com','https://openrouter.ai/api/v1','https://generativelanguage.googleapis.com/v1beta/openai',KIMI_CODE_ENDPOINT];
+export const PUBLIC_ENDPOINTS=['https://api.openai.com/v1','https://api.deepseek.com','https://openrouter.ai/api/v1','https://generativelanguage.googleapis.com/v1beta/openai',KIMI_CODE_ENDPOINT,'https://newapi.gcoreinc.com/v1'];
 export function endpoint(value:unknown,env:any){
  if(typeof value!=='string'||value.length>500)throw new AIError('invalid_endpoint',400,'请输入公开 HTTPS API 接入点');
  let u:URL;try{u=new URL(value)}catch{throw new AIError('invalid_endpoint',400,'API 接入点格式无效')}
  const clean=u.href.replace(/\/+$/,'');
  const allowed=[...PUBLIC_ENDPOINTS,...String(env.HKIS_AI_ALLOWED_ENDPOINTS||'').split(',').map(s=>s.trim().replace(/\/+$/,'')).filter(Boolean)];
- if(u.protocol!=='https:'||u.port||u.username||u.password||u.search||u.hash||!allowed.includes(clean)||!/^([a-z0-9-]+\.)+[a-z]{2,}$/i.test(u.hostname)||/(^|\.)(localhost|local|internal|test|example|invalid)$/.test(u.hostname))throw new AIError('endpoint_not_allowed',400,'仅允许列表中的已审核 HTTPS 接入点；自定义网关需先加入服务器白名单。禁止私网、IP 地址、查询参数和重定向');
+ if(u.protocol!=='https:'||u.port||u.username||u.password||u.search||u.hash||!allowed.includes(clean)||!/^([a-z0-9-]+\.)+[a-z]{2,}$/i.test(u.hostname)||/(^|\.)(localhost|local|internal|test|example|invalid)$/.test(u.hostname)){
+  let reason='此完整接入点不在服务器已审核列表中；请从列表选择，或由站点维护者先审核并配置该地址。';
+  if(u.protocol!=='https:')reason='接入点必须使用 HTTPS。';
+  else if(u.username||u.password)reason='接入点不能包含用户名或密码。';
+  else if(u.port)reason='接入点不允许使用非默认端口。';
+  else if(u.search||u.hash)reason='接入点不能包含查询参数或片段（? 或 #）。';
+  else if(!/^([a-z0-9-]+\.)+[a-z]{2,}$/i.test(u.hostname)||/(^|\.)(localhost|local|internal|test|example|invalid)$/.test(u.hostname))reason='接入点必须是允许的公开域名，不能使用 IP 或本地域名。';
+  else if(allowed.some(candidate=>{try{return new URL(candidate).hostname===u.hostname}catch{return false}}))reason='域名在列表中，但此完整地址或路径未获允许；请使用列表中的完整 Base URL，不要附加 /responses 或 /chat/completions。';
+  throw new AIError('endpoint_not_allowed',400,reason);
+ }
  return clean;
 }
 export const REASONING=['none','low','medium','high','xhigh','max'] as const;

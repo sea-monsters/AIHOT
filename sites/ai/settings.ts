@@ -14,7 +14,7 @@ export async function saveSettings(db:any,id:string,body:any,env:any){
  if(body.removeKey===true){cipher=null;values.enabled=false}
  if(body.apiKey!=null&&body.apiKey!==''){
   if(body.removeKey===true)throw new AIError('ambiguous_key',400,'不能同时替换和移除 API key');
-  if(typeof body.apiKey!=='string'||body.apiKey.length<8||body.apiKey.length>4096||/[\s\x00-\x1f]/.test(body.apiKey))throw new AIError('invalid_key',400,'API key 格式无效，请直接粘贴完整凭证，不要包含 Bearer 前缀');
+  if(typeof body.apiKey!=='string'||body.apiKey.length<8||body.apiKey.length>4096||/[\s\x00-\x1f*•●…]/.test(body.apiKey)||/^sk-\.{3}/i.test(body.apiKey))throw new AIError('invalid_key',400,'API key 格式无效，请粘贴完整凭证，不能使用掩码或 Bearer 前缀');
   if(body.confirmedDestination!==values.endpoint)throw new AIError('destination_confirmation_required',400,'请确认凭证接收方后保存');
   cipher=await seal(body.apiKey,env,`${id}|${values.endpoint}`);
  }else if(old?.endpoint!==values.endpoint&&cipher)throw new AIError('endpoint_key_confirmation',400,'更换接入点需重新输入该供应商的 API key，或先移除旧凭证；不会将现有密钥转发给新接入点');

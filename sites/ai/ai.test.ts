@@ -198,3 +198,54 @@ test('home daily context is server-built and bounded; absent scientific evidence
 // The 28-source preference response is larger than the old 17-source fixture.
 // Keep the existing context guard rather than raising model input limits.
 test('expanded source preferences stop repeated large tool output at the unchanged context boundary',async()=>{const f=fixture(),original=globalThis.fetch;await configured(f,{endpoint:'https://api.deepseek.com',confirmedDestination:'https://api.deepseek.com',model:'deepseek-flash',reasoning:'max',maxTokens:384000});const p=await paper(f);let n=0;globalThis.fetch=async()=>{n++;return toolResponse(Array.from({length:200},(_,i)=>toolCall(i%2?'paper_details':'read_preferences',i%2?{ids:[p.id]}:{},`expanded-${i}`)))};try{const data=await(await request(f.env,'chat',{message:'测试扩展来源上下文',requestId:crypto.randomUUID()})).json();assert.equal(data.partial,true);assert.equal(data.stopReason,'context_limit');assert.ok(data.toolCalls>0&&data.toolCalls<200);assert.equal(data.toolExecutions,2);assert.equal(n,1)}finally{globalThis.fetch=original;f.sql.close()}});
+test('settings save round trips changes and preserves key only for its original destination without model calls',async()=>{
+ const f=fixture(),original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw Error('unexpected network')};
+ try{
+  let state=await configured(f);const ciphertext=f.sql.prepare('SELECT key_ciphertext FROM ai_settings').get()!.key_ciphertext;
+  for(const maxTokens of [1024,65536,1048576]){
+   const r=await request(f.env,'settings',{...state,model:'custom-model',maxTokens,apiKey:undefined});assert.equal(r.status,200);state=await r.json();assert.equal(state.maxTokens,maxTokens);assert.equal(state.model,'custom-model');assert.equal(state.hasKey,true);assert.equal(f.sql.prepare('SELECT key_ciphertext FROM ai_settings').get()!.key_ciphertext,ciphertext);
+   const read=await (await request(f.env,'settings')).json();assert.equal(read.maxTokens,maxTokens);assert.equal(read.revision,state.revision);assert.equal('apiKey' in read,false);
+  }
+  const rejected=await request(f.env,'settings',{...state,endpoint:'https://api.deepseek.com',apiKey:undefined});assert.equal(rejected.status,400);assert.equal((await rejected.json()).code,'endpoint_key_confirmation');assert.equal(f.sql.prepare('SELECT key_ciphertext FROM ai_settings').get()!.key_ciphertext,ciphertext);
+  const changed=await request(f.env,'settings',{...state,endpoint:'https://api.deepseek.com/',confirmedDestination:'https://api.deepseek.com',model:'new-model',protocol:'chat_completions',apiKey:'ANOTHER_FAKE_TEST_KEY'});assert.equal(changed.status,200);state=await changed.json();assert.equal(state.endpoint,'https://api.deepseek.com');assert.equal(state.model,'new-model');assert.equal(state.hasKey,true);
+  const again=await request(f.env,'settings',{...state,apiKey:undefined});assert.equal(again.status,200);assert.equal((await again.json()).revision,state.revision+1);assert.equal(calls,0);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
+ }finally{globalThis.fetch=original;f.sql.close()}
+});
+test('canonical destination confirmation fixes mixed-case URL save without relaxing endpoint validation',async()=>{
+ const f=fixture();try{
+  const body={...DEFAULTS,endpoint:'https://API.OPENAI.COM:443/v1/',apiKey:secret,revision:0,enabled:true};
+  const old=await request(f.env,'settings',{...body,confirmedDestination:body.endpoint.replace(/\/+$/,'')});assert.equal(old.status,400);assert.equal((await old.json()).code,'destination_confirmation_required');
+  const corrected=await request(f.env,'settings',{...body,confirmedDestination:new URL(body.endpoint).href.replace(/\/+$/,'')});assert.equal(corrected.status,200);assert.equal((await corrected.json()).endpoint,DEFAULTS.endpoint);
+ }finally{f.sql.close()}
+});
+test('settings reject masked and whitespace keys without replacing saved ciphertext',async()=>{
+ const f=fixture(),original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw Error('unexpected network')};
+ try{const state=await configured(f),before=f.sql.prepare('SELECT key_ciphertext,revision FROM ai_settings').get();
+  for(const apiKey of ['   ','********','sk-****abcd','••••••••','sk-...abcd','FAKE KEY WITH SPACE']){const r=await request(f.env,'settings',{...state,apiKey,confirmedDestination:state.endpoint});assert.equal(r.status,400);assert.equal((await r.json()).code,'invalid_key');assert.deepEqual(f.sql.prepare('SELECT key_ciphertext,revision FROM ai_settings').get(),before)}
+  assert.equal(calls,0);
+ }finally{globalThis.fetch=original;f.sql.close()}
+});
+test('endpoint canonicalization respects path and rejects query, fragment, and malformed addresses',()=>{
+ for(const value of ['https://API.OPENAI.COM:443/v1','https://api.openai.com/v1/','https://api.openai.com/v1///'])assert.equal(endpoint(value,{}),DEFAULTS.endpoint);
+ for(const value of ['https://api.openai.com','https://api.openai.com/v1?x=1','https://api.openai.com/v1#fragment','not a url','http://api.openai.com/v1','https://127.0.0.1/v1'])assert.throws(()=>endpoint(value,{}));
+});
+test('endpoint rejection explains the specific constraint without broadening the allowlist',async()=>{
+ const f=fixture(),state=await configured(f),before=f.sql.prepare('SELECT endpoint,revision,key_ciphertext FROM ai_settings').get();
+ try{for(const [value,hint] of [
+  ['http://api.openai.com/v1','HTTPS'],['https://user:pass@api.openai.com/v1','用户名或密码'],['https://api.openai.com:444/v1','端口'],['https://api.openai.com/v1?token=synthetic','查询参数'],['https://api.openai.com/v1#fragment','片段'],['https://127.0.0.1/v1','公开域名'],['https://api.openai.com/v1/responses','路径'],['https://unknown-provider.org/v1','不在服务器已审核列表']
+ ]){const r=await request(f.env,'settings',{...state,endpoint:value});assert.equal(r.status,400);const result=await r.json();assert.equal(result.code,'endpoint_not_allowed');assert.ok(result.error.includes(hint));assert.ok(!result.error.includes('synthetic'));assert.deepEqual(f.sql.prepare('SELECT endpoint,revision,key_ciphertext FROM ai_settings').get(),before)}
+ assert.equal(endpoint('https://gateway.example.org/v1',{HKIS_AI_ALLOWED_ENDPOINTS:'https://gateway.example.org/v1'}),'https://gateway.example.org/v1');assert.throws(()=>endpoint('https://gateway.example.org/v1/responses',{HKIS_AI_ALLOWED_ENDPOINTS:'https://gateway.example.org/v1'}));
+ }finally{f.sql.close()}
+});
+test('authorized Gcore base URL is exact and switching never carries over an existing key',async()=>{
+ const target='https://newapi.gcoreinc.com/v1',f=fixture(),original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw Error('unexpected network')};
+ try{
+  assert.equal(endpoint(target,{}),target);assert.equal(endpoint('https://NEWAPI.GCOREINC.COM:443/v1/',{}),target);
+  for(const invalid of ['http://newapi.gcoreinc.com/v1','https://newapi.gcoreinc.com','https://newapi.gcoreinc.com/v2','https://newapi.gcoreinc.com/v1/responses','https://newapi.gcoreinc.com/v1?x=1','https://newapi.gcoreinc.com/v1#x','https://newapi.gcoreinc.com:444/v1','https://newapi.gcoreinc.com.evil.org/v1','https://other.gcoreinc.com/v1','https://127.0.0.1/v1'])assert.throws(()=>endpoint(invalid,{}),invalid);
+  const saved=await configured(f),before=f.sql.prepare('SELECT endpoint,key_ciphertext,revision FROM ai_settings').get();
+  const rejected=await request(f.env,'settings',{...saved,endpoint:target,apiKey:undefined});assert.equal(rejected.status,400);assert.equal((await rejected.json()).code,'endpoint_key_confirmation');assert.deepEqual(f.sql.prepare('SELECT endpoint,key_ciphertext,revision FROM ai_settings').get(),before);
+  const removed=await request(f.env,'settings',{...saved,endpoint:target,apiKey:undefined,removeKey:true});assert.equal(removed.status,200);const state=await removed.json();assert.equal(state.endpoint,target);assert.equal(state.hasKey,false);assert.equal(state.enabled,false);assert.equal(f.sql.prepare('SELECT key_ciphertext FROM ai_settings').get()!.key_ciphertext,null);
+  const newKey='FAKE_NEW_GCORE_CREDENTIAL';const savedNew=await request(f.env,'settings',{...state,apiKey:newKey,confirmedDestination:target});assert.equal(savedNew.status,200);const cipher=String(f.sql.prepare('SELECT key_ciphertext FROM ai_settings').get()!.key_ciphertext);assert.equal(await unseal(cipher,f.env,'owner-123|'+target),newKey);await assert.rejects(()=>unseal(cipher,f.env,'owner-123|'+DEFAULTS.endpoint));
+  assert.equal(calls,0);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
+ }finally{globalThis.fetch=original;f.sql.close()}
+});

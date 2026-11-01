@@ -1,8 +1,42 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-10-31T15:26:35Z",
+  "latestVersion": "2026-11-01T15:22:31Z",
   "releases": [
+    {
+      "id": "hkis-exact-gcore-endpoint-20261101",
+      "at": "2026-11-01T15:22:31Z",
+      "kind": "feature",
+      "basis": "record",
+      "title": "支持经授权的模型接入点",
+      "body": [
+        "按所有者授权允许配置精确接入点 https://newapi.gcoreinc.com/v1；仍须自行提供该接入点的凭证。",
+        "维持 HTTPS、完整地址精确匹配和密钥与接入点绑定；接入点可用性与模型兼容性须单独验证。"
+      ],
+      "sources": [
+        {
+          "label": "模型接入点与安全边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/ai-assistant.md"
+        }
+      ]
+    },
+    {
+      "id": "hkis-llm-settings-save-feedback-20261101",
+      "at": "2026-11-01T15:01:51Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "改进模型设置保存反馈",
+      "body": [
+        "模型设置保存只提交可编辑字段，避免用量等只读数据增加请求体；凭证接收方确认采用与服务端一致的地址规范。",
+        "表单底部显示保存结果与地址限制原因，编辑后清除旧提示；完整列出允许的 Base URL，并按规范化地址判断密钥是否需更换。"
+      ],
+      "sources": [
+        {
+          "label": "模型设置说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/ai-assistant.md"
+        }
+      ]
+    },
     {
       "id": "hkis-isolated-evidence-checkpoints-20261031",
       "at": "2026-10-31T15:26:35Z",
