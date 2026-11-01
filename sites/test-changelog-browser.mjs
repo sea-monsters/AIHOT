@@ -17,13 +17,13 @@ await writeFile('.sites-runtime/changelog-source-browser-fixture.tsx',`import Re
 await build({entryPoints:['.sites-runtime/changelog-source-browser-fixture.tsx'],outfile:'.sites-runtime/changelog-source-browser-fixture.mjs',bundle:true,platform:'node',format:'esm',packages:'external',jsx:'automatic',logLevel:'silent'});
 const {renderSources}=await import(pathToFileURL(resolve('.sites-runtime/changelog-source-browser-fixture.mjs')).href);
 const sourceCases={none:[],one:[{label:'Reference',url:'https://example.invalid/one'}],multiple:[{label:'First reference',url:'https://example.invalid/first'},{label:'Second reference',url:'https://example.invalid/second'},{label:'Third reference',url:'https://example.invalid/third'}],long:[{label:'长名称参考链接用于检查自然换行和右侧空间。'.repeat(10),url:'https://example.invalid/long'}]};
-let networkProbes=0,chrome,server,mf,ws;
+let networkProbes=0,catalogRequests=0,chrome,server,mf,ws;
 const failures=[],checks=[];
 const record=(name,value=true)=>{assert.ok(value,name);checks.push(name);console.log('BROWSER OK',name)};
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
 const profile=await mkdtemp(join(tmpdir(),'hkis-ui-chrome-'));
 try{
- mf=new Miniflare(convertV4MiniflareOptions({modules:true,scriptPath:'dist/server/index.js',compatibilityDate:'2026-09-01',compatibilityFlags:['nodejs_compat'],d1Databases:['DB'],bindings:{HKIS_OWNER_EMAIL:'fixture@example.org'},outboundService:async()=>{networkProbes++;return new Response('External access disabled in UI fixture',{status:599})},assets:{directory:'dist/client',binding:'ASSETS',run_worker_first:true,routerConfig:{has_user_worker:true}}}));
+ mf=new Miniflare(convertV4MiniflareOptions({modules:true,scriptPath:'dist/server/index.js',compatibilityDate:'2026-09-01',compatibilityFlags:['nodejs_compat'],d1Databases:['DB'],bindings:{HKIS_OWNER_EMAIL:'fixture@example.org'},outboundService:async request=>{const url=new URL(request.url);if(request.method==='GET'&&url.href==='https://models.dev/api.json'){catalogRequests++;return Response.json({openai:{models:{'synthetic-model':{name:'Synthetic model',cost:{input:1,output:2}}}}})}networkProbes++;return new Response('External access disabled in UI fixture',{status:599})},assets:{directory:'dist/client',binding:'ASSETS',run_worker_first:true,routerConfig:{has_user_worker:true}}}));
  const db=await mf.getD1Database('DB');
  for(const f of (await readdir('drizzle')).filter(f=>f.endsWith('.sql')).sort())for(const s of (await readFile('drizzle/'+f,'utf8')).split('--> statement-breakpoint').map(s=>s.trim()).filter(Boolean))await db.prepare(s).run();
  await db.prepare('INSERT INTO navigation_seen(owner_id,page_key,seen_revision,seen_version,enabled) VALUES(?,?,?,?,1)').bind('browser-fixture','changelog',0,0).run();
@@ -223,7 +223,7 @@ try{
   record(`${name}: one document scroll and no horizontal overflow`,await evaluate(`document.documentElement.scrollWidth<=innerWidth&&[...document.querySelectorAll('.reading-control-rail')].every(e=>!['auto','scroll'].includes(getComputedStyle(e).overflowY))`));
   await screenshot(`site-${name}-1440`);
  }
- record('no external Worker requests',networkProbes===0);record('no browser JavaScript exceptions',failures.length===0);
+ record('models.dev uses synthetic catalog',catalogRequests===1);record('no other external Worker requests',networkProbes===0);record('no browser JavaScript exceptions',failures.length===0);
  await writeFile(join(output,'results.json'),JSON.stringify({checks:checks.length,passed:checks,titleStyles,collapsedMeasurements,drawerMeasurements,contrasts,networkProbes,failures,widths:[390,640,1440],syntheticIdentity:true,productionAccess:false},null,2));
  console.log('BROWSER RESULT',JSON.stringify({passed:checks.length,output,networkProbes}));
 }finally{
