@@ -2,7 +2,7 @@
 
 ## 当前同步索引
 
-- 本轮候选：`b3998dc6fc138eb9659f33f55eb38c1c716f0d57` → `d4e0374d6b32ab75681f2beffb2c52b91dbd93ab`，42 项审查，3 项依赖定向适配；详见 [2026-11-02 审查记录](hkis-selective-adaptation-2026-11-02.md)。维护时间 2026-11-01T23:15:15Z，不代表发布。
+- 本轮候选：`b3998dc6fc138eb9659f33f55eb38c1c716f0d57` → `d4e0374d6b32ab75681f2beffb2c52b91dbd93ab`，42 项审查，3 项依赖及 1 项跨年格式定向适配；详见 [2026-11-02 审查记录](hkis-selective-adaptation-2026-11-02.md)。维护时间 2026-11-01T23:26:50Z，不代表发布。
 
 - 最后完整 merge：`cf8f8d07d68dfa9079becc72b0717a45b33485f3`，由 fork `ed0cf9a24790602902b6350bb2d2d18a6168a4e7` 合入；未把后续审查 head 记成已完整合并。
 - 最近一次选择性审查与适配：`84a7abb1d00a43a41e3ddcc26c45e1a23785e075` → `b3998dc6fc138eb9659f33f55eb38c1c716f0d57`，23 项审查，2 项择取/适配、2 项延期、19 项跳过；见 [2026-10-23 逐项记录](hkis-selective-adaptation-2026-10-23.md)。只更新仓库，不部署 Sites 或更改自动任务 pin。

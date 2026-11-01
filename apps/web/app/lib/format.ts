@@ -29,10 +29,12 @@ export function fullDateTime(iso: string): string {
   return `${beijingDate(iso)} ${beijingTime(iso)}`;
 }
 
-/** "9月24日 10:51" (Beijing), for lists that span days. */
-export function monthDayTime(iso: string): string {
-  const [, m, d] = beijingDate(iso).split("-").map(Number) as [number, number, number];
-  return `${m}月${d}日 ${beijingTime(iso)}`;
+/** Beijing date and time, including the year for dates outside the current Beijing year. */
+export function monthDayTime(iso: string, now = Date.now()): string {
+  const date = beijingDate(iso);
+  const [y, m, d] = date.split("-").map(Number) as [number, number, number];
+  const year = date.slice(0, 4) === beijingDate(now).slice(0, 4) ? "" : `${y}年`;
+  return `${year}${m}月${d}日 ${beijingTime(iso)}`;
 }
 
 /** "X：Ethan Mollick (@emollick)" → "Ethan Mollick"; other sources keep their name. */
