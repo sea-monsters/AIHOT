@@ -1,8 +1,23 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-11-01T20:24:54Z",
+  "latestVersion": "2026-11-01T23:15:15Z",
   "releases": [
+    {
+      "id": "hkis-upstream-dependencies-20261101",
+      "at": "2026-11-01T23:15:15Z",
+      "kind": "upstream",
+      "basis": "record",
+      "title": "择取上游依赖更新并审查同步范围",
+      "body": [
+        "定向更新 fast-uri、Zod 和部分 Undici 依赖，保留本站的采集、简报与访问控制。",
+        "本次是选择性适配，不代表完整合并上游引擎或验证外部模型服务。"
+      ],
+      "sources": [
+        {"label": "上游审查与适配记录", "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/upstream-sync.md"},
+        {"label": "上游审查范围", "url": "https://github.com/KKKKhazix/AIHOT/compare/b3998dc6fc138eb9659f33f55eb38c1c716f0d57...d4e0374d6b32ab75681f2beffb2c52b91dbd93ab"}
+      ]
+    },
     {
       "id": "hkis-provider-http-530-diagnostics-20261101",
       "at": "2026-11-01T20:24:54Z",
