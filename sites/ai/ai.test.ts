@@ -249,3 +249,14 @@ test('authorized Gcore base URL is exact and switching never carries over an exi
   assert.equal(calls,0);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
  }finally{globalThis.fetch=original;f.sql.close()}
 });
+test('HTTP 530 HTML or JSON reports uncertain upstream outcome without leaking content or retrying',async()=>{
+ for(const body of ['', '<html>synthetic failure '+secret+'</html>',JSON.stringify({error:{message:'synthetic private '+secret}})]){
+  const f=fixture(),original=globalThis.fetch;let calls=0;
+  try{await configured(f);globalThis.fetch=async()=>{calls++;return new Response(body,{status:530,headers:{'content-type':body.startsWith('<')?'text/html':'application/json','server':'cloudflare','x-private':secret}})};
+   const req={requestId:crypto.randomUUID()},response=await request(f.env,'test',req),result=await response.json();assert.equal(response.status,502);assert.equal(result.code,'provider_http_530');assert.ok(result.error.includes('HTTP 530'));assert.ok(result.error.includes('来源尚未确认'));assert.ok(!result.error.includes('检查地址与协议'));
+   const receipt=f.sql.prepare('SELECT status,outcome,response_json FROM ai_receipts').get()!;assert.equal(receipt.status,'unknown');assert.equal(receipt.outcome,'unknown');const diagnostic=JSON.parse(String(receipt.response_json));assert.equal(diagnostic.diagnostic.httpStatus,530);assert.equal(diagnostic.diagnostic.phase,'read_response');assert.ok(!String(receipt.response_json).includes(secret));assert.ok(!String(receipt.response_json).includes('synthetic private'));
+   const logs=f.sql.prepare("SELECT error_code,http_status,outcome,metadata_json FROM runtime_logs WHERE component='provider' AND event='request_failed'").get()!;assert.equal(logs.error_code,'provider_http_530');assert.equal(logs.http_status,530);assert.equal(logs.outcome,'unknown');assert.ok(!JSON.stringify(logs).includes(secret));
+   assert.equal((await request(f.env,'test',req)).status,409);assert.equal(calls,1);
+  }finally{globalThis.fetch=original;f.sql.close()}
+ }
+});

@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-11-01T15:22:31Z",
+  "latestVersion": "2026-11-01T20:24:54Z",
   "releases": [
+    {
+      "id": "hkis-provider-http-530-diagnostics-20261101",
+      "at": "2026-11-01T20:24:54Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "明确模型接入点 HTTP 530 状态",
+      "body": [
+        "模型请求收到 HTTP 530 时显示上游或网关来源未确认，不再直接归因于 JSON、地址或协议；标记处理结果未知，不自动重试。",
+        "仅记录状态和脱敏诊断，不保存上游响应正文；不代表已验证服务可用性或模型兼容性。"
+      ],
+      "sources": [
+        {
+          "label": "模型助手及接入说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/ai-assistant.md"
+        }
+      ]
+    },
     {
       "id": "hkis-exact-gcore-endpoint-20261101",
       "at": "2026-11-01T15:22:31Z",
