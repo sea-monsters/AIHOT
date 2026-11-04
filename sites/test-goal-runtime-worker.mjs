@@ -104,7 +104,7 @@ async function run(spec){
 const {privateStableSlotMain}=await import(${JSON.stringify(pathToFileURL(join(checkout,'sites/run-stable-research-slot.mjs')).href)});
 const nativeFetch=globalThis.fetch;globalThis.fetch=async(url,options)=>{const parsed=new URL(url);if(parsed.origin!==${JSON.stringify(origin)}||options.redirect!=='error')throw Error('Synthetic origin boundary');const response=await nativeFetch('http://127.0.0.1:${server.address().port}'+parsed.pathname,options);const next=Number(response.headers.get('x-goal-fixture-clock'));if(Number.isFinite(next))now=next;return response};
 privateStableSlotMain().catch(e=>{process.stderr.write(String(e.code||'fixture_failed'));process.exitCode=2});`;
-  const input={baseUrl:origin,allowedOrigins:[origin],token:PRIVATE_SITES_TEST_TOKEN,automationStartedAt:spec.startedAt,slot:spec.slot,expectedBootstrapSource:bootstrapPin,budgetMs:540000,collectionCalls:35};
+  const input={baseUrl:origin,allowedOrigins:[origin],token:PRIVATE_SITES_TEST_TOKEN,automationStartedAt:spec.startedAt,slot:spec.slot,expectedBootstrapSource:bootstrapPin,budgetMs:540000,collectionCalls:60};
   const result=await new Promise((resolve,reject)=>{
    const child=spawn(process.execPath,['--input-type=module','-e',script],{cwd:checkout,stdio:['pipe','pipe','pipe'],env:{...process.env,COLLECT_ENABLED:'false',MODEL_CALLS_ENABLED:'false',FEISHU_ENABLED:'false',INDEXNOW_SUBMIT_ENABLED:'false'}});let stdout='',stderr='';
    const timer=setTimeout(()=>{child.kill('SIGKILL');reject(Error('Native goal runtime fixture timeout'))},60000);

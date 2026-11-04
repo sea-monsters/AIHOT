@@ -31,8 +31,13 @@ export async function collectionControl(db:any,batchKey:string|null,at=new Date(
  const heads=expected.filter(id=>!headSettled.has(id)).sort((a,b)=>headOrder({id:a,crossref:byId.get(a)},{id:b,crossref:byId.get(b)}));
  const continuations=expected.filter(id=>headSettled.has(id)&&!deferredHeads.has(id)&&pages(id)===1&&(byId.get(id)?.latest?.some((j:any)=>j.status==='pending')||byId.get(id)?.history?.length)).sort((a,b)=>String(byId.get(a)?.lastContinuationAttemptAt||'').localeCompare(String(byId.get(b)?.lastContinuationAttemptAt||''))||a.localeCompare(b));
  const persisted=(await db.prepare("SELECT DISTINCT source_id FROM research_ingestion_work WHERE origin_batch_key=? AND status='pending' ORDER BY observed_at,ordinal").bind(batchKey).all()).results.map((r:any)=>r.source_id);
- const nextSourceId=(heads.length?heads:persisted.length?persisted:continuations)[0]||null;
- return {stop:!nextSourceId,scope:'batch',reason:nextSourceId?null:'sources_exhausted',nextAction:nextSourceId?'sync_next':'finish_batch',nextSourceId,dispatchableSources:heads.length?heads:persisted.length?persisted:continuations,deadlineAt:new Date(Date.parse(batch.started_at)+maxMs).toISOString(),pass:heads.length?'head':persisted.length?'persist':'continuation',headSourcesRemaining:heads,headDeferredSources:[...deferredHeads],expectedSources:expected};
+ // Reserve a bounded tail for older cursors once enough heads have settled.
+ // Head age rotates the deferred first checks in the next window; no attempt
+ // is fabricated, and the atomic page and per-source caps remain unchanged.
+ const remainingPages=RESEARCH_PAGE_BUDGET-Number(values.get('collection-budget:'+cycle)||0);
+ const pass=persisted.length&&!heads.length?'persist':continuations.length&&(!heads.length||remainingPages<=8)?'continuation':heads.length?'head':persisted.length?'persist':'continuation';
+ const dispatchableSources=pass==='head'?heads:pass==='persist'?persisted:continuations;const nextSourceId=dispatchableSources[0]||null;
+ return {stop:!nextSourceId,scope:'batch',reason:nextSourceId?null:'sources_exhausted',nextAction:nextSourceId?'sync_next':'finish_batch',nextSourceId,dispatchableSources,deadlineAt:new Date(Date.parse(batch.started_at)+maxMs).toISOString(),pass,headSourcesRemaining:heads,headDeferredSources:[...deferredHeads],expectedSources:expected};
 }
 export async function stopCrossrefSlot(db:any,at=new Date(),batchKey:string|null=null){
  const row=await db.prepare("SELECT value FROM research_settings WHERE key='crossref_http_cooldown'").first();

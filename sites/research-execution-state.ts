@@ -12,10 +12,13 @@ export function executionSlots(at:Date){
 }
 export function projectExecution(slot:any,evidence:any,at:Date,schedule:any){
  const due=Date.parse(slot.scheduledAt)<=at.getTime(),expected=!!schedule?.verified&&schedule.periods.some((p:any)=>Date.parse(slot.scheduledAt)>=Date.parse(p.from)&&(p.to==null||Date.parse(slot.scheduledAt)<Date.parse(p.to)));
- const batch=evidence.batch,ops=evidence.operations||[],latest=ops.slice().sort((a:any,b:any)=>String(b.started_at).localeCompare(a.started_at)||String(b.id).localeCompare(a.id))[0],reason=latest?.reason?operationReason(latest.reason):null;
+ const batch=evidence.batch,ops=evidence.operations||[],latest=ops.slice().sort((a:any,b:any)=>String(b.started_at).localeCompare(a.started_at)||String(b.id).localeCompare(a.id))[0];
  const coverage=batch?{expected:Number(batch.expected_sources),attempted:Number(batch.attempted_sources),complete:Number(batch.complete_sources)}:null;
  const lifecycle=batch?batchLifecycle({...batch,slot:Number(slot.batchKey.slice(-2))},at):null;
  const terminal=!!batch&&['finished','interrupted'].includes(batch.status),complete=!!batch&&batch.status==='finished'&&!!batch.finished_at&&coverage!.complete===coverage!.expected;
+ // Historical finish receipts used the generic work_pending fallback for partial
+ // coverage. Preserve other phases and genuine pending/unknown evidence.
+ const reason=latest?.phase==='batch_finish'&&latest.reason==='work_pending'&&batch?.status==='finished'&&coverage!.complete<coverage!.expected?'coverage_incomplete':latest?.reason?operationReason(latest.reason):null;
  const invocation=evidence.runtimeIngress||ops.some((o:any)=>['batch_start','batch_collect'].includes(o.phase))?'observed':'unknown';
  const postprocessing=evidence.postprocessing||{},debt=Number(postprocessing.metadata||0)+Number(postprocessing.daily||0),brief=evidence.brief?.status||'not_registered';
  let state='not_started';

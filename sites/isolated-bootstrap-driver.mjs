@@ -26,7 +26,7 @@ export async function runPinnedIsolatedBootstrap({origin,token,expectedSource,ex
  if(dirty||source!==expectedBootstrapSource)throw Error('Full bootstrap requires the exact clean candidate checkout');
  const entry=pathToFileURL(resolve('sites/run-stable-research-slot.mjs')).href,clock=Date.parse(startedAt);
  const script=`const start=performance.now();Date.now=()=>${clock}+Math.floor(performance.now()-start);const {privateStableSlotMain}=await import(${JSON.stringify(entry)});await privateStableSlotMain().catch(()=>{process.exitCode=2});`;
- const input={baseUrl:origin,allowedOrigins:[origin],token,automationStartedAt:startedAt,slot:20,expectedBootstrapSource:source,budgetMs:540000,collectionCalls:35};
+ const input={baseUrl:origin,allowedOrigins:[origin],token,automationStartedAt:startedAt,slot:20,expectedBootstrapSource:source,budgetMs:540000,collectionCalls:60};
  const result=await new Promise((resolveResult,reject)=>{
   const child=spawn(process.execPath,['--input-type=module','-e',script],{stdio:['pipe','pipe','pipe']});let stdout='',stderr='';
   const timer=setTimeout(()=>{child.kill('SIGTERM');reject(processFailure('isolated_bootstrap_timeout',processDiagnostic(stdout,stderr,null)))},550000);

@@ -1,8 +1,22 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-11-01T23:26:50Z",
+  "latestVersion": "2026-11-04T05:51:58Z",
   "releases": [
+    {
+      "id": "hkis-batch-coverage-reason-20261104",
+      "at": "2026-11-04T05:51:58Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "区分采集覆盖不足与待处理工作",
+      "body": [
+        "采集批次已结束但覆盖不足时，运行状态和新收尾回执显示覆盖不足，避免误认为仍有待入库工作。",
+        "采集在既有分页额度内为旧游标预留机会，日报在已登记待办间轮换，保留真实积压与冷却状态；来源调用上限的生效须与计划任务一同切换。"
+      ],
+      "sources": [
+        {"label": "采集状态实现", "url": "https://github.com/sea-monsters/AIHOT/blob/main/industry/changelog.json"}
+      ]
+    },
     {
       "id": "hkis-upstream-dependencies-20261101",
       "at": "2026-11-01T23:26:50Z",

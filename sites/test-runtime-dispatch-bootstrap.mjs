@@ -43,7 +43,7 @@ try{
  ${early?'Date.now=()=>Date.parse('+JSON.stringify(writeAt)+');':recovery?"const wall=performance.now();Date.now=()=>Date.parse('2026-10-24T12:00:00.000Z')+Math.floor(performance.now()-wall);":''}
  const nativeFetch=globalThis.fetch;globalThis.fetch=(url,options)=>{const u=new URL(url);if(u.origin!==${JSON.stringify(origin)}||options.redirect!=='error')throw Error('Fixture origin');return nativeFetch('http://127.0.0.1:${port}'+u.pathname,options)};
  privateStableSlotMain().catch(e=>{process.stderr.write(String(e.code||'fixture_failed'));process.exitCode=2});`;
- const input={baseUrl:origin,allowedOrigins:[origin],token:PRIVATE_SITES_TEST_TOKEN,automationStartedAt:early?preparedAt:recovery?'2026-10-24T12:00:00.000Z':new Date().toISOString(),slot:early?8:20,expectedBootstrapSource:pin,diagnosticOnly:!early,budgetMs:540000,collectionCalls:35};
+ const input={baseUrl:origin,allowedOrigins:[origin],token:PRIVATE_SITES_TEST_TOKEN,automationStartedAt:early?preparedAt:recovery?'2026-10-24T12:00:00.000Z':new Date().toISOString(),slot:early?8:20,expectedBootstrapSource:pin,diagnosticOnly:!early,budgetMs:540000,collectionCalls:candidate?60:35};
  const result=await new Promise((resolve,reject)=>{
   const child=spawn(process.execPath,['--input-type=module','-e',script],{cwd:checkout,stdio:['pipe','pipe','pipe']});let stdout='',stderr='';
   const timer=setTimeout(()=>{child.kill('SIGKILL');reject(Error('Pinned bootstrap fixture timeout'))},recovery?65000:20000);

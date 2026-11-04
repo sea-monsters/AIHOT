@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,readdirSync} from 'node:fs';
-import {operationsApi,operationCall,operationReason,OPERATION_DAYS,OPERATION_CAP} from './research-operations.ts';
+import {operationsApi,operationCall,operationOutcome,operationReason,OPERATION_DAYS,OPERATION_CAP} from './research-operations.ts';
 import {RESEARCH_SOURCES} from './research-config.ts';
 import {AIError} from './ai/security.ts';
 
@@ -82,6 +82,12 @@ test('operation API preserves owner-only access, no-store headers, read-only ret
 test('fixed collection stop and deferral codes remain diagnosable without accepting arbitrary text',()=>{
  for(const reason of ['page_budget','time_budget','sources_exhausted','crossref_cooldown','crossref_rate_limit','batch_interrupted','head_deferred','head_pass_pending','backfill_pending','latest_pending','history_pending','coverage_incomplete','collection_stopped','collection_failed','provider_deferred','provider_pending','configuration_changed','no_dispatchable_source','sync_call_budget','slice_deadline','slice_call_limit'])assert.equal(operationReason(reason),reason);
  for(const input of ['SYNTHETIC_PRIVATE_BODY',null,{},['page_budget']])assert.equal(operationReason(input),'other');
+});
+
+test('finished batch with partial coverage records the coverage reason',()=>{
+ assert.deepEqual(operationOutcome({status:'partial',batchStatus:'finished'},'batch_finish'),{state:'deferred',reason:'coverage_incomplete'});
+ assert.deepEqual(operationOutcome({status:'partial',batchStatus:'running'},'batch_finish'),{state:'deferred',reason:'work_pending'});
+ assert.deepEqual(operationOutcome({status:'partial',batchStatus:'finished',reason:'ingestion_pending'},'batch_finish'),{state:'deferred',reason:'ingestion_pending'});
 });
 
 test('request journal distinguishes collection pending, known failures and unknown acknowledgments',async()=>{

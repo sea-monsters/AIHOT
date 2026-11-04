@@ -133,3 +133,11 @@ test('selective scoring exposes unknown receipt attempts and never replays an em
   }finally{f.sql.close()}}
  }finally{globalThis.fetch=oldFetch}
 });
+
+
+test('daily plan rotates registered debt while freezing each day and preserving cooled work',async()=>{
+ const f=fixture();try{work(f,'2026-10-22','2026-10-21','pending');work(f,'2026-10-23','2026-10-22','pending');const before=f.sql.prepare('SELECT * FROM research_daily_work WHERE date<? ORDER BY date').all('2026-10-25');
+  const first=await recordRunPlan(f.db,8,at);assert.equal(first.maintenance.sourceDay,'2026-10-21');assert.deepEqual(await recordRunPlan(f.db,8,at),first);await assert.rejects(assertMaintenanceTarget(f.db,{sourceDay:'2026-10-22',reportDate:'2026-10-23'},at),(e:any)=>e.code==='runtime_goal_changed');
+  const tomorrow=new Date(at.getTime()+86400000),second=await recordRunPlan(f.db,8,tomorrow);assert.equal(second.maintenance.sourceDay,'2026-10-22');assert.deepEqual(await assertMaintenanceTarget(f.db,second.maintenance,tomorrow),second.maintenance);assert.deepEqual(f.sql.prepare('SELECT * FROM research_daily_work WHERE date<? ORDER BY date').all('2026-10-25'),before);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
+ }finally{f.sql.close()}
+});

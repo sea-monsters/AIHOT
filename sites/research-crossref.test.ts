@@ -4,6 +4,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,readdirSync} from 'node:fs';
 import {monthWindow,PIPELINE_VERSION} from './research-pipeline.ts';
 import {prepareCrossref,nextCrossrefPage,reserveCrossrefPage,markCrossrefAttempt,crossrefURL,commitCrossrefPage,crossrefSummary,collectionCycle,type CrossrefState} from './research-crossref.ts';
+import {collectionControl} from './research-collection-control.ts';
 import {collectResearch,collectResearchBatch} from './research-refresh-plan.ts';
 import {initResearch,syncSource,researchStatus,researchApi} from './research.ts';
 import {RESEARCH_SOURCES,RESEARCH_PAGE_BUDGET} from './research-config.ts';
@@ -97,4 +98,15 @@ test('full batch client follows server plan independently of current due list, w
  let calls=0;const result=await collectResearchBatch(async()=>{calls++;return {collectionControl:{stop:calls===4,pass:calls<3?'head':'continuation'}}},{maxPagesPerSource:2,maxMs:260000});assert.equal(result.length,4);
  calls=0;assert.equal((await collectResearchBatch(async()=>{calls++;return {collectionControl:{stop:false,pass:'head'}}},{maxPagesPerSource:2,maxMs:260000})).length,35);
  let time=0;assert.equal((await collectResearchBatch(async()=>{time+=100;return {collectionControl:{stop:false,pass:'head'}}},{maxPagesPerSource:2,maxMs:150,now:()=>time})).length,2);
+});
+
+
+test('bounded page tail advances oldest continuations while unattempted heads stay eligible for later windows',async()=>{
+ const f=fixture(),at=new Date(),key=collectionCycle(at.toISOString(),null),ids=RESEARCH_SOURCES.slice(0,4).map(s=>s.id);try{await initResearch(f.db);
+  f.sql.prepare("INSERT INTO research_batches(key,date,slot,status,sources_json,started_at) VALUES(?,?,?,'running',?,?)").run(key,key.slice(0,10),Number(key.slice(-2)),JSON.stringify(ids),at.toISOString());
+  for(const [i,id] of ids.slice(0,2).entries()){const state=prepareCrossref(null,{}, {},monthWindow(at),at.toISOString(),key).state;state.cycle.pages=1;state.lastContinuationAttemptAt=i?'2026-10-01T00:00:00Z':'2026-10-02T00:00:00Z';f.sql.prepare('INSERT INTO research_settings(key,value) VALUES(?,?)').run('crossref:'+id,JSON.stringify(state));f.sql.prepare("INSERT INTO research_runs(id,started_at,status,source_id,batch_key,details_json) VALUES(?,?,'backfill_pending',?,?,?)").run('fixture-'+i,at.toISOString(),id,key,JSON.stringify({headOutcome:'completed',crossrefPages:[{head:true,status:'pending'}]}));}
+  f.sql.prepare('INSERT INTO research_settings(key,value) VALUES(?,?)').run('collection-budget:'+key,'26');let c=await collectionControl(f.db,key,at);assert.equal(c.pass,'head');assert.deepEqual(c.dispatchableSources,ids.slice(2));
+  f.sql.prepare('UPDATE research_settings SET value=? WHERE key=?').run('27','collection-budget:'+key);c=await collectionControl(f.db,key,at);assert.equal(c.pass,'continuation');assert.deepEqual(c.dispatchableSources,[ids[1],ids[0]]);assert.deepEqual(c.headSourcesRemaining,ids.slice(2));
+  f.sql.prepare('UPDATE research_settings SET value=? WHERE key=?').run('35','collection-budget:'+key);assert.equal((await collectionControl(f.db,key,at)).reason,'page_budget');
+ }finally{f.sql.close()}
 });

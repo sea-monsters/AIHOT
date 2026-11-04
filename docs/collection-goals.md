@@ -96,3 +96,10 @@ Node24.22.1。完整Sites **852/852**，Web **68/68**，typecheck、完整Web cl
 验收期间保留失败证据：首轮完整848/849的唯一断言要求ai_disabled后仍发paid，收紧为不派发后整轮849通过；后续新增真实拒绝不误报成功、published不误报待助手及known配置拒绝等回归，最终852通过。原生组合最初fixture误用ai_preferences.updated_at（实际schema无此列），再因固定同毫秒时钟制造run排序伪差；仅修fixture schema和双端递增时钟，不改门控或删数据断言。真实组合还捕获pending_scoring被ai_disabled掩盖的问题，修复为同时保留依赖reason和blocked维度后3场全过。
 
 [机器可读验收](fixtures/collection-goals-validation.json)记录具体模式、事实和限制。建议父端审查的新固定bootstrap为48d21620f77c0fd2f4eb8a637d8b81590167d0d7（不是自动更新pin）；后续仅文档验收提交不会改变五个执行模块。真实Sites发布、任务全文与pin由父端协调，本执行器不访问生产或补跑。
+
+
+## 2026-11-04 待部署修复
+
+来源调用上限改为每批60次；Crossref分页仍受35次原子限额和每源2页约束。预算末段优先最久未续的已首查来源，未轮到的首查按真实尝试时间在后续窗口轮换；这不保证覆盖完整。日报仅轮换已登记的待办，冻结当日目标，不标记积压为完成，不改变每轮模型额度或未知结果停止原则。
+
+60次调用改变固定运行合同：站点manifest与固定bootstrap均严格校验额度，旧bootstrap不接受新manifest。须在非执行窗口协调切换计划任务固定SHA和输入，再发布站点并回读有效manifest、任务设置和owner权限；源代码合并不代表真实任务已切换。

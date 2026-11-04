@@ -1,5 +1,5 @@
 import {validateRuntimeManifest,RUNTIME_READBACK_PATH} from './research-runtime-contract.ts';
-export const SLOT_LIMITS={totalMs:540000,collection8Ms:260000,collection20Ms:330000,longRequestReserveMs:110000,collectionSliceMs:75000,collectionCalls:35,collectionConcurrency:3,localScoringMinMs:30000,paidScoringMinMs:120000};
+export const SLOT_LIMITS={totalMs:540000,collection8Ms:260000,collection20Ms:330000,longRequestReserveMs:110000,collectionSliceMs:75000,collectionCalls:60,collectionConcurrency:3,localScoringMinMs:30000,paidScoringMinMs:120000};
 const safeOperationId=(v:any)=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)?v.toLowerCase():null;
 type Call=(path:string,body?:any,timeoutMs?:number)=>Promise<any>;
 const rejected=(value:any)=>!!value?.code||!!value?.error;

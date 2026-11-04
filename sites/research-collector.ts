@@ -19,7 +19,7 @@ export async function collectBatchSlice(db:any,batchKey:string,call:(sourceId:st
  let stopReason='slice_deadline',control:any=null,reconcileControl:any=null;
  const tried=new Map<string,number>();
  try{
-  while(results.length<Math.min(35,options.maxCalls)){
+  while(results.length<Math.min(60,options.maxCalls)){
    checkCollectionCancellation(options.signal);
    control=await collectionControl(db,batchKey,new Date(now()));
    if(control.stop){stopReason=control.reason||'sources_exhausted';break;}
@@ -34,7 +34,7 @@ export async function collectBatchSlice(db:any,batchKey:string,call:(sourceId:st
    if(settled.some(r=>r.status==='unknown'||r.status==='interrupted'||r.code)){stopReason='collection_unknown';break;}
    if(settled.some(r=>r.collectionControl?.stop&&/cooldown|rate_limit|429/.test(r.collectionControl.reason||''))){stopReason='provider_cooldown';break;}
   }
-  if(stopReason==='slice_deadline'&&results.length>=Math.min(35,options.maxCalls))stopReason='slice_call_limit';
+  if(stopReason==='slice_deadline'&&results.length>=Math.min(60,options.maxCalls))stopReason='slice_call_limit';
   control=await collectionControl(db,batchKey,new Date(now()));
   if(reconcileControl)control=reconcileControl;
   if(control.stop)stopReason=control.reason||stopReason;
@@ -47,7 +47,7 @@ export async function collectBatchSlice(db:any,batchKey:string,call:(sourceId:st
 }
 export function validateCollectorOptions(body:any){
  if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!['batchKey','maxMs','maxCalls','concurrency'].includes(k)))throw new AIError('invalid_deadline',400,'批量采集参数无效');
- const options={maxMs:body.maxMs??75000,maxCalls:body.maxCalls??35,concurrency:body.concurrency??3};
- for(const [key,max]of [['maxMs',75000],['maxCalls',35],['concurrency',3]] as const)if(!Number.isInteger(options[key])||options[key]<1||options[key]>max)throw new AIError('invalid_deadline',400,'批量采集预算无效');
+ const options={maxMs:body.maxMs??75000,maxCalls:body.maxCalls??60,concurrency:body.concurrency??3};
+ for(const [key,max]of [['maxMs',75000],['maxCalls',60],['concurrency',3]] as const)if(!Number.isInteger(options[key])||options[key]<1||options[key]>max)throw new AIError('invalid_deadline',400,'批量采集预算无效');
  return options;
 }

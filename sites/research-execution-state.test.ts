@@ -12,6 +12,9 @@ test('expected windows are projected without execution; no observed ingress mean
 test('partial crash, coverage, postprocessing, publication, environment and user waits remain separate evidence',()=>{
  assert.equal(projectExecution(slot,{batch:{...batch,status:'running',finished_at:null},operations:[op({state:'unknown',known:0,reason:'database_unknown'})]},at,schedule).state,'waiting_environment');
  assert.equal(projectExecution(slot,{batch:{...batch,complete_sources:1},operations:[op({reason:'provider_cooldown'})]},at,schedule).state,'coverage_incomplete');
+ const partial={...batch,complete_sources:1};assert.equal(projectExecution(slot,{batch:partial,operations:[op({phase:'batch_finish',state:'deferred',reason:'work_pending'})]},at,schedule).reason,'coverage_incomplete');
+ assert.equal(projectExecution(slot,{batch:partial,operations:[op({phase:'metadata',state:'deferred',reason:'work_pending'})]},at,schedule).reason,'work_pending');
+ assert.equal(projectExecution(slot,{batch:{...partial,status:'running',finished_at:null},operations:[op({phase:'batch_finish',state:'deferred',reason:'work_pending'})]},at,schedule).reason,'work_pending');
  assert.equal(projectExecution(slot,{batch},at,schedule).state,'postprocessing_pending');assert.equal(projectExecution(slot,{batch,brief:{status:'published'}},at,schedule).state,'complete');
  assert.equal(projectExecution(slot,{batch,brief:{status:'published'},postprocessing:{metadata:1}},at,schedule).state,'postprocessing_pending');
  assert.equal(projectExecution(slot,{operations:[op({state:'deferred',reason:'owner_setup_required'})]},at,schedule).state,'waiting_user');

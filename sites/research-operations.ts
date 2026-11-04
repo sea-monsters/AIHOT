@@ -91,7 +91,7 @@ export async function operationsApi(request:Request,env:any){
 export function operationOutcome(result:any,phase:string){
  const status=result?.status,unknown=status==='unknown'||result?.known===false||result?.recovery?.known===false;
  const failed=['error','failed'].includes(status)||!!result?.error;
- const coveragePending=status==='backfill_pending'||result?.crossref?.pending===true||Number(result?.crossref?.latestPending)>0||Number(result?.crossref?.historyPending)>0;
+ const coveragePending=(phase==='batch_finish'&&result?.batchStatus==='finished'&&status==='partial')||status==='backfill_pending'||result?.crossref?.pending===true||Number(result?.crossref?.latestPending)>0||Number(result?.crossref?.historyPending)>0;
  const pending=['deferred','partial','busy','blocked','persist_pending','interrupted','backfill_pending','head_pass_pending','collection_stopped','interval_owner_ambiguous'].includes(status)||result?.pending===true||coveragePending||!!result?.blocked||Number(result?.deferred)>0||Number(result?.remainingQueued)>0||Number(result?.remainingMetadata)>0;
  const state=unknown?'unknown':failed?'failed':pending?'deferred':'ok';
  let reason=result?.reason||result?.deferredReason||result?.blocked;

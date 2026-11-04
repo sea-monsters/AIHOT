@@ -18,7 +18,7 @@ export const RUNTIME_PATHS:Record<string,string>={
  '/api/site/research/batch/finish':RUNTIME_ROOT+'/finish',
 };
 export const RUNTIME_HEADERS={contract:'x-hkis-runtime-contract',configHash:'x-hkis-config-hash',sourceRevision:'x-hkis-site-source',bootstrapSource:'x-hkis-bootstrap-source',startedAt:'x-hkis-run-started-at',slot:'x-hkis-runtime-slot'} as const;
-export const RUNTIME_CEILINGS={totalMs:540000,collectionCalls:35,collection8Ms:260000,collection20Ms:330000,collectionSliceMs:75000,collectionConcurrency:3};
+export const RUNTIME_CEILINGS={totalMs:540000,collectionCalls:60,collection8Ms:260000,collection20Ms:330000,collectionSliceMs:75000,collectionConcurrency:3};
 export const DEFAULT_RUNTIME_MANIFEST={schemaVersion:1,protocolMajor:1,requiredCapabilities:[...RUNTIME_CAPABILITIES],limits:{...RUNTIME_CEILINGS},slots:{'8':{template:'scheduled-am-v2',enabled:true,assessmentMaxPapers:1,dailyMaxCalls:2},'20':{template:'scheduled-pm-v2',enabled:true,assessmentMaxPapers:2,dailyMaxCalls:0}}};
 export class RuntimeContractError extends Error {
  code:string;
