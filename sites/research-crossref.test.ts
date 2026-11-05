@@ -5,6 +5,7 @@ import {readFileSync,readdirSync} from 'node:fs';
 import {monthWindow,PIPELINE_VERSION} from './research-pipeline.ts';
 import {prepareCrossref,nextCrossrefPage,reserveCrossrefPage,markCrossrefAttempt,crossrefURL,commitCrossrefPage,crossrefSummary,collectionCycle,type CrossrefState} from './research-crossref.ts';
 import {collectionControl} from './research-collection-control.ts';
+import {collectBatchSlice} from './research-collector.ts';
 import {collectResearch,collectResearchBatch} from './research-refresh-plan.ts';
 import {initResearch,syncSource,researchStatus,researchApi} from './research.ts';
 import {RESEARCH_SOURCES,RESEARCH_PAGE_BUDGET} from './research-config.ts';
@@ -109,4 +110,21 @@ test('bounded page tail advances oldest continuations while unattempted heads st
   f.sql.prepare('UPDATE research_settings SET value=? WHERE key=?').run('27','collection-budget:'+key);c=await collectionControl(f.db,key,at);assert.equal(c.pass,'continuation');assert.deepEqual(c.dispatchableSources,[ids[1],ids[0]]);assert.deepEqual(c.headSourcesRemaining,ids.slice(2));
   f.sql.prepare('UPDATE research_settings SET value=? WHERE key=?').run('35','collection-budget:'+key);assert.equal((await collectionControl(f.db,key,at)).reason,'page_budget');
  }finally{f.sql.close()}
+});
+
+test('after a known 429 only never-admitted sources resume; an extended cooldown stops the batch',async(t)=>{
+ const f=fixture(),old=globalThis.fetch,[a,b,c]=RESEARCH_SOURCES,base=Date.now();let requests=0;t.mock.timers.enable({apis:['Date'],now:base});
+ try{await initResearch(f.db);const at=new Date(),key=collectionCycle(at.toISOString(),null);f.sql.prepare("INSERT INTO research_batches(key,date,slot,status,sources_json,started_at) VALUES(?,?,?,'running',?,?)").run(key,key.slice(0,10),Number(key.slice(-2)),JSON.stringify([a!.id,b!.id,c!.id]),at.toISOString());
+  globalThis.fetch=async()=>{requests++;return requests===1?new Response('',{status:429,headers:{'retry-after':'60'}}):Response.json({message:{items:[]}})};
+  const first:any=await syncSource(f.db,{...a!,rss:null},1,key);assert.equal(first.collectionControl.reason,'crossref_rate_limit');assert.equal(first.collectionControl.nextAction,'wait_cooldown');assert.equal(requests,1);
+  assert.equal((await collectionControl(f.db,key,new Date(),true)).stop,true);t.mock.timers.tick(61000);
+  assert.equal((await collectionControl(f.db,key,new Date())).stop,true,'legacy callers remain stopped');
+  f.sql.prepare("INSERT INTO research_ingestion_work(id,group_id,ordinal,source_id,channel,origin_run_id,origin_batch_key,daily_cohort_key,observed_at,status,payload_json,records) VALUES('pending-fixture','fixture',0,?,'crossref','fixture',?, ?,?,'pending','[]',0)").run(a!.id,key,key,new Date().toISOString());assert.equal((await collectionControl(f.db,key,new Date(),true)).reason,'ingestion_pending');f.sql.prepare("DELETE FROM research_ingestion_work WHERE id='pending-fixture'").run();
+  f.sql.prepare("INSERT INTO research_runs(id,started_at,status,source_id,batch_key,details_json) VALUES('old-unknown',?,'unknown',?,NULL,'{}')").run(new Date().toISOString(),c!.id);assert.deepEqual((await collectionControl(f.db,key,new Date(),true)).dispatchableSources,[b!.id]);f.sql.prepare("DELETE FROM research_runs WHERE id='old-unknown'").run();
+  const resumed=await collectionControl(f.db,key,new Date(),true);assert.equal(resumed.pass,'resume');assert.deepEqual(resumed.dispatchableSources,[b!.id,c!.id].sort());
+  const same:any=await syncSource(f.db,{...a!,rss:null},1,key,'internal',new Date().toISOString(),{},20000,undefined,undefined,true,true);assert.equal(same.status,'head_pass_pending');assert.equal(requests,1);
+  const second:any=await collectBatchSlice(f.db,key,async(id,maxMs)=>syncSource(f.db,{...RESEARCH_SOURCES.find(s=>s.id===id)!,rss:null},1,key,'internal',new Date().toISOString(),{},maxMs,undefined,undefined,true,true),{maxMs:15000,maxCalls:48,concurrency:3,resumeAfterCooldown:true});assert.equal(requests,3);assert.equal(second.calls,2);assert.ok(second.results.every((r:any)=>r.crossrefPages.length===1));assert.equal(second.collectionControl.reason,'sources_exhausted');
+  f.sql.prepare("INSERT INTO research_runs(id,started_at,status,source_id,batch_key,details_json) VALUES('unknown-fixture',?,'unknown',?,?,'{}')").run(new Date().toISOString(),c!.id,key);const unknown=await collectionControl(f.db,key,new Date(),true);assert.equal(unknown.reason,'collection_unknown');assert.equal(unknown.nextAction,'readback_reconcile');f.sql.prepare("UPDATE research_runs SET status='ok' WHERE id='unknown-fixture'").run();const unconfirmed=await collectionControl(f.db,key,new Date(),true);assert.equal(unconfirmed.reason,'collection_unknown');f.sql.prepare("DELETE FROM research_runs WHERE id='unknown-fixture'").run();
+  f.sql.prepare("UPDATE research_settings SET value=? WHERE key='crossref_http_cooldown'").run(new Date(Date.now()+120000).toISOString());const extended=await collectionControl(f.db,key,new Date(),true);assert.equal(extended.stop,true);assert.equal(extended.nextAction,'finish_batch');assert.equal(requests,3);
+ }finally{globalThis.fetch=old;f.sql.close()}
 });

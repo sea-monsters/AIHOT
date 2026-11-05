@@ -4,7 +4,7 @@ export const RUNTIME_CONTRACT='hkis-runtime-v1';
 export const RUNTIME_ROOT='/api/hkis/runtime/v1';
 export const RUNTIME_MANIFEST_PATH=RUNTIME_ROOT+'/manifest';
 export const RUNTIME_READBACK_PATH=RUNTIME_ROOT+'/readback';
-export const RUNTIME_CAPABILITIES=['frozen-writes-v1','bounded-collection-v1','scheduled-cohorts-v1','unknown-stop-v1','collection-first-v1'] as const;
+export const RUNTIME_CAPABILITIES=['frozen-writes-v1','bounded-collection-v1','scheduled-cohorts-v1','unknown-stop-v1','collection-first-v1','cooldown-resume-v1'] as const;
 export const RUNTIME_CODES=['runtime_manifest_invalid','runtime_protocol_unsupported','runtime_capability_unsupported','runtime_budget_invalid','runtime_freeze_required','runtime_changed','runtime_expired','runtime_operation_rejected','runtime_disabled','runtime_source_unavailable','runtime_goal_changed'] as const;
 export const RUNTIME_PATHS:Record<string,string>={
  '/api/site/research/run/plan':RUNTIME_ROOT+'/plan',
@@ -96,7 +96,7 @@ export function runtimeOperationBody(path:string,body:any,frozen:any,now=Date.no
  else if(path.endsWith('/process')){shape(body.cohort==='previous_day'?['maxPapers','cohort','maxMs','deadlineAt','sourceDay']:['maxPapers','cohort','maxMs','deadlineAt']);if(body.cohort!==(frozen.slot===8?'previous_day':'current')&&!(frozen.slot===8&&body.cohort==='current'&&body.maxPapers===0))fail('runtime_operation_rejected');if(body.cohort==='previous_day')target();integer(body.maxPapers,0,s.assessmentMaxPapers);integer(body.maxMs,1,frozen.slot===8?120000:210000);deadline()}
  else if(path.endsWith('/daily/generate')){shape(['maxCalls','sourceDay']);target();integer(body.maxCalls,1,s.dailyMaxCalls);if(frozen.slot!==8||left<190000)fail('runtime_operation_rejected')}
  else if(path.endsWith('/batch/start')){shape(['slot']);if(body.slot!==frozen.slot)fail('runtime_operation_rejected')}
- else if(path.endsWith('/batch/collect')){shape(['batchKey','maxMs','maxCalls','concurrency']);integer(body.maxMs,1,m.limits.collectionSliceMs);integer(body.maxCalls,1,m.limits.collectionCalls);integer(body.concurrency,1,m.limits.collectionConcurrency)}
+ else if(path.endsWith('/batch/collect')){shape(body.resumeAfterCooldown===true?['batchKey','maxMs','maxCalls','concurrency','resumeAfterCooldown']:['batchKey','maxMs','maxCalls','concurrency']);integer(body.maxMs,1,m.limits.collectionSliceMs);integer(body.maxCalls,1,m.limits.collectionCalls);integer(body.concurrency,1,m.limits.collectionConcurrency)}
  else if(path.endsWith('/batch/finish')){shape(['batchKey','maxMs','deadlineAt']);integer(body.maxMs,1,6000);deadline()}
  else fail('runtime_operation_rejected');
  if('batchKey' in body&&body.batchKey!==new Date(Date.parse(frozen.startedAt)+8*3600000).toISOString().slice(0,10)+'/'+String(frozen.slot).padStart(2,'0'))fail('runtime_operation_rejected');

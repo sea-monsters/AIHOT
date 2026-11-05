@@ -7,9 +7,9 @@ import {checkCollectionCancellation,databaseNowSql} from './research-lifecycle.t
 const parse=(s:any,f:any)=>{try{return JSON.parse(s)}catch{return f}};
 /** Finite waves: independent sources overlap persistence/RSS, but all head work
  * settles before continuations. The provider gate still serializes Crossref. */
-export async function collectBatchSlice(db:any,batchKey:string,call:(sourceId:string,maxMs:number)=>Promise<any>,options:{maxMs:number;maxCalls:number;concurrency:number;signal?:AbortSignal;now?:()=>number;startedMs?:number;runtimeBudget?:RuntimeBudget}){
+export async function collectBatchSlice(db:any,batchKey:string,call:(sourceId:string,maxMs:number)=>Promise<any>,options:{maxMs:number;maxCalls:number;concurrency:number;signal?:AbortSignal;now?:()=>number;startedMs?:number;runtimeBudget?:RuntimeBudget;resumeAfterCooldown?:boolean}){
  const now=options.now||Date.now,started=options.startedMs??now(),deadline=runtimeDeadline(started+Math.min(75000,options.maxMs),options.runtimeBudget),results:any[]=[];
- if(deadline-now()<8000)return {batchKey,status:'partial',reason:'slice_deadline',stopReason:'slice_deadline',calls:0,attempted:0,results,collectionControl:await collectionControl(db,batchKey,new Date(now()))};
+ if(deadline-now()<8000)return {batchKey,status:'partial',reason:'slice_deadline',stopReason:'slice_deadline',calls:0,attempted:0,results,collectionControl:await collectionControl(db,batchKey,new Date(now()),options.resumeAfterCooldown===true)};
  const key='batch-collector:'+batchKey,lease=new Date(deadline+5000).toISOString()+'|'+crypto.randomUUID();
  // Coordinator expiry does not cancel source workers delayed by persistence.
  // Fence both first admission and takeover in SQL, including legacy source locks.
@@ -21,7 +21,7 @@ export async function collectBatchSlice(db:any,batchKey:string,call:(sourceId:st
  try{
   while(results.length<Math.min(60,options.maxCalls)){
    checkCollectionCancellation(options.signal);
-   control=await collectionControl(db,batchKey,new Date(now()));
+   control=await collectionControl(db,batchKey,new Date(now()),options.resumeAfterCooldown===true);
    if(control.stop){stopReason=control.reason||'sources_exhausted';break;}
    if(deadline-now()<8000){stopReason='slice_deadline';break;}
    const candidates=(control.dispatchableSources||[control.nextSourceId]).filter((id:string)=>id&&(tried.get(id)||0)<(control.pass==='head'?1:2));
@@ -35,7 +35,7 @@ export async function collectBatchSlice(db:any,batchKey:string,call:(sourceId:st
    if(settled.some(r=>r.collectionControl?.stop&&/cooldown|rate_limit|429/.test(r.collectionControl.reason||''))){stopReason='provider_cooldown';break;}
   }
   if(stopReason==='slice_deadline'&&results.length>=Math.min(60,options.maxCalls))stopReason='slice_call_limit';
-  control=await collectionControl(db,batchKey,new Date(now()));
+  control=await collectionControl(db,batchKey,new Date(now()),options.resumeAfterCooldown===true);
   if(reconcileControl)control=reconcileControl;
   if(control.stop)stopReason=control.reason||stopReason;
   const batch=await db.prepare('SELECT sources_json FROM research_batches WHERE key=?').bind(batchKey).first(),expected:string[]=parse(batch?.sources_json,[]);
@@ -46,8 +46,9 @@ export async function collectBatchSlice(db:any,batchKey:string,call:(sourceId:st
  }finally{await db.prepare('DELETE FROM research_settings WHERE key=? AND value=?').bind(key,lease).run();}
 }
 export function validateCollectorOptions(body:any){
- if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!['batchKey','maxMs','maxCalls','concurrency'].includes(k)))throw new AIError('invalid_deadline',400,'批量采集参数无效');
- const options={maxMs:body.maxMs??75000,maxCalls:body.maxCalls??60,concurrency:body.concurrency??3};
+ if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!['batchKey','maxMs','maxCalls','concurrency','resumeAfterCooldown'].includes(k)))throw new AIError('invalid_deadline',400,'批量采集参数无效');
+ if(body.resumeAfterCooldown!==undefined&&typeof body.resumeAfterCooldown!=='boolean')throw new AIError('invalid_deadline',400,'恢复参数无效');
+ const options={maxMs:body.maxMs??75000,maxCalls:body.maxCalls??60,concurrency:body.concurrency??3,...(body.resumeAfterCooldown===true?{resumeAfterCooldown:true}:{})};
  for(const [key,max]of [['maxMs',75000],['maxCalls',60],['concurrency',3]] as const)if(!Number.isInteger(options[key])||options[key]<1||options[key]>max)throw new AIError('invalid_deadline',400,'批量采集预算无效');
  return options;
 }

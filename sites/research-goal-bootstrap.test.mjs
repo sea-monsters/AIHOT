@@ -82,6 +82,7 @@ const fixtureResponse=async(input,options)=>{
  else if(suffix==='daily')result={status:'deferred',reason:'pending_scoring',blocked:'ai_disabled',date:reportDate,report:{sourceDate:sourceDay},attempted:0};
  else if(suffix==='brief')result={brief:{batchKey:key,status:spec.publishedBrief?'published':'awaiting_analysis'}};
  else throw Error('Unexpected fixture route');
+ if(spec.resume429&&suffix==='collect'&&entry.occurrence===1)result={status:'partial',batchKey:key,calls:1,results:[{status:'error',error:'Crossref HTTP 429',finishedAt:new Date(clock).toISOString()}],collectionControl:{stop:true,reason:'crossref_rate_limit',nextAction:'wait_cooldown',retryAt:new Date(clock).toISOString()},stopReason:'crossref_rate_limit',diagnostics:{remainingPages:34}};
  if(spec.completedTarget&&suffix==='plan')Object.assign(result.maintenance,{completed:true,status:spec.completedTarget});
  if(spec.metadataPartial&&suffix==='metadata')Object.assign(result,{status:'partial',reason:'provider_cooldown',ready:1,deferred:1,remainingMetadata:1});
  if(spec.aiDisabled&&suffix==='scoring')Object.assign(result,{status:'blocked',blocked:'ai_disabled',attempted:0,modelCalls:0,remainingQueued:1});
@@ -252,3 +253,9 @@ test('known collection cancellation and concurrency gates stop without replay, f
 test('known terminal provider rejection remains a partial assessment goal rather than success',async()=>{const result=await run({knownRejection:true});collected(result);assert.equal(result.code,0);assert.equal(goal(result,'assessment').status,'partial');assert.equal(goal(result,'assessment').reason,'provider_rejected');assert.equal(goal(result,'assessment').nextAction,'review_committed_state');assert.equal(posts(result).filter(r=>r.path.endsWith('/scoring')&&r.body.maxPapers>0).length,1)});
 
 test('already published brief is acknowledged without scheduling another assistant analysis',async()=>{const result=await run({publishedBrief:true});collected(result);assert.equal(result.code,0);assert.equal(goal(result,'brief').status,'ok');assert.equal(goal(result,'brief').reason,'goal_completed');assert.equal(goal(result,'brief').nextAction,'none');assert.equal(names(result).filter(n=>n==='brief').length,1)});
+
+
+test('actual fixed bootstrap waits for a known cooldown and continues with the remaining calls',async()=>{
+ const result=await run({slot:20,writeAt:'2026-10-25T12:00:00.000Z',startedAt:'2026-10-25T12:00:00.000Z',resume429:true});
+ const collects=posts(result).filter(r=>r.path.endsWith('/collect'));assert.equal(result.code,0);assert.equal(collects.length,2);assert.equal(collects[0].body.maxCalls,60);assert.equal(collects[1].body.maxCalls,59);assert.equal(collects[1].body.resumeAfterCooldown,true);assert.ok(names(result).includes('finish'));assert.equal(result.stats.providerCalls,0);
+});

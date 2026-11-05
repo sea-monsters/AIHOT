@@ -116,9 +116,9 @@ async function runLegacyResearchSlot(call:Call,slot:8|20,now=Date.now,started=no
 
 /** Explicit new template; legacy direct callers keep their historical profile.
  * The approved bootstrap always validates a manifest and never downgrades. */
-export async function runResearchSlot(call:Call,slot:8|20,now=Date.now,started=now(),runtimeManifest?:any){
+export async function runResearchSlot(call:Call,slot:8|20,now=Date.now,started=now(),runtimeManifest?:any,sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms))){
  if(!runtimeManifest)return runLegacyResearchSlot(call,slot,now,started);
- return runCollectionFirstSlot(call,slot,now,started,validateRuntimeManifest(runtimeManifest));
+ return runCollectionFirstSlot(call,slot,now,started,validateRuntimeManifest(runtimeManifest),sleep);
 }
 const SOFT_GOAL_REASONS=new Set(['pending_metadata','pending_scoring','provider_deferred','provider_cooldown','work_pending','no_new_ready_in_cohort','no_queued_in_cohort','not_configured','ai_disabled','key_unavailable','interactive_only','connection_test_required','time_budget','daily_call_cap','paid_scoring_budget','local_scoring_budget','metadata_deferred']);
 const reasonOf=(v:any)=>v?.code||v?.error||v?.blocked||v?.reason||v?.deferredReason||v?.collectionControl?.reason||null;
@@ -128,7 +128,7 @@ function goalBarrier(v:any):'unknown'|'blocked'|null {
  if(['deferred','blocked'].includes(v.status)&&!SOFT_GOAL_REASONS.has(reasonOf(v)))return 'blocked';
  return null;
 }
-async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started:number,manifest:any){
+async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started:number,manifest:any,sleep:(ms:number)=>Promise<void>){
  const limits={...SLOT_LIMITS,...manifest.limits},policy=manifest.slots[String(slot)],localEnd=new Date(started+8*3600000);localEnd.setUTCHours(slot+1,0,0,0);
  const deadline=Math.min(started+limits.totalMs-2000,localEnd.getTime()-8*3600000),remaining=()=>Math.max(0,deadline-now()),today=new Date(started+8*3600000).toISOString().slice(0,10);
  const steps:any[]=[],goals:any=Object.fromEntries(['collection','metadata_current','rules_current','metadata_previous','rules_previous','assessment','daily','brief'].map(k=>[k,{status:'pending',reason:null,sourceDay:k.endsWith('_current')?today:null,reportDate:null}]));
@@ -189,14 +189,14 @@ async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started
  if(goalBarrier(batch)||!batch?.batchKey)return stop('collection',batch,'batch_not_terminal');
  batchKey=batch.batchKey;if(batch.collectionContract!=='bounded-v1'){mark('collection','unknown','collection_contract_unconfirmed');return outcome('unknown','collection_contract_unconfirmed')}
  mark('collection','pending');collectionDeadline=Math.min(now()+collectionBudgetMs,deadline-60000);
- let control=batch.collectionControl;
+ let control=batch.collectionControl,resumeAfterCooldown=false,waitedForCooldown=false;
  if(batch.status==='running'){
   if(!control||typeof control.stop!=='boolean'||control.nextAction==='readback_reconcile'){mark('collection','blocked','collection_interrupted_readback_reconcile');return outcome('blocked','collection_interrupted_readback_reconcile')}
   while(collectionCalls<limits.collectionCalls&&!control.stop){
-   if(!control.nextSourceId){collectionStopReason='no_dispatchable_source';break}
+   if(!control.nextSourceId&&!resumeAfterCooldown){collectionStopReason='no_dispatchable_source';break}
    const left=collectionDeadline-now();if(left<30000){collectionStopReason='collection_time_budget';break}
    const maxMs=Math.min(limits.collectionSliceMs,left-15000),maxCalls=limits.collectionCalls-collectionCalls;collectionRequests++;
-   const v=await invoke('collection','/api/site/research/batch/collect',{batchKey,maxMs,maxCalls,concurrency:limits.collectionConcurrency},maxMs+15000);
+   const v=await invoke('collection','/api/site/research/batch/collect',{batchKey,maxMs,maxCalls,concurrency:limits.collectionConcurrency,...(resumeAfterCooldown?{resumeAfterCooldown:true}:{})},maxMs+15000);
    if(!v||v.status==='unknown'||v.batchKey!==batchKey||!Array.isArray(v.results)||!Number.isInteger(v.calls)||v.calls<0||v.calls>maxCalls||v.calls!==v.results.length||!v.collectionControl||typeof v.collectionControl.stop!=='boolean'||typeof v.stopReason!=='string'){
     return readbackUnknownCollect(v);
    }
@@ -204,7 +204,14 @@ async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started
    if(v.results.some((r:any)=>!r||r.status==='unknown')){mark('collection','unknown','collection_interrupted_readback_reconcile');return outcome('unknown','collection_interrupted_readback_reconcile')}
    if(v.code||v.error||v.status==='interrupted'||v.collectionControl.nextAction==='readback_reconcile'||v.results.some((r:any)=>r.code||r.status==='interrupted'||r.error==='collection_canceled'))return stop('collection',v,'collection_interrupted_readback_reconcile');
    control=v.collectionControl;collectionStopReason=v.stopReason||control.reason;
-   if(control.stop)break;
+   if(control.stop){
+    const retryAt=typeof control.retryAt==='string'?Date.parse(control.retryAt):NaN,wait=Math.max(0,retryAt-now());
+    const safeResult=(r:any)=>r&&(!r.error&&['head_pass_pending','collection_stopped','not_due'].includes(r.status)||Number.isFinite(Date.parse(r.finishedAt||''))&&(!r.error&&['ok','backfill_pending'].includes(r.status)||r.status==='error'&&['Crossref HTTP 429','Crossref HTTP 429 shared cooldown'].includes(r.error)));
+    if(control.reason==='crossref_rate_limit'&&v.results.some((r:any)=>r?.status!=='persist_pending'&&!safeResult(r))){mark('collection','unknown','collection_interrupted_readback_reconcile');return outcome('unknown','collection_interrupted_readback_reconcile')}
+    const canWait=v.results.every(safeResult)&&!waitedForCooldown&&control.reason==='crossref_rate_limit'&&control.nextAction==='wait_cooldown'&&Number.isFinite(retryAt)&&Number.isInteger(v.diagnostics?.remainingPages)&&v.diagnostics.remainingPages>0&&collectionCalls<limits.collectionCalls&&!v.results.some((r:any)=>r.status==='persist_pending')&&now()+wait+30000<=collectionDeadline&&remaining()>=wait+90000;
+    if(!canWait)break;
+    waitedForCooldown=true;await sleep(wait);resumeAfterCooldown=true;control={...control,stop:false};continue;
+   }
    if(v.calls===0||['deferred','blocked','busy'].includes(v.status)||!['slice_deadline','slice_call_limit'].includes(v.stopReason))break;
   }
   collectionStopReason??=control?.reason||(collectionCalls>=limits.collectionCalls?'call_budget':'collection_stopped');collectionStoppedAt=now();

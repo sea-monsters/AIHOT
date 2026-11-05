@@ -5,12 +5,15 @@ const parse=(s:any,f:any)=>{try{return JSON.parse(s)}catch{return f}};
 export const headAge=(s:any)=>String(s.crossref&&'lastHeadAttemptAt' in s.crossref?s.crossref.lastHeadAttemptAt||'':s.crossref?.headPlannedThrough||'');
 export const headOrder=(a:any,b:any)=>headAge(a).localeCompare(headAge(b))||a.id.localeCompare(b.id);
 export function collectionStopped(result:any){return !!result?.code||['unknown','interrupted'].includes(result?.status)||result?.collectionControl?.stop===true||/HTTP 429|shared cooldown/.test(result?.error||'');}
-export async function collectionControl(db:any,batchKey:string|null,at=new Date()):Promise<any>{
+export async function collectionControl(db:any,batchKey:string|null,at=new Date(),resumeAfterCooldown=false):Promise<any>{
  const cycle=collectionCycle(at.toISOString(),batchKey);
  const rows=(await db.prepare("SELECT key,value FROM research_settings WHERE key IN ('crossref_http_cooldown',?,?)").bind('collection-stop:'+cycle,'collection-budget:'+cycle).all()).results;
  const values=new Map<string,string>(rows.map((r:any)=>[r.key,r.value]));
  const saved=parse(values.get('collection-stop:'+cycle),null),retryAt=values.get('crossref_http_cooldown')||null;
- if(saved)return {...saved,stop:true,scope:'slot',nextAction:'finish_batch'};
+ if(resumeAfterCooldown&&!saved)return {stop:true,scope:'batch',reason:'collection_unknown',nextAction:'readback_reconcile'};
+ const savedUntil=Date.parse(saved?.retryAt||''),sharedUntil=Date.parse(retryAt||'');
+ const eligibleStop=!!batchKey&&saved?.reason==='crossref_rate_limit'&&Number.isFinite(savedUntil)&&Number.isFinite(sharedUntil)&&sharedUntil<=savedUntil;
+ if(saved&&(!eligibleStop||!resumeAfterCooldown||at.getTime()<savedUntil))return {...saved,stop:true,scope:'slot',nextAction:eligibleStop?'wait_cooldown':'finish_batch'};
  if(retryAt&&Date.parse(retryAt)>at.getTime())return {stop:true,scope:'global',reason:'crossref_cooldown',retryAt,nextAction:'finish_batch'};
  if(Number(values.get('collection-budget:'+cycle)||0)>=RESEARCH_PAGE_BUDGET)return {stop:true,scope:'slot',reason:'page_budget',retryAt:null,nextAction:'finish_batch'};
  if(!batchKey)return {stop:false};
@@ -22,8 +25,19 @@ export async function collectionControl(db:any,batchKey:string|null,at=new Date(
  const expected:string[]=parse(batch.sources_json,[]),states=(await db.prepare("SELECT key,value FROM research_settings WHERE key LIKE 'crossref:%'").all()).results;
  const byId=new Map<string,any>(states.map((r:any)=>[r.key.slice(9),parse(r.value,{})]));
  const pages=(id:string)=>{const s=byId.get(id);return s?.cycle?.key===cycle?s.cycle.pages:0};
- const runs=(await db.prepare('SELECT source_id,status,details_json,close_reason FROM research_runs WHERE batch_key=? ORDER BY started_at,id').bind(batchKey).all()).results;
+ const runs=(await db.prepare('SELECT source_id,status,finished_at,details_json,close_reason FROM research_runs WHERE batch_key=? ORDER BY started_at,id').bind(batchKey).all()).results;
  if(runs.some((r:any)=>r.close_reason==='client_canceled'||['unknown','interrupted'].includes(r.status)))return {stop:true,scope:'batch',reason:runs.some((r:any)=>r.close_reason==='client_canceled')?'collection_canceled':'collection_unknown',nextAction:'readback_reconcile',...batchLifecycle(batch,at)};
+ if(saved&&resumeAfterCooldown){
+  const known429=(r:any)=>r.status==='error'&&['Crossref HTTP 429','Crossref HTTP 429 shared cooldown'].includes(parse(r.details_json,{})?.error);
+  if(!runs.some(known429)||runs.some((r:any)=>r.status!=='running'&&!r.finished_at||!known429(r)&&!['ok','backfill_pending','running'].includes(r.status)))return {stop:true,scope:'batch',reason:'collection_unknown',nextAction:'readback_reconcile'};
+  // Resume only never-admitted sources. Empty page arrays alone do not prove
+  // that a previous request was never dispatched; keep every prior run fenced.
+  const pending=await db.prepare("SELECT 1 AS n FROM research_ingestion_work WHERE origin_batch_key=? AND status='pending' LIMIT 1").bind(batchKey).first();
+  if(pending)return {stop:true,scope:'batch',reason:'ingestion_pending',nextAction:'finish_batch'};
+  const uncertain=(await db.prepare("SELECT DISTINCT source_id FROM research_runs WHERE source_id IN (SELECT value FROM json_each(?)) AND (close_reason='client_canceled' OR (finished_at IS NULL AND status IN ('running','unknown','interrupted')))").bind(JSON.stringify(expected)).all()).results;
+  const attempted=new Set([...runs,...uncertain].map((r:any)=>r.source_id)),dispatchableSources=expected.filter(id=>!attempted.has(id)).sort((a,b)=>headOrder({id:a,crossref:byId.get(a)},{id:b,crossref:byId.get(b)}));
+  return {stop:!dispatchableSources.length,scope:'batch',reason:dispatchableSources.length?null:'sources_exhausted',nextAction:dispatchableSources.length?'sync_next':'finish_batch',nextSourceId:dispatchableSources[0]||null,dispatchableSources,deadlineAt:new Date(Date.parse(batch.started_at)+maxMs).toISOString(),pass:'resume',headSourcesRemaining:dispatchableSources,headDeferredSources:[],expectedSources:expected};
+ }
  const headSettled=new Set<string>(),deferredHeads=new Set<string>();
  for(const r of runs){const d=parse(r.details_json,{});if(d.headOutcome==='staged')headSettled.add(r.source_id);if(d.crossrefPages?.some((p:any)=>p.head&&['complete','pending'].includes(p.status)))headSettled.add(r.source_id);else if(d.headOutcome==='deferred'){headSettled.add(r.source_id);deferredHeads.add(r.source_id)}}
  const deferred=(await db.prepare("SELECT key FROM research_settings WHERE key LIKE ?").bind('head-deferred:'+batchKey+':%').all()).results;
@@ -41,7 +55,7 @@ export async function collectionControl(db:any,batchKey:string|null,at=new Date(
 }
 export async function stopCrossrefSlot(db:any,at=new Date(),batchKey:string|null=null){
  const row=await db.prepare("SELECT value FROM research_settings WHERE key='crossref_http_cooldown'").first();
- const control={stop:true,scope:'slot',reason:'crossref_rate_limit',retryAt:row?.value||null,nextAction:'finish_batch'};
+ const control={stop:true,scope:'slot',reason:'crossref_rate_limit',retryAt:row?.value||null,nextAction:row?.value?'wait_cooldown':'finish_batch'};
  await db.prepare('INSERT OR IGNORE INTO research_settings(key,value) VALUES(?,?)').bind('collection-stop:'+collectionCycle(at.toISOString(),batchKey),JSON.stringify(control)).run();
  return control;
 }

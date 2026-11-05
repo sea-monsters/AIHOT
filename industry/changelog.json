@@ -1,8 +1,22 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-11-04T05:51:58Z",
+  "latestVersion": "2026-11-05T00:42:42Z",
   "releases": [
+    {
+      "id": "hkis-crossref-cooldown-resume-20261105",
+      "at": "2026-11-05T00:42:42Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "限流冷却后有界继续未尝试来源",
+      "body": [
+        "采集收到已确认的 Crossref 限流时，可在同一批次内等待一次共享冷却，时间和额度充足且状态明确时继续从未入场的来源。",
+        "沿用原始截止时间与来源、分页额度；未知结果、未确认落库或再次限流时安全停止，不重放先前来源。此规则需要固定执行器和站点配套更新。"
+      ],
+      "sources": [
+        {"label": "限流后续采说明", "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/collection-goals.md"}
+      ]
+    },
     {
       "id": "hkis-batch-coverage-reason-20261104",
       "at": "2026-11-04T05:51:58Z",
