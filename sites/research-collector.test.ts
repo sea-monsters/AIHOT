@@ -19,6 +19,13 @@ test('known provider HTTP failure records truthful phase, status and source stag
   const log=f.sql.prepare("SELECT error_code,http_status,metadata_json,request_id,correlation_id FROM runtime_logs WHERE event='collection_finished' ORDER BY id DESC LIMIT 1").get()!;assert.equal(log.error_code,'provider_http_5xx');assert.equal(log.http_status,503);assert.equal(log.request_id,await logReference(trace.requestId));assert.equal(log.correlation_id,await logReference(trace.automationId));assert.equal(JSON.parse(String(log.metadata_json)).failurePhase,'crossref_connect');assert.ok(!JSON.stringify({ops,log,result}).includes('SYNTHETIC_PRIVATE_PROVIDER_BODY'));
  }finally{globalThis.fetch=original;f.sql.close()}
 });
+test('failed collection summary insert leaves business outcome unknown and blocks replay',async()=>{
+ const {initResearch,syncSource}=await import('./research.ts'),{RESEARCH_SOURCES}=await import('./research-config.ts'),f=setup(),old=globalThis.fetch;let providerCalls=0,replays=0;try{
+  await initResearch(f.db);f.sql.exec("CREATE TRIGGER summary_fail BEFORE INSERT ON runtime_logs WHEN NEW.event='collection_finished' BEGIN SELECT RAISE(ABORT,'synthetic diagnostic failure'); END");globalThis.fetch=async()=>{providerCalls++;return new Response('',{status:503})};const source={...RESEARCH_SOURCES.find(s=>s.id===f.ids[0])!,rss:null};
+  const result=await syncSource(f.db,source,1,f.key,'internal',new Date().toISOString(),{},20000,undefined,undefined,true);assert.equal(providerCalls,1);assert.equal(result.status,'unknown');assert.equal(result.collectionControl.nextAction,'readback_reconcile');const row=f.sql.prepare('SELECT status,finished_at FROM research_runs WHERE id=?').get(result.runId)!;assert.equal(row.status,'unknown');assert.equal(row.finished_at,null);assert.equal(f.sql.prepare("SELECT count(*) n FROM runtime_logs WHERE event='collection_finished'").get()!.n,0);
+  const again=await collectBatchSlice(f.db,f.key,async()=>{replays++;throw Error('must not dispatch')},{maxMs:75000,maxCalls:60,concurrency:3});assert.equal(again.calls,0);assert.equal(replays,0);assert.equal(providerCalls,1);
+ }finally{globalThis.fetch=old;f.sql.close()}
+});
 test('confirmed 429 and unknown network failures retain distinct source operation states without extra attempts',async()=>{
  const {initResearch,syncSource}=await import('./research.ts'),{RESEARCH_SOURCES}=await import('./research-config.ts');
  for(const mode of ['rate','network']){const f=setup(),original=globalThis.fetch;let calls=0;try{
