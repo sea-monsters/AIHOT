@@ -16,23 +16,23 @@ test('advertised bounded collection uses serial 75s slices and decrements source
   if(path.endsWith('/collect')){active++;bodies.push(body);assert.ok(body.maxMs<=75000);assert.equal(timeout,body.maxMs+15000);await Promise.all(Array.from({length:3},async()=>{await Promise.resolve();}));active--;return ++slice===1?settled(20):settled(15,{collectionControl:{stop:true,reason:'sources_exhausted'},stopReason:'sources_exhausted'});}
   return maintenance(path);
  },20,()=>0);
- assert.equal(paths.some(p=>p.endsWith('/sync')),false);assert.deepEqual(bodies.map(b=>b.maxCalls),[35,15]);assert.ok(bodies.every(b=>b.batchKey===key&&b.concurrency===3));
+ assert.equal(paths.some(p=>p.endsWith('/sync')),false);assert.deepEqual(bodies.map(b=>b.maxCalls),[60,40]);assert.ok(bodies.every(b=>b.batchKey===key&&b.concurrency===3));
  assert.ok(paths.includes('/api/site/research/batch/finish'));assert.deepEqual(paths.slice(-4),['/api/site/research/ingestion/recover','/api/site/research/enrich','/api/site/research/process','/api/site/research/process']);
- assert.equal(result.collectionCalls,35);assert.equal(result.collectionRequests,2);assert.equal(result.remainingCollectionCalls,0);assert.equal(result.collectionStopReason,'sources_exhausted');assert.equal(result.coverageStatus,'complete');assert.equal(result.status,'ok');
+ assert.equal(result.collectionCalls,35);assert.equal(result.collectionRequests,2);assert.equal(result.remainingCollectionCalls,25);assert.equal(result.collectionStopReason,'sources_exhausted');assert.equal(result.coverageStatus,'complete');assert.equal(result.status,'ok');
 });
 
-test('35-call client ceiling remains independent of provider page attempts',async()=>{
+test('60-call client ceiling remains independent of the 35-page provider budget',async()=>{
  const requested:number[]=[];const result=await runResearchSlot(async(path,body)=>{
   if(path.endsWith('/start'))return start();
   if(path.endsWith('/collect')){requested.push(body.maxCalls);return settled(requested.length===1?30:5,{results:Array.from({length:requested.length===1?30:5},()=>({status:'ok',crossrefPages:[]})),diagnostics:{pageAttempts:0,remainingPages:35}});}
   return path.endsWith('/finish')?finish({status:'partial',completeSources:0}):maintenance(path);
  },20,()=>0);
- assert.deepEqual(requested,[35,5]);assert.equal(result.collectionStopReason,'call_budget');assert.equal(result.remainingCollectionCalls,0);assert.equal(result.collectionDiagnostics.remainingPages,35);assert.equal(result.status,'partial');
+ assert.deepEqual(requested,[60,30,25,20,15,10,5]);assert.equal(result.collectionStopReason,'call_budget');assert.equal(result.remainingCollectionCalls,0);assert.equal(result.collectionDiagnostics.remainingPages,35);assert.equal(result.status,'partial');
 });
 
 test('empty or blocked settled slices stop without busy polling or legacy fallback',async()=>{
  for(const [status,count] of [['ok',0],['partial',1],['deferred',0]] as const){const paths:string[]=[];const result=await runResearchSlot(async path=>{paths.push(path);if(path.endsWith('/start'))return start();if(path.endsWith('/collect'))return settled(count,{status,stopReason:'no_dispatchable_source'});return maintenance(path);},20,()=>0);
-  assert.equal(paths.filter(p=>p.endsWith('/collect')).length,1);assert.equal(paths.filter(p=>p.endsWith('/sync')).length,0);assert.equal(paths.filter(p=>p.endsWith('/finish')).length,1);assert.equal(result.collectionStopReason,'no_dispatchable_source');assert.equal(result.remainingCollectionCalls,35-count);assert.equal(result.status,'partial');}
+  assert.equal(paths.filter(p=>p.endsWith('/collect')).length,1);assert.equal(paths.filter(p=>p.endsWith('/sync')).length,0);assert.equal(paths.filter(p=>p.endsWith('/finish')).length,1);assert.equal(result.collectionStopReason,'no_dispatchable_source');assert.equal(result.remainingCollectionCalls,60-count);assert.equal(result.status,'partial');}
 });
 
 test('unknown, interrupted or malformed bounded outcomes never replay, downgrade, finish or start maintenance',async()=>{
@@ -57,7 +57,7 @@ test('AM preparation stays prior-day, and batch start plus response margins cann
 
 test('PM retains the 330s collection ceiling with bounded slices and explicit time stop',async()=>{
  let time=0;const maxMs:number[]=[];const result=await runResearchSlot(async(path,body,timeout)=>{if(path.endsWith('/start'))return start();if(path.endsWith('/collect')){maxMs.push(body.maxMs);time+=timeout!;return settled(1);}return maintenance(path);},20,()=>time);
- assert.deepEqual(maxMs,[75000,75000,75000,45000]);assert.equal(result.collectionBudgetMs,330000);assert.equal(result.collectionStopReason,'collection_time_budget');assert.equal(result.elapsedMs,330000);assert.equal(result.remainingMs,210000);assert.equal(result.remainingCollectionCalls,31);
+ assert.deepEqual(maxMs,[75000,75000,75000,45000]);assert.equal(result.collectionBudgetMs,330000);assert.equal(result.collectionStopReason,'collection_time_budget');assert.equal(result.elapsedMs,330000);assert.equal(result.remainingMs,210000);assert.equal(result.remainingCollectionCalls,56);
 });
 
 test('finished HTTP response alone never declares collection coverage complete',async()=>{
@@ -69,7 +69,7 @@ test('finished HTTP response alone never declares collection coverage complete',
 
 test('settled bounded 429 response closes safely then stops all maintenance',async()=>{
  const paths:string[]=[];const result=await runResearchSlot(async path=>{paths.push(path);if(path.endsWith('/start'))return start();if(path.endsWith('/collect'))return settled(1,{results:[{status:'error'}],collectionControl:{stop:true,reason:'crossref_rate_limit'},stopReason:'crossref_rate_limit'});if(path.endsWith('/enrich'))return {status:'partial',reason:'provider_cooldown',metadataProgress:{confirmed:true,processedItems:1},remainingMetadata:1};if(path.endsWith('/process'))return {status:'ok'};return path.endsWith('/finish')?finish({status:'partial',completeSources:0}):maintenance(path);},20,()=>0);
- assert.deepEqual(paths.slice(0,3),['/api/site/research/batch/start','/api/site/research/batch/collect','/api/site/research/batch/finish']);assert.ok(paths.includes('/api/site/research/enrich'));assert.ok(paths.includes('/api/site/research/process'));assert.equal(result.reason,'provider_cooldown');assert.equal(result.collectionStopReason,'crossref_rate_limit');assert.equal(result.coverageStatus,'partial');assert.equal(result.remainingCollectionCalls,34);
+ assert.deepEqual(paths.slice(0,3),['/api/site/research/batch/start','/api/site/research/batch/collect','/api/site/research/batch/finish']);assert.ok(paths.includes('/api/site/research/enrich'));assert.ok(paths.includes('/api/site/research/process'));assert.equal(result.reason,'provider_cooldown');assert.equal(result.collectionStopReason,'crossref_rate_limit');assert.equal(result.coverageStatus,'partial');assert.equal(result.remainingCollectionCalls,59);
 });
 
 test('full collection plus metadata deadline still runs local scoring but defers paid scoring',async()=>{

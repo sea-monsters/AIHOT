@@ -24,6 +24,12 @@ test('known runtime reasons survive both fixed allowlists without accepting priv
  }
  assert.equal((await safeLogEntry({errorCode:diagnosticCode('PRIVATE TOKEN')})).errorCode,null);
 });
+test('all supported operation reasons survive the diagnostic allowlist',async()=>{
+ const {operationReason}=await import('./research-operations.ts');
+ const src=readFileSync('sites/research-operations.ts','utf8');
+ const candidates=[...src.matchAll(/'([a-z][a-z0-9_]+)'/g)].map(m=>m[1]);
+ for(const code of new Set(candidates))if(code!=='other'&&operationReason(code)===code){assert.equal(diagnosticCode(code),code,code);assert.equal((await safeLogEntry({errorCode:diagnosticCode(code)})).errorCode,code,code);}
+});
 test('slot diagnostics retain bounded page and call counts, and only fixed stop reasons',()=>{
  const value=safeSlotResult({steps:[{phase:'collection',pages:2,calls:3,stopReason:'page_budget'},{phase:'collection',pages:-3,calls:Infinity,stopReason:'PRIVATE_TOKEN'}]});
  assert.equal(value.steps[0].pages,2);assert.equal(value.steps[0].calls,3);assert.equal(value.steps[0].stopReason,'page_budget');assert.equal(value.steps[1].pages,0);assert.equal(value.steps[1].calls,null);assert.equal(value.steps[1].stopReason,'other');assert.ok(!JSON.stringify(value).includes('PRIVATE_TOKEN'));
