@@ -23,7 +23,7 @@ function runtimeOwner(request:Request,env:any){
 }
 export async function researchRuntimeApi(request:Request,env:any){
  const url=new URL(request.url),id=diagnosticId(request.headers.get('x-hkis-operation-id'))||crypto.randomUUID(),automationId=diagnosticId(request.headers.get('x-hkis-automation-id')),revision=builtSourceRevision();
- let description:any=null,specialPath:string|null=null,specialStarted=false;
+ let description:any=null,specialPath:string|null=null,startedPath:string|null=null;
  const respond=(data:any,status=200)=>{
   const headers=new Headers({'cache-control':'no-store','x-hkis-execution-contract':EXECUTION_CONTRACT,'x-hkis-operation-id':id,'x-hkis-runtime-contract':RUNTIME_CONTRACT});
   if(automationId)headers.set('x-hkis-automation-id',automationId);
@@ -56,16 +56,16 @@ export async function researchRuntimeApi(request:Request,env:any){
   const headers=new Headers(request.headers);for(const name of Object.values(RUNTIME_HEADERS))headers.delete(name);headers.set('x-hkis-operation-id',id);
   specialPath=path==='/api/site/research/run/plan'||path==='/api/site/research/brief/prepare'?path:null;
   await writeLog(env.DB,{component:'research',event:'request_started',severity:'info',outcome:'started',requestId:id,correlationId:automationId,metadata:{route:path,runtimeContract:RUNTIME_CONTRACT,sourceRevision:revision,configHash:frozen.configHash,bootstrapSource:frozen.bootstrapSource,runStartedAt:frozen.startedAt,slot:frozen.slot}});
-  specialStarted=!!specialPath;
+  startedPath=path;
   const finishSpecial=async(value:any,status:number)=>{const outcome=requestOutcome(value,path,status);await writeLog(env.DB,{component:'research',event:'request_finished',severity:outcome.unknown||outcome.outcome==='failed'?'error':outcome.outcome==='blocked'||outcome.outcome==='partial'?'warning':'info',outcome:outcome.unknown?'unknown':outcome.outcome,httpStatus:status,errorCode:outcome.reason?diagnosticCode(outcome.reason):undefined,requestId:id,correlationId:automationId,metadata:{route:path,httpMethod:'POST',sourceRevision:revision,applicationReached:true}});};
   assertRuntimeBudget(budget);
-  if(path==='/api/site/research/run/plan'){const value=await recordRunPlan(env.DB,body.slot,new Date());await finishSpecial(value,200);specialStarted=false;return respond(value);}
+  if(path==='/api/site/research/run/plan'){const value=await recordRunPlan(env.DB,body.slot,new Date());await finishSpecial(value,200);startedPath=null;return respond(value);}
   const operationRequest=new Request(new URL(path,url.origin),{method:'POST',headers,body:JSON.stringify(body),signal:request.signal});
   const response=path==='/api/site/research/brief/prepare'?await briefApi(operationRequest,env):await researchApi(operationRequest,env,budget);
-  const value=await response.json();if(specialPath){await finishSpecial(value,response.status);specialStarted=false;}return respond(value,response.status);
+  if(!specialPath)startedPath=null;const value=await response.json();if(specialPath){await finishSpecial(value,response.status);startedPath=null;}return respond(value,response.status);
  }catch(e){
   const code=e instanceof RuntimeContractError?e.code:e instanceof AIError?e.code:'research_unavailable',status=e instanceof RuntimeContractError?(code==='runtime_source_unavailable'?503:409):e instanceof AIError?e.status:503;
-  if(specialStarted&&specialPath)await writeLog(env.DB,{component:'research',event:'request_finished',severity:status>=500?'error':'warning',outcome:status>=500?'unknown':'blocked',errorCode:diagnosticCode(code),httpStatus:status,requestId:id,correlationId:automationId,metadata:{route:specialPath,httpMethod:'POST',sourceRevision:revision,applicationReached:true}});
+  if(startedPath)await writeLog(env.DB,{component:'research',event:'request_finished',severity:status>=500?'error':'warning',outcome:status>=500?'unknown':'blocked',errorCode:diagnosticCode(code),httpStatus:status,requestId:id,correlationId:automationId,metadata:{route:startedPath,httpMethod:'POST',sourceRevision:revision,applicationReached:true}});
   // Fixed codes only; even rejected requests never echo headers or input.
   console.info('HKIS_RUNTIME',JSON.stringify({requestId:id,automationId,sourceRevision:revision,code,state:'stopped'}));
   return respond({code},status);

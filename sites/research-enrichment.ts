@@ -3,7 +3,8 @@ import {available as aminerAvailable} from './aminer/settings.ts';
 import {runtimeDeadline,assertRuntimeBudget,type RuntimeBudget} from './research-runtime-budget.ts';
 import {enrichSearchEvidence,metadataSearchConfig} from './research-anysearch.ts';
 import {pendingWorkCounts,recoverIngestion} from './research-recovery.ts';
-import {OperationTrace} from './research-operations.ts';
+import {OperationTrace,operationFailure} from './research-operations.ts';
+import {writeLog} from './runtime-logs.ts';
 import {AIError} from './ai/security.ts';
 import {admitRun,fencedRunDatabase} from './research-lifecycle.ts';
 import {dailyCohortKey,isManualBatchKey} from './research-attribution.ts';
@@ -116,6 +117,7 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace
  if(!lease){await phaseEvent(rawDb,{batchKey:body.batchKey,phase:'metadata'},phaseTiming(started),'lock_busy');return {status:'deferred',reason:'lock_busy',attempted:0};}
  const db=fencedRunDatabase(rawDb,lease.id),result:any={status:'ok',runId:lease.id,batchKey:body.batchKey||null,attempted:0,ready:0,localReady:0,abstained:0,scopePending:0,deferred:0,providers:{},metadataProgress:{confirmed:false,processedItems:0,candidateItems:0,readyItems:0,abstainedItems:0,deferredItems:0,remainingItems:null}};
  try{
+  await existingTrace?.linkRun(lease.id,db);
   await db.prepare("UPDATE research_runs SET phase='metadata' WHERE id=?").bind(lease.id).run();
   await db.prepare("UPDATE research_enrichment_queue SET status='legacy_deferred',ready_reason='legacy_unattributed' WHERE origin_run_id IS NULL AND daily_cohort_key IS NULL AND status IN ('pending','deferred','blocked','overflow')").run();
   const expiryTiming=phaseTiming(started),expiryStart=Date.now(),window=monthWindow(new Date(started));
@@ -176,8 +178,8 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace
     try{
      let data:any;
      if(req.url.length>1800)throw new AIError('metadata_request_bounds',413,'补全请求超过编码长度上限');
-     if(service==='crossref'){data=await readURL(req.url,'json',deadline,db,async()=>{assertRuntimeBudget(runtimeBudget?{deadlineAt:deadline}:undefined);dispatched=true},timing);}
-     else{const httpStart=Date.now();try{const fetched=await providerRequest(db,env,service as Service,req.url,AbortSignal.timeout(Math.max(1,deadline-Date.now())),{body:req.body,expectedRevision,onReserved:async()=>{assertRuntimeBudget(runtimeBudget?{deadlineAt:deadline}:undefined);dispatched=true;timing.gateMs+=Date.now()-httpStart;}});data=fetched.data;cached=fetched.cached;}finally{if(dispatched)timing.httpMs+=Math.max(0,Date.now()-httpStart-timing.gateMs);else timing.gateMs+=Date.now()-httpStart;}}
+     if(service==='crossref'){data=await readURL(req.url,'json',deadline,db,async()=>{assertRuntimeBudget(runtimeBudget?{deadlineAt:deadline}:undefined);dispatched=true},timing,undefined,existingTrace);}
+     else{const httpStart=Date.now();try{const fetched=await providerRequest(db,env,service as Service,req.url,AbortSignal.timeout(Math.max(1,deadline-Date.now())),{body:req.body,expectedRevision,parentRequestId:existingTrace?.requestId,parentAutomationId:existingTrace?.automationId,onReserved:async()=>{assertRuntimeBudget(runtimeBudget?{deadlineAt:deadline}:undefined);dispatched=true;timing.gateMs+=Date.now()-httpStart;}});data=fetched.data;cached=fetched.cached;}finally{if(dispatched)timing.httpMs+=Math.max(0,Date.now()-httpStart-timing.gateMs);else timing.gateMs+=Date.now()-httpStart;}}
      const values=service==='crossref'?req.single?[data.message]:data.message?.items:service==='openalex'?data.results:data;
      if(!Array.isArray(values)||values.length>100||(service==='semanticscholar'&&values.length!==keys.length))throw new AIError('metadata_format',502,'补全返回数量无效');
      const byDoi=new Map<string,any>(),conflicts=new Set<string>(),stableIds=new Map<string,string>(),explicitNulls=new Set<string>();let invalidIdentity=false,duplicate=false;
@@ -210,13 +212,14 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace
      if(conflicts.size)outcome='identity_warning';
     }catch(e){
      if(e instanceof AIError&&e.code==='collection_lease_lost')throw e;
-     const code=e instanceof AIError?e.code:(e as any).code==='runtime_expired'?'deadline':(e as any).httpStatus===429?'429':(e as any).deferredReason||'metadata_network';
+     const httpStatus=Number.isInteger((e as any).httpStatus)&&(e as any).httpStatus>=400&&(e as any).httpStatus<=599?(e as any).httpStatus:null;const failure=service==='crossref'?operationFailure(e,undefined,existingTrace?.current?.phase||'crossref_connect'):null;const code=e instanceof AIError?e.code:(e as any).code==='runtime_expired'?'deadline':httpStatus===429?'429':(e as any).deferredReason||(service==='crossref'?failure:'metadata_network');
+     if(service==='crossref'){await existingTrace?.end(httpStatus?'failed':'unknown',failure);await writeLog(rawDb,{component:'research',event:'request_failed',severity:'warning',outcome:httpStatus?'failed':'unknown',errorCode:failure,httpStatus,taskId:lease.id,requestId:existingTrace?.requestId,correlationId:existingTrace?.automationId,metadata:{purpose:'network'}});}
      if(service==='crossref'&&req.single&&(e as any).httpStatus===404){outcome='no_record';for(const row of chunk)row.providers[service]={status:'no_record',at:stamp(),runId:lease.id};}
      else{
      outcome=/429|rate_limit|cooldown/.test(code)?'429':/timeout/.test(code)?'timeout':/lock_busy|throttle/.test(code)?'lock_busy':code==='deadline'?'deadline':'deferred';
      const gate=service==='crossref'?await db.prepare("SELECT value FROM research_settings WHERE key='crossref_http_cooldown'").first():await db.prepare('SELECT cooldown_until,next_allowed FROM scholarly_usage WHERE id=?').bind('__site__|'+service).first();
      const retryAt=new Date(Math.max(Date.now()+60000,Date.parse(gate?.value||'')||0,gate?.cooldown_until||0,gate?.next_allowed||0)).toISOString();
-     for(const row of needed.filter((r:any)=>!TERMINAL.has(r.providers[service]?.status)))row.providers[service]={status:'deferred',at:stamp(),runId:lease.id,reason:code,retryAt};
+     for(const row of needed.filter((r:any)=>!TERMINAL.has(r.providers[service]?.status)))row.providers[service]={status:'deferred',at:stamp(),runId:lease.id,reason:code,retryAt,...(service==='crossref'&&httpStatus?{httpStatus}:{})};
      result.status='partial';
      }
     }
@@ -229,10 +232,10 @@ export async function enrichMetadata(rawDb:any,env:any,body:any={},existingTrace
    if(result.reason==='provider_cooldown'||result.reason==='provider_deferred')break;
   }
   if(!['provider_cooldown','provider_deferred','deadline'].includes(result.reason)){
-   const supplemental=await enrichSearchEvidence(db,env,candidates,deadline,lease.id,mergeCandidate);result.providers.anysearch=supplemental;result.attempted+=supplemental.calls+supplemental.verificationCalls;
+   const supplemental=await enrichSearchEvidence(db,env,candidates,deadline,lease.id,mergeCandidate,existingTrace);result.providers.anysearch=supplemental;result.attempted+=supplemental.calls+supplemental.verificationCalls;
    if(supplemental.reason)result.reason=supplemental.reason==='anysearch_pass_limit'?'pending_metadata':supplemental.reason;
   }
-  const aminerSupplement=await enrichAMinerEvidence(db,env,candidates,deadline,lease.id,row=>SERVICES.every(service=>TERMINAL.has(row.providers[service]?.status)||(row.providers[service]?.status==='deferred'&&row.providers[service]?.reason==='connection_unavailable')));result.providers.aminer=aminerSupplement;result.attempted+=aminerSupplement.calls;if(aminerSupplement.deferred){result.status='partial';result.reason=result.reason||'pending_metadata';}
+  const aminerSupplement=await enrichAMinerEvidence(db,env,candidates,deadline,lease.id,row=>SERVICES.every(service=>TERMINAL.has(row.providers[service]?.status)||(row.providers[service]?.status==='deferred'&&row.providers[service]?.reason==='connection_unavailable')),existingTrace);result.providers.aminer=aminerSupplement;result.attempted+=aminerSupplement.calls;if(aminerSupplement.deferred){result.status='partial';result.reason=result.reason||'pending_metadata';}
   const commitTiming=phaseTiming(candidates[0]?.first_seen||started),commitStarted=Date.now();
   for(const row of candidates){
    const source=RESEARCH_SOURCES.find(s=>s.id===row.source_id),terminal=SERVICES.every(s=>TERMINAL.has(row.providers[s]?.status)),sufficient=adequateMetadata(row.p);

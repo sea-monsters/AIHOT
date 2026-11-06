@@ -23,6 +23,15 @@ const source=RESEARCH_SOURCES[0]!,record=(doi:string,title='TCAD transistor tran
 const env={HKIS_AI_ENCRYPTION_KEY:'a'.repeat(64)},abstract='TCAD transistor simulation measured device transport under controlled conditions. '.repeat(4);
 async function configured(db:any,service:'openalex'|'semanticscholar'){const endpoint=SERVICES[service].endpoint,cipher=await seal('synthetic-test-key',env,credentialContext('fixture',service,endpoint));await db.prepare("INSERT INTO scholarly_settings(id,owner_id,service,endpoint,key_ciphertext,revision,updated_at,test_status) VALUES(?,?,?,?,?,1,?,'ok')").bind('fixture|'+service,'fixture',service,endpoint,cipher,new Date().toISOString()).run();}
 const clearSpacing=(sql:any)=>sql.prepare("DELETE FROM research_settings WHERE key='crossref_http_next'").run();
+test('Crossref metadata failures preserve observed HTTP versus unknown transport with parent-linked diagnostics',async()=>{
+ const {OperationTrace}=await import('./research-operations.ts');
+ for(const [mode,expected,known] of [['unauthorized','provider_http_4xx',1],['unavailable','provider_http_5xx',1],['network','network_failed',0]] as const){const {sql,db}=fixture(),old=globalThis.fetch;let calls=0;try{
+  await initResearch(db);const p=fromCrossref(record('10.9999/diagnostic-'+mode),source)!;p.discovery='rss';await queueMetadata(db,[p],false,{runId:'origin',batchKey:null});
+  globalThis.fetch=async()=>{calls++;if(mode==='network')throw Error('SYNTHETIC_PRIVATE_METADATA');return new Response('SYNTHETIC_PRIVATE_METADATA',{status:mode==='unauthorized'?401:503})};
+  const trace=new OperationTrace(db,null,null,Date.now()+75000);trace.requestId=crypto.randomUUID();trace.automationId=crypto.randomUUID();const result=await enrichMetadata(db,env,{},trace);assert.equal(calls,1);assert.equal(result.status,'partial');
+  const item=sql.prepare('SELECT provider_json FROM research_enrichment_queue').get()!,value=JSON.parse(String(item.provider_json));assert.equal(value.crossref.reason,expected);const op=sql.prepare("SELECT request_id,run_id,state,known,reason FROM research_operations WHERE phase='crossref_connect' ORDER BY rowid DESC LIMIT 1").get()!;assert.equal(op.request_id,trace.requestId);assert.equal(op.run_id,result.runId);assert.equal(op.known,known);assert.equal(op.reason,expected);assert.ok(!JSON.stringify({item,op,result}).includes('SYNTHETIC_PRIVATE_METADATA'));
+ }finally{globalThis.fetch=old;sql.close()}}
+});
 
 test('trusted absolute budget survives slow database reads and provider reservations without late metadata dispatch or quota refund',async(t)=>{
  const start=Date.parse('2026-10-24T12:00:00Z');t.mock.timers.enable({apis:['Date'],now:start});

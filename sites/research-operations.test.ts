@@ -123,6 +123,9 @@ test('request journal distinguishes collection pending, known failures and unkno
   assert.ok(!JSON.stringify(f.sql.prepare('SELECT * FROM research_operations').all()).includes('SYNTHETIC_PRIVATE_BODY'));
  }finally{f.sql.close()}
 });
+test('unknown paid attempts remain unknown in scoring and daily root receipts',async()=>{
+ const f=fixture();try{for(const [phase,value] of [['scoring',{status:'partial',unknownAttempts:1,blocked:'provider_network'}],['daily',{status:'partial',queue:{unknown:1},blocked:'provider_network'}]] as const){const result=await operationCall(f.db,phase,{},async()=>value);const row=f.sql.prepare('SELECT state,known,reason FROM research_operations WHERE request_id=?').get(result.requestId)!;assert.deepEqual({...row},{state:'unknown',known:0,reason:'provider_network'});}}finally{f.sql.close()}
+});
 
 test('batch collection gets a 75s trace, single-source sync matches the real 20s ceiling, and shorter caller budgets hold',async()=>{
  const f=fixture();try{

@@ -139,7 +139,7 @@ async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started
  const invoke=async(phase:string,path:string,body:any,limit:number)=>{
   if(remaining()<=0){steps.push({phase,status:'deferred',reason:'deadline'});return {status:'deferred',reason:'deadline'};}
   const at=now();let v:any;try{v=await call(path,body,Math.max(1,Math.min(limit,remaining())))}catch{v={status:'unknown',reason:'response_unconfirmed'}}
-  steps.push({phase,status:v?.status||v?.batchStatus||(v?.brief?'ok':'unknown'),reason:v?.reason||reasonOf(v),blocked:v?.blocked||null,cohort:body?.cohort||null,startedMs:at-started,endedMs:now()-started,runId:v?.runId,requestId:v?.requestId,sentRequestId:v?.sentRequestId,operationIdMismatch:v?.operationIdMismatch===true,...Object.fromEntries(['ready','abstained','deferred','scopePending','remainingQueued','remainingMetadata','attempted','reservedUnsent'].map(k=>[k,v?.[k]??null]))});
+  steps.push({phase,status:v?.status||v?.batchStatus||(v?.brief?'ok':'unknown'),reason:v?.reason||reasonOf(v),blocked:v?.blocked||null,cohort:body?.cohort||null,startedMs:at-started,endedMs:now()-started,runId:v?.runId,requestId:v?.requestId,sentRequestId:v?.sentRequestId,operationIdMismatch:v?.operationIdMismatch===true,...Object.fromEntries(['ready','abstained','deferred','scopePending','remainingQueued','remainingMetadata','attempted','reservedUnsent','unknownAttempts'].map(k=>[k,v?.[k]??null])),pages:Array.isArray(v?.crossrefPages)?v.crossrefPages.length:Array.isArray(v?.results)?v.results.reduce((n:number,r:any)=>n+(Array.isArray(r?.crossrefPages)?r.crossrefPages.length:0),0):null,calls:v?.calls??null,stopReason:v?.stopReason??null});
   return v;
  };
  const readbackUnknownCollect=async(v:any)=>{

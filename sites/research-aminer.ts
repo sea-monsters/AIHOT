@@ -1,4 +1,5 @@
 import {AIError} from './ai/security.ts';
+import {writeLog} from './runtime-logs.ts';
 import {digest} from './research-pipeline.ts';
 import {normalizeDoi,normalizedTitle,type Paper} from './research-domain.ts';
 import {publicationKind} from './research-publisher-abstract.ts';
@@ -24,12 +25,13 @@ export async function supplementAMiner(db:any,env:any,p:Paper,deadline:number,op
 }
 
 /** Runs independently of AnySearch; disabled/no-key/zero-budget adds no pending debt. */
-export async function enrichAMinerEvidence(db:any,env:any,rows:any[],deadline:number,runId:string,terminal:(row:any)=>boolean){
+export async function enrichAMinerEvidence(db:any,env:any,rows:any[],deadline:number,runId:string,terminal:(row:any)=>boolean,trace?:any){
  const access=await available(db),summary:any={configured:access.usable,enabled:!!access.config?.enabled,reason:access.reason,calls:0,detailCalls:0,reservedCostFen:0,candidatesAccepted:0,deferred:0};if(!access.usable)return summary;let admitted=0;
  for(const row of rows){if(row.localReady||row.deadlineDeferred||!terminal(row)||!row.p.doi||!row.p.authors.length||!['research','review'].includes(publicationKind(row.p))||String(row.p.abstract||'').trim().length>=180)continue;
   const current=await available(db),atLimit=admitted>=AMINER_LIMITS.perPass;
   let outcome=await supplementAMiner(db,env,row.p,deadline,{availability:current,verificationOnly:atLimit,onReserved:async r=>{const key=row.p.doi&&row.doi.startsWith('id:')?row.p.doi:row.doi;row.providers.aminer={...row.providers.aminer,attempted:true,detailAttempted:!!row.providers.aminer?.detailAttempted||r.paidAttempt,originKey:row.providers.aminer?.originKey||row.doi,requestId:r.id,detailRequestId:r.paidAttempt?r.id:row.providers.aminer?.detailRequestId,status:'attempted',at:stamp(),runId};const saved=await db.prepare('UPDATE research_enrichment_queue SET doi=?,provider_json=?,updated_at=? WHERE doi=? AND source_id=?').bind(key,JSON.stringify(row.providers),stamp(),row.doi,row.source_id).run();if(!saved.meta?.changes)throw new AIError('collection_lease_lost',409,'AMiner队列归属已变化');row.doi=key;}});
   if(atLimit&&current.ready&&current.searchReady&&outcome.reason==='aminer_no_cached_evidence')outcome={...outcome,status:'deferred',reason:'aminer_pass_limit'};
+  if(outcome.attempted||outcome.httpCalls)await writeLog(db,{component:'scholarly',event:outcome.status==='done'?'request_finished':'request_failed',severity:outcome.status==='done'?'info':'warning',outcome:outcome.status==='done'?'ok':outcome.status==='unknown'?'unknown':'partial',requestId:outcome.receiptId,taskId:runId,errorCode:outcome.reason,metadata:{service:'aminer',providerCalls:outcome.httpCalls,parentRequestId:trace?.requestId,parentAutomationId:trace?.automationId}});
   summary.calls+=outcome.httpCalls;summary.detailCalls+=outcome.detailCalls;summary.reservedCostFen+=outcome.reservedCostFen;if(outcome.httpCalls||outcome.reservedCostFen)admitted++;if(outcome.paper){row.p=outcome.paper;summary.candidatesAccepted++;}
   if(outcome.attempted||row.providers.aminer?.attempted)row.providers.aminer={...row.providers.aminer,attempted:true,status:outcome.status,reason:outcome.reason,requestId:outcome.receiptId||row.providers.aminer?.requestId,at:stamp(),runId};if(outcome.status==='deferred'){row.aminerPending=true;summary.deferred++;}
  }

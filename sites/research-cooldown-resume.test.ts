@@ -2,8 +2,20 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {runResearchSlot} from './research-slot.ts';
 import {DEFAULT_RUNTIME_MANIFEST} from './research-runtime-contract.ts';
+import {safeSlotResult} from './research-diagnostics.ts';
 
 const base=Date.parse('2026-11-05T12:00:00.000Z'),key='2026-11-05/20';
+test('real collection-first slot preserves slice counts and unknown scoring attempts in safe output',async()=>{
+ let slice=0;const result=await runResearchSlot(async path=>{
+  if(path.endsWith('/ingestion/recover'))return {status:'ok',recovery:{known:true,confirmed:true,remainingItems:0}};
+  if(path.endsWith('/start'))return {status:'running',batchKey:key,collectionContract:'bounded-v1',collectionControl:{stop:false,nextSourceId:'a'}};
+  if(path.endsWith('/collect'))return ++slice===1?{status:'partial',batchKey:key,calls:1,results:[{status:'ok',crossrefPages:[{}]}],collectionControl:{stop:false,nextSourceId:'b'},stopReason:'slice_call_limit'}:{status:'partial',batchKey:key,calls:1,results:[{status:'ok',crossrefPages:[{},{}]}],collectionControl:{stop:true,reason:'page_budget'},stopReason:'page_budget'};
+  if(path.endsWith('/finish'))return {status:'partial',batchStatus:'finished',expectedSources:32,attemptedSources:2,completeSources:0,missingSources:[]};
+  if(path.endsWith('/enrich'))return {status:'ok',sourceDay:'2026-11-05'};
+  if(path.endsWith('/process'))return {status:'partial',scope:{sourceDay:'2026-11-05'},remainingQueued:1,unknownAttempts:1,blocked:'provider_network'};
+  if(path.endsWith('/brief/prepare'))return {brief:{batchKey:key,status:'awaiting_analysis'}};
+ },20,()=>base,base,structuredClone(DEFAULT_RUNTIME_MANIFEST));const safe=safeSlotResult(result),collect=safe.steps.filter(s=>s.phase==='collection'),scoring=safe.steps.find(s=>s.phase==='scoring'||s.phase==='local_scoring');assert.deepEqual(collect.map(s=>[s.pages,s.calls,s.stopReason]),[[1,1,'slice_call_limit'],[2,1,'page_budget']]);assert.equal(scoring?.unknownAttempts,1);
+});
 test('known 429 waits once within original budgets and resumes with remaining source calls',async()=>{
  let now=base,collects=0;const bodies:any[]=[],sleeps:number[]=[];
  const result=await runResearchSlot(async(path,body)=>{

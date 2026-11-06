@@ -115,7 +115,7 @@ test('slow diagnostic logging cannot grant a fresh handler budget or mutate exis
  try{process.env.HKIS_BUILD_SHA=source;await history(f);const before=snapshot(f),prepare=f.db.prepare.bind(f.db);globalThis.fetch=async()=>{outbound++;throw Error('No provider dispatch')};
   f.db.prepare=(q:string)=>{const statement=prepare(q),run=statement.runSync.bind(statement);statement.runSync=()=>{const r=run();if(!delayed&&q.includes('INSERT INTO runtime_logs')){delayed=true;t.mock.timers.setTime(Date.parse(startedAt)+540001)}return r};return statement};
   const r=await researchRuntimeApi(request(RUNTIME_ROOT+'/metadata',{cohort:'current',maxMs:75000},frozenRuntimeHeaders(await frozen())),f.env);
-  assert.equal(delayed,true);assert.equal(r.status,409);assert.equal((await r.json()).code,'runtime_expired');assert.equal(outbound,0);assert.deepEqual(snapshot(f),before);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
+  assert.equal(delayed,true);assert.equal(r.status,409);assert.equal((await r.json()).code,'runtime_expired');assert.equal(outbound,0);assert.deepEqual(snapshot(f),before);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);const logged=f.sql.prepare("SELECT event,outcome,error_code FROM runtime_logs WHERE json_extract(metadata_json,'$.route')='/api/site/research/enrich' ORDER BY id").all();assert.deepEqual(logged.map(r=>r.event),['request_started','request_finished']);assert.equal(logged[1].error_code,'runtime_expired');
  }finally{globalThis.fetch=oldFetch;if(previous===undefined)delete process.env.HKIS_BUILD_SHA;else process.env.HKIS_BUILD_SHA=previous;f.sql.close()}
 });
 

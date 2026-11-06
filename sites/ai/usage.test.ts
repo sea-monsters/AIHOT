@@ -6,6 +6,7 @@ import {normalizeUsage,usageSummary,estimateUsageCost,costJson,usageJson,usageTr
 import {primeModelsDevCacheForTests,resetModelsDevCache,cachedModelsDevReference,publicModelsDevReference} from './models-dev.ts';
 import {parseProviderResponse,providerCall} from './provider.ts';
 import {seal} from './security.ts';
+import {logsApi,logReference} from '../runtime-logs.ts';
 
 function fixture(){
  const sql=new DatabaseSync(':memory:');for(const file of readdirSync('drizzle').filter(file=>file.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+file,'utf8'));
@@ -14,6 +15,16 @@ function fixture(){
 }
 function responsesOutput(text='ok'){return [{type:'message',content:[{type:'output_text',text}]}]}
 function setup(f:any,protocol='responses'){const endpoint=protocol==='responses'?'https://api.openai.com/v1':'https://api.deepseek.com';return seal('SYNTHETIC_PROVIDER_KEY',f.env,'owner|'+endpoint).then(cipher=>{f.sql.prepare('INSERT INTO ai_settings(owner_id,endpoint,model,protocol,reasoning,key_ciphertext,enabled,daily_limit,max_tokens,revision,updated_at,test_status) VALUES(?,?,?,?,?,?,1,30,4096,1,?,\'ok\')').run('owner',endpoint,'synthetic-model',protocol,'low',cipher,new Date().toISOString());return {owner_id:'owner',endpoint,model:'synthetic-model',protocol,reasoning:'low',key_ciphertext:cipher,enabled:1,daily_limit:30,max_tokens:4096,revision:1};});}
+
+test('scoring and daily provider records remain queryable by hashed parent IDs without replacing receipt IDs',async()=>{
+ const f=fixture(),config=await setup(f),old=globalThis.fetch,parentRequestId=crypto.randomUUID(),parentAutomationId=crypto.randomUUID();let calls=0;
+ try{globalThis.fetch=async()=>{calls++;return Response.json({output:responsesOutput('SYNTHETIC_PRIVATE_OUTPUT')},{headers:{'x-request-id':'fixture-provider-attempt'}})};
+  for(const purpose of ['paper_assessment','daily_digest'])await providerCall(f.db,'owner',config,f.env,'synthetic-'+purpose,0,[{role:'user',content:'SYNTHETIC_PRIVATE_INPUT'}],purpose,{allowTools:false,parentRequestId,parentAutomationId});
+  assert.equal(calls,2);const rows=f.sql.prepare("SELECT request_id,metadata_json FROM runtime_logs WHERE component='provider' AND event='request_finished' ORDER BY id").all();assert.equal(rows.length,2);for(const r of rows){assert.equal(r.request_id,await logReference('fixture-provider-attempt'));const m=JSON.parse(String(r.metadata_json));assert.equal(m.parentRequestId,await logReference(parentRequestId));assert.equal(m.parentAutomationId,await logReference(parentAutomationId));}
+  const headers={'oai-authenticated-user-id':'owner','oai-authenticated-user-email':'owner@example.test'};for(const filter of ['requestId='+parentRequestId,'automationId='+parentAutomationId]){const result=await logsApi(new Request('https://fixture.invalid/api/site/logs?severity=all&'+filter,{headers}),f.env);assert.equal(result.status,200);assert.equal((await result.json()).entries.filter((x:any)=>x.component==='provider').length,2)}
+  assert.ok(!JSON.stringify(rows).includes('SYNTHETIC_PRIVATE_INPUT'));assert.ok(!JSON.stringify(rows).includes('SYNTHETIC_PRIVATE_OUTPUT'));assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,2);
+ }finally{globalThis.fetch=old;f.sql.close()}
+});
 
 test('normalizes Responses and DeepSeek Chat usage without double counting reasoning or cache synonyms',()=>{
  const responses=normalizeUsage({input_tokens:10,output_tokens:6,total_tokens:16,input_tokens_details:{cached_tokens:4},output_tokens_details:{reasoning_tokens:2}},'responses');assert.equal(responses.state,'known');assert.equal(responses.input_tokens,10);assert.equal(responses.cached_input_tokens,4);assert.equal(responses.reasoning_tokens,2);assert.equal(responses.total_tokens,16);assert.equal(responses.cache_hit,'hit');

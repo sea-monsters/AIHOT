@@ -23,7 +23,7 @@ export async function metadataSearchConfig(db:any){
 }
 /** Independent metadata lease/fenced DB supplied by enrichMetadata. No model,
  * result-URL fetch, new credentials, or collection budget is involved. */
-export async function enrichSearchEvidence(db:any,env:any,rows:any[],deadline:number,runId:string,merge:(a:Paper,b:Paper)=>Paper){
+export async function enrichSearchEvidence(db:any,env:any,rows:any[],deadline:number,runId:string,merge:(a:Paper,b:Paper)=>Paper,trace?:any){
  const config=await metadataSearchConfig(db),summary={configured:!!config,calls:0,verificationCalls:0,cached:0,deferred:0,reason:null as string|null};
  if(!config)return summary;
  const checkpoint=async(row:any)=>{
@@ -51,7 +51,7 @@ export async function enrichSearchEvidence(db:any,env:any,rows:any[],deadline:nu
    // truncate an overlong query into a broader paid search.
    const query=`"${row.p.title}" ${row.p.doi||source.issn}`;
    if(query.length>500){row.providers.anysearch={status:'not_needed',reason:'query_bounds',at:stamp()};continue;}
-   const start=Date.now(),result=await search(db,config.ownerId,env,query,5,{pipeline:true,expectedRevision:config.revision,deadlineAt:deadline-2000,requestId,onDispatch:async()=>{
+   const start=Date.now(),result=await search(db,config.ownerId,env,query,5,{pipeline:true,expectedRevision:config.revision,deadlineAt:deadline-2000,requestId,parentRequestId:trace?.requestId,parentAutomationId:trace?.automationId,onDispatch:async()=>{
     row.providers.anysearch={status:'attempted',attempted:true,originKey,at:stamp(),runId,requestId};await checkpoint(row);
     if(Date.now()+2000>=deadline)throw new AIError('deadline',409,'补全时限已结束');
    },fetcher:(url,init)=>{dispatched=true;summary.calls++;return fetch(url,init);}});timing.httpMs+=Date.now()-start;
@@ -64,7 +64,7 @@ export async function enrichSearchEvidence(db:any,env:any,rows:any[],deadline:nu
    await checkpoint(row);
    if(evidence.doi&&!evidence.conflict&&Date.now()+5000<deadline){
     const recordUrl='https://api.crossref.org/works/'+encodeURIComponent(evidence.doi);
-    const raw=await readURL(recordUrl,'json',deadline,db,async()=>{if(Date.now()+2000>=deadline)throw new AIError('deadline',409,'补全时限已结束');summary.verificationCalls++;},timing);
+    const raw=await readURL(recordUrl,'json',deadline,db,async()=>{if(Date.now()+2000>=deadline)throw new AIError('deadline',409,'补全时限已结束');summary.verificationCalls++;},timing,undefined,trace);
     const record=raw.message,issns=[source.issn,...(source.issns||[])],extra=Array.isArray(record?.ISSN)&&record.ISSN.some((s:any)=>issns.includes(String(s).toUpperCase()))?fromCrossref(record,source):null;
     const queueConflict=evidence.doi!==row.doi?await db.prepare('SELECT doi FROM research_enrichment_queue WHERE doi=? AND source_id=?').bind(evidence.doi,row.source_id).first():null;
     const sameAuthor=!row.p.authors.length||row.p.authors.some((a:any)=>extra?.authors.some(b=>normalizedTitle(a.name)===normalizedTitle(b.name)));
@@ -79,6 +79,7 @@ export async function enrichSearchEvidence(db:any,env:any,rows:any[],deadline:nu
     }else{row.providers.anysearch.reason='identity_conflict';outcome='identity_warning';}
    }
   }catch(e){
+   if(trace?.current){const status=Number((e as any)?.httpStatus)||0;await trace.end(status?'failed':'unknown',status===429?'crossref_rate_limit':status>=500?'provider_http_5xx':status>=400?'provider_http_4xx':'network_failed');}
    if(e instanceof AIError&&e.code==='collection_lease_lost')throw e;
    const code=e instanceof AIError?e.code:(e as any).httpStatus===429?'429':(e as any).deferredReason||'metadata_network';
    row.providers.anysearch={...row.providers.anysearch,status:dispatched||row.providers.anysearch?.attempted?'attempted':'deferred',at:stamp(),runId,reason:code};
