@@ -37,11 +37,11 @@ test('trusted absolute budget survives slow database reads and provider reservat
  }finally{globalThis.fetch=old;sql.close()}}
 });
 
-test('32 successful heads precede at most 3 fair continuations; discovery sends zero enrichment calls',async()=>{
+test('27 distinct heads precede the reserved 8 fair continuations; discovery sends zero enrichment calls',async()=>{
  const {sql,db}=fixture(),old=globalThis.fetch;let heads=0,extras=0;try{await initResearch(db);const started=new Date().toISOString(),key=collectionCycle(started,null),ids=RESEARCH_SOURCES.map(s=>s.id);sql.prepare("INSERT INTO research_batches(key,date,slot,status,sources_json,started_at) VALUES(?,?,20,'running',?,?)").run(key,key.slice(0,10),JSON.stringify(ids),started);
  globalThis.fetch=async(input:any)=>{const u=new URL(String(input));if(u.hostname==='api.crossref.org'&&u.pathname.endsWith('/works')&&u.searchParams.get('cursor')){heads++;return Response.json({message:{items:Array.from({length:100},(_,i)=>record('10.9999/'+heads+'-'+i)),'next-cursor':'cursor-'+heads}});}if(u.hostname==='api.crossref.org'||u.hostname==='api.openalex.org'||u.hostname==='api.semanticscholar.org'){extras++;throw Error('unexpected enrichment');}return new Response('<rss><channel/></rss>');};
  const order:string[]=[];for(let n=0;n<35;n++){clearSpacing(sql);const control=await collectionControl(db,key);const s=RESEARCH_SOURCES.find(s=>s.id===control.nextSourceId)!;assert.ok(s,JSON.stringify(control));order.push(s.id);const result=await syncSource(db,s,1,key);assert.notEqual(result.status,'error',JSON.stringify(result));}
- assert.equal(new Set(order.slice(0,32)).size,32);assert.equal(order.length,35);assert.equal(heads,35);assert.equal(extras,0);assert.equal((await collectionControl(db,key)).reason,'page_budget');for(const id of ids)assert.ok(order.filter(s=>s===id).length<=2);
+ assert.equal(new Set(order.slice(0,27)).size,27);assert.ok(order.slice(27).every(id=>order.slice(0,27).includes(id)));assert.equal(new Set(order).size,27);assert.equal(order.length,35);assert.equal(heads,35);assert.equal(extras,0);assert.equal((await collectionControl(db,key)).reason,'page_budget');for(const id of ids)assert.ok(order.filter(s=>s===id).length<=2);
  assert.ok(sql.prepare('SELECT count(*) n FROM research_enrichment_queue').get()!.n>0);assert.equal(sql.prepare("SELECT count(*) n FROM research_papers WHERE metadata_status='pending' AND priority<>0").get()!.n,0);assert.equal(sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
  }finally{globalThis.fetch=old;sql.close();}
 });

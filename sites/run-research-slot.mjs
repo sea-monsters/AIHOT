@@ -1,7 +1,7 @@
 import {RUNTIME_CODES,RUNTIME_PATHS,RUNTIME_READBACK_PATH,RUNTIME_HEADERS,RUNTIME_CONTRACT,runtimeHash,frozenRuntimeHeaders} from './research-runtime-contract.ts';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {EXECUTION_CONTRACT,RUNNER_VERSION,executionRoutes,diagnosticId,sourceRevision,diagnosticCode,diagnosticCount,safeSlotResult} from './research-diagnostics.ts';
+import {EXECUTION_CONTRACT,RUNNER_VERSION,executionRoutes,diagnosticId,sourceRevision,diagnosticCode,diagnosticCount,safeSlotResult,appendDiagnosticEvent} from './research-diagnostics.ts';
 import {runResearchSlot} from './research-slot.ts';
 import {pathToFileURL} from 'node:url';
 // Only exact service code/status pairs prove a rejected operation. Gateways
@@ -55,9 +55,9 @@ export function verifiedSiteOrigin(baseUrl,allowedOrigins){
  catch{throw Object.assign(Error('本地Site原点校验失败；未派发请求，请核对原get_site结果与精确allowedOrigins'),{code:'invalid_site_origin'});}
 }
 export async function privateSlotMain(){
- const processStarted=Date.now(),automationId=crypto.randomUUID(),events=[];let input=null,stage='stdin',postsAttempted=0,requestsAttempted=0;
+ const processStarted=Date.now(),automationId=crypto.randomUUID(),events=[];let eventsOmitted=0,input=null,stage='stdin',postsAttempted=0,requestsAttempted=0;
  let runnerSource=null;try{const gitOptions={cwd:fileURLToPath(new URL('..',import.meta.url)),encoding:'utf8',stdio:['ignore','pipe','ignore'],timeout:1000};const dirty=execFileSync('git',['status','--porcelain','--untracked-files=normal'],gitOptions).trim();if(!dirty)runnerSource=sourceRevision(execFileSync('git',['rev-parse','HEAD'],gitOptions).trim());}catch{}
- const emit=event=>{const value={diagnosticContract:EXECUTION_CONTRACT,runnerVersion:RUNNER_VERSION,automationId,...event};if(events.length<128)events.push(value);process.stdout.write('HKIS_DIAGNOSTIC '+JSON.stringify(value)+'\n');};
+ const emit=event=>{const value={diagnosticContract:EXECUTION_CONTRACT,runnerVersion:RUNNER_VERSION,automationId,...event};if(!appendDiagnosticEvent(events,value))eventsOmitted++;process.stdout.write('HKIS_DIAGNOSTIC '+JSON.stringify(value)+'\n');};
  const fail=code=>{throw Object.assign(Error('HKIS preflight stopped'),{code});};
  emit({phase:'runner',state:'started',at:new Date(processStarted).toISOString(),sourceRevision:runnerSource,nodeMajor:Number(process.versions.node.split('.')[0]),fetchAvailable:typeof globalThis.fetch==='function',stdinAvailable:!!process.stdin});
  try{
@@ -89,11 +89,11 @@ export async function privateSlotMain(){
   if(probe.status!=='ok'||probe.diagnosticContract!==EXECUTION_CONTRACT||probe.diagnostic?.applicationReached!==true)fail('server_contract_unconfirmed');
   if(input.expectedSiteSource&&input.expectedSiteSource!==sourceRevision(probe.sourceRevision))fail('site_source_mismatch');
   emit({phase:'preflight',state:'confirmed',sourceRevision:sourceRevision(probe.sourceRevision),postCapabilityVerified:false});
-  if(input.diagnosticOnly){process.stdout.write(JSON.stringify({status:'ok',diagnostics:{automationId,diagnosticContract:EXECUTION_CONTRACT,postsAttempted:0,requestsAttempted,events}})+'\n');return;}
+  if(input.diagnosticOnly){process.stdout.write(JSON.stringify({status:'ok',diagnostics:{automationId,diagnosticContract:EXECUTION_CONTRACT,postsAttempted:0,requestsAttempted,events,eventsOmitted}})+'\n');return;}
   stage='pipeline';const result=await runResearchSlot(call,slot,Date.now,started);
-  const report={...safeSlotResult(result),diagnostics:{automationId,diagnosticContract:EXECUTION_CONTRACT,postsAttempted,requestsAttempted,events}};
+  const report={...safeSlotResult(result),diagnostics:{automationId,diagnosticContract:EXECUTION_CONTRACT,postsAttempted,requestsAttempted,events,eventsOmitted}};
   emit({phase:'runner',state:'finished',status:report.status,postsAttempted,remainingMs:Math.max(0,540000-(Date.now()-started))});
-  process.stdout.write(JSON.stringify(report)+'\n');if(result.status==='unknown')process.exitCode=2;
+  report.diagnostics.eventsOmitted=eventsOmitted;process.stdout.write(JSON.stringify(report)+'\n');if(result.status==='unknown')process.exitCode=2;
  }catch(e){emit({phase:stage,state:requestsAttempted?'stopped':'not_dispatched',code:diagnosticCode(e?.code),postsAttempted,requestsAttempted,elapsedMs:diagnosticCount(Date.now()-processStarted)});process.exitCode=2;throw e;}
  finally{if(input&&typeof input==='object')input.token='';}
 }

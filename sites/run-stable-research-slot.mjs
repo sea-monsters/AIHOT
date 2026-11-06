@@ -2,7 +2,7 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {createResearchClient,verifiedSiteOrigin} from './run-research-slot.mjs';
 import {runResearchSlot} from './research-slot.ts';
-import {diagnosticCode,safeSlotResult} from './research-diagnostics.ts';
+import {diagnosticCode,safeSlotResult,appendDiagnosticEvent} from './research-diagnostics.ts';
 import {RUNTIME_CONTRACT,RUNTIME_MANIFEST_PATH,RUNTIME_CEILINGS,runtimeSource,freezeRuntime} from './research-runtime-contract.ts';
 
 function checkoutSource(){try{const opts={cwd:fileURLToPath(new URL('..',import.meta.url)),encoding:'utf8',stdio:['ignore','pipe','ignore'],timeout:1000};if(execFileSync('git',['status','--porcelain','--untracked-files=normal'],opts).trim())return null;return runtimeSource(execFileSync('git',['rev-parse','HEAD'],opts).trim())}catch{return null}}
@@ -55,8 +55,8 @@ export async function readRuntimeManifest(call,slot,started,budgetMs,{now=Date.n
 }
 export async function privateStableSlotMain(){
  const processStarted=Date.now(),automationId=crypto.randomUUID(),bootstrapSource=checkoutSource(),events=[];
- let input=null,stage='stdin',postsAttempted=0,requestsAttempted=0,manifestAttempts=0,manifestElapsedMs=0,manifestFailureCode=null;
- const emit=e=>{const event={runtimeContract:RUNTIME_CONTRACT,automationId,...e};if(events.length<128)events.push(event);process.stdout.write('HKIS_DIAGNOSTIC '+JSON.stringify(event)+'\n')};
+ let eventsOmitted=0,input=null,stage='stdin',postsAttempted=0,requestsAttempted=0,manifestAttempts=0,manifestElapsedMs=0,manifestFailureCode=null;
+ const emit=e=>{const event={runtimeContract:RUNTIME_CONTRACT,automationId,...e};if(!appendDiagnosticEvent(events,event))eventsOmitted++;process.stdout.write('HKIS_DIAGNOSTIC '+JSON.stringify(event)+'\n')};
  const fail=code=>{throw Object.assign(Error('HKIS stable runner stopped'),{code})};
  emit({phase:'runner',state:'started',sourceRevision:bootstrapSource,at:new Date(processStarted).toISOString()});
  try{
@@ -93,7 +93,7 @@ export async function privateStableSlotMain(){
   stage='pipeline';
   const call=createResearchClient(origin,input.token,{automationId,onDiagnostic,runtime:frozen});
   const result=await runResearchSlot(call,slot,Date.now,started,effective);
-  process.stdout.write(JSON.stringify({...safeSlotResult(result),frozen:evidence,manifestPreflight,diagnostics:{automationId,postsAttempted,requestsAttempted,events}})+'\n');
+  process.stdout.write(JSON.stringify({...safeSlotResult(result),frozen:evidence,manifestPreflight,diagnostics:{automationId,postsAttempted,requestsAttempted,events,eventsOmitted}})+'\n');
   if(result.status==='unknown')process.exitCode=2;
  }catch(e){emit({phase:stage,state:requestsAttempted?'stopped':'not_dispatched',code:diagnosticCode(e?.code),postsAttempted,requestsAttempted,manifestAttempts,manifestElapsedMs,manifestFailureCode:manifestFailureCode||(stage==='preflight'&&manifestAttempts?diagnosticCode(e?.code):null)});process.exitCode=2;throw e}
  finally{if(input&&typeof input==='object')input.token=''}

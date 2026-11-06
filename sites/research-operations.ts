@@ -4,7 +4,7 @@ import {runtimeLogStatement} from './runtime-logs.ts';
 import {isManualBatchKey} from './research-attribution.ts';
 export const OPERATION_DAYS=30,OPERATION_CAP=10000,OPERATION_CLEANUP=200,OPERATION_PAGE_SIZE=100;
 const phases=new Set(['sync','batch_start','batch_collect','batch_finish','metadata','scoring','daily','crossref_gate','crossref_connect','crossref_read','crossref_parse','crossref_capture','crossref_preload','crossref_commit','rss_connect','rss_read','rss_parse','rss_capture','rss_preload','rss_commit','collection_commit','local_finalize','local_recovery','maintenance_prepare']);
-const reasons=new Set(['client_canceled','request_deadline','network_timeout','network_failed','parse_failed','database_unknown','lease_expired','collection_lease_lost','record_conflict','work_pending','capture_capacity','capture_too_large','batch_in_flight','batch_finalizing','collection_canceled','collection_unknown','collection_in_progress','metadata_in_progress','processing_in_progress','pending_metadata','pending_scoring','pending_collection','ingestion_pending','ingestion_recovery_unknown','ingestion_origin_review_required','no_prepare_eligible','already_ready','maintenance_gate_blocked','maintenance_prepare_unconfirmed','identity_review_required','origin_review_required','metadata_required','identity_ambiguous','invalid_selection','invalid_diagnostics','scoring_state_changed','dispatch_not_sent','commit_ack_reconciled','processing_lease_lost_readback','lock_busy','deadline','provider_cooldown','budget_exceeded','not_configured','ai_disabled','key_unavailable','connection_test_required','owner_required','batch_window','daily_window','batch_not_finished','invalid_batch','batch_closed','invalid_deadline','interval_owner_ambiguous']);
+const reasons=new Set(['client_canceled','request_deadline','network_timeout','network_failed','provider_http_4xx','provider_http_5xx','parse_failed','database_unknown','lease_expired','collection_lease_lost','record_conflict','work_pending','capture_capacity','capture_too_large','batch_in_flight','batch_finalizing','collection_canceled','collection_unknown','collection_in_progress','metadata_in_progress','processing_in_progress','pending_metadata','pending_scoring','pending_collection','ingestion_pending','ingestion_recovery_unknown','ingestion_origin_review_required','no_prepare_eligible','already_ready','maintenance_gate_blocked','maintenance_prepare_unconfirmed','identity_review_required','origin_review_required','metadata_required','identity_ambiguous','invalid_selection','invalid_diagnostics','scoring_state_changed','dispatch_not_sent','commit_ack_reconciled','processing_lease_lost_readback','lock_busy','deadline','provider_cooldown','budget_exceeded','not_configured','ai_disabled','key_unavailable','connection_test_required','owner_required','batch_window','daily_window','batch_not_finished','invalid_batch','batch_closed','invalid_deadline','interval_owner_ambiguous']);
 for(const reason of ['operation_admission_unconfirmed','operation_receipt_unconfirmed','operation_already_recorded','operation_request_conflict','operation_journal_full','origin_rejected','request_marker_required','request_rejected','invalid_request','invalid_json','request_too_large','method_not_allowed','not_found','database_unavailable','research_unavailable','owner_setup_required','page_budget','time_budget','sources_exhausted','crossref_cooldown','crossref_rate_limit','batch_interrupted','head_deferred','head_pass_pending','backfill_pending','latest_pending','history_pending','coverage_incomplete','collection_stopped','collection_failed','operation_failed','provider_deferred','provider_pending','configuration_changed','no_dispatchable_source','sync_call_budget','slice_deadline','slice_call_limit'])reasons.add(reason);
 const sources=new Set(RESEARCH_SOURCES.map(s=>s.id));
 const isStoredBatchKey=(value:any)=>isManualBatchKey(value)||/^\d{4}-\d{2}-\d{2}\/(08|20)$/.test(value||'');
@@ -18,6 +18,7 @@ export function operationFailure(e:any,signal?:AbortSignal,phase?:string){
  if(phase&&/capture|preload|commit/.test(phase))return 'database_unknown';
  if(e?.code==='parse_failed'||phase?.endsWith('_parse'))return 'parse_failed';
  if(e?.httpStatus===429)return 'provider_cooldown';
+ if(Number.isInteger(e?.httpStatus)&&e.httpStatus>=400&&e.httpStatus<=599)return e.httpStatus<500?'provider_http_4xx':'provider_http_5xx';
  if(phase&&/connect|read/.test(phase)){if(e?.name==='TimeoutError')return 'network_timeout';if(e?.name==='AbortError')return 'request_deadline';return 'network_failed';}
  return 'database_unknown';
 }
@@ -29,7 +30,7 @@ export async function cleanupOperations(db:any){const cutoff=new Date(Date.now()
 ]);}
 /** Fixed enums and numeric progress only. Work payload never enters this journal. */
 export class OperationTrace{
- requestId:string=crypto.randomUUID();runId:string|null=null;current:any=null;requestOperationId:string|null=null;cleaned=false;rows=0;workStatements=0;legacyCollection=false;legacyStarted=false;
+ requestId:string=crypto.randomUUID();automationId:string|null=null;runId:string|null=null;current:any=null;requestOperationId:string|null=null;cleaned=false;rows=0;workStatements=0;legacyCollection=false;legacyStarted=false;
  db:any;batchKey:string|null;sourceId:string|null;deadline:number;originRunId:string|null;
  constructor(db:any,batchKey:string|null,sourceId:string|null,deadline:number,originRunId:string|null=null){this.db=db;this.batchKey=batchKey;this.sourceId=sourceId;this.deadline=deadline;this.originRunId=originRunId;}
  remaining(){return clamp(this.deadline-Date.now(),540000)}
@@ -121,7 +122,7 @@ async function intentHash(phase:string,body:any,request?:Request){
 }
 export async function operationCall(db:any,phase:string,body:any,action:(trace:OperationTrace)=>Promise<any>,httpRequest?:Request){
  const budget=phase==='sync'?20000:phase==='metadata'||phase==='batch_collect'?75000:phase==='scoring'?240000:phase==='daily'?190000:15000,trace=new OperationTrace(db,body?.batchKey||null,body?.sourceId||null,Date.now()+Math.min(budget,Number(body?.maxMs)||budget));
- trace.requestId=operationRequestId(httpRequest?.headers.get('x-hkis-operation-id'))||trace.requestId;
+ trace.requestId=operationRequestId(httpRequest?.headers.get('x-hkis-operation-id'))||trace.requestId;trace.automationId=operationRequestId(httpRequest?.headers.get('x-hkis-automation-id'));
  const id='request:'+trace.requestId,hash=await intentHash(phase,body,httpRequest),at=new Date().toISOString();
  try{
   try{await cleanupOperations(db)}catch{}trace.cleaned=true;

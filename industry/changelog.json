@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-11-05T00:42:42Z",
+  "latestVersion": "2026-11-06T01:42:41Z",
   "releases": [
+    {
+      "id": "hkis-pipeline-diagnostic-20261106",
+      "at": "2026-11-06T01:42:41Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "完善采集管线的错误诊断与脱敏",
+      "body": [
+        "区分已确认的供应商 HTTP 错误和结果未知的网络或持久化故障，保留来源、阶段、请求关联与预算截断提示。",
+        "限制日志字段及旧信源异常输出，保留原有采集预算、未知结果不重试和访问权限。"
+      ],
+      "sources": [
+        {
+          "label": "采集管线诊断维护记录",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/collection-goals.md"
+        }
+      ]
+    },
     {
       "id": "hkis-crossref-cooldown-resume-20261105",
       "at": "2026-11-05T00:42:42Z",

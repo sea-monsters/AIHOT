@@ -21,6 +21,14 @@ function fixture(){
  const db:any={prepare(q:string){statements++;const s=sql.prepare(q);return {args:[] as any[],bind(...args:any[]){this.args=args;return this},async first(){return s.get(...this.args)||null},async all(){return {results:s.all(...this.args)}},runSync(){return {meta:{changes:Number(s.run(...this.args).changes)}}},async run(){return this.runSync()}}},async batch(items:any[]){sql.exec('BEGIN');try{const out=items.map(s=>s.runSync());sql.exec('COMMIT');return out}catch(e){sql.exec('ROLLBACK');throw e}}};
  return {db,sql,env:{DB:db,HKIS_OWNER_EMAIL:'owner@example.invalid'},statements:()=>statements};
 }
+test('accepted plan and delegated start have one informational start and one terminal log each',async(t)=>{
+ const at='2026-10-24T00:00:00.000Z';t.mock.timers.enable({apis:['Date'],now:Date.parse(at)});const f=fixture(),old=process.env.HKIS_BUILD_SHA;
+ try{process.env.HKIS_BUILD_SHA=source;const frozen8=await freezeRuntime(await runtimeDescription(source),bootstrap,at,8),headers=frozenRuntimeHeaders(frozen8);
+  const plan=await researchRuntimeApi(request(RUNTIME_ROOT+'/plan',{slot:8},headers),f.env);assert.equal(plan.status,200);
+  const start=await researchRuntimeApi(request(RUNTIME_ROOT+'/start',{slot:8},headers),f.env);assert.equal(start.status,200);
+  for(const route of ['/api/site/research/run/plan','/api/site/research/batch/start']){const rows=f.sql.prepare("SELECT event,severity,outcome FROM runtime_logs WHERE json_extract(metadata_json,'$.route')=? ORDER BY id").all(route);assert.equal(rows.filter(x=>x.event==='request_started').length,1,route);assert.equal(rows.filter(x=>x.event==='request_finished').length,1,route);assert.equal(rows.find(x=>x.event==='request_started')!.severity,'info');}
+ }finally{if(old===undefined)delete process.env.HKIS_BUILD_SHA;else process.env.HKIS_BUILD_SHA=old;f.sql.close()}
+});
 const protectedTables=['research_papers','research_records','research_changes','research_analyses','research_batch_members','paper_reader_state','research_briefs','research_brief_evidence','research_daily','research_daily_groups','daily_content_versions','daily_visits'];
 function snapshot(f:any){return Object.fromEntries(protectedTables.map(table=>[table,f.sql.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all().map((r:any)=>({...r}))]));}
 async function history(f:any){
