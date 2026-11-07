@@ -18,6 +18,7 @@ for(const code of ['crossref_rate_limit','crossref_cooldown','operation_journal_
 for(const code of ['capture_capacity', 'capture_too_large', 'batch_finalizing', 'no_prepare_eligible', 'already_ready', 'maintenance_gate_blocked', 'maintenance_prepare_unconfirmed', 'identity_review_required', 'origin_review_required', 'metadata_required', 'identity_ambiguous', 'invalid_selection', 'invalid_diagnostics', 'batch_not_finished', 'batch_interrupted', 'head_deferred', 'head_pass_pending', 'backfill_pending', 'sync_call_budget'])codes.add(code);
 for(const code of ['local_rules_only','no_queued_in_cohort','no_new_ready_in_cohort','already_completed','daily_call_cap','provider_network','outcome_unknown','response_unconfirmed'])codes.add(code);
 codes.add('diagnostic_write_unconfirmed');
+for(const code of ['commit_unconfirmed','request_outcome_unconfirmed','needs_review'])codes.add(code);
 codes.add('manifest_retry');
 codes.add('automation_clock_changed');
 // Diagnostic vocabulary is independent of the runner's continuation policy.

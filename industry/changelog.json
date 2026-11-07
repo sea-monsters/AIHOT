@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-11-06T01:42:41Z",
+  "latestVersion": "2026-11-07T14:07:00Z",
   "releases": [
+    {
+      "id": "hkis-targeted-primary-20261107",
+      "at": "2026-11-07T14:07:00Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "定向出版页元数据核验",
+      "body": [
+        "为所有者明确选择的既存论文准备仅使用出版页和 Crossref 的定向核验模式，不调用付费搜索或模型。",
+        "增加保守身份验证、并发提交防护和脱敏诊断；仅对所有者明确选择的论文执行。"
+      ],
+      "sources": [
+        {
+          "label": "元数据维护记录",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/targeted-metadata.md"
+        }
+      ]
+    },
     {
       "id": "hkis-pipeline-diagnostic-20261106",
       "at": "2026-11-06T01:42:41Z",

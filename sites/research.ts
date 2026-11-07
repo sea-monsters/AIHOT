@@ -7,7 +7,7 @@ import {captureIngestion,drainIngestion,INGEST_LIMITS} from './research-ingestio
 import {paperDateError} from './paper-date-range.ts';
 import {assertStoredRecoveryEligible,recoverIngestion,pendingWorkDiagnostics} from './research-recovery.ts';
 import {scoringDebt} from './research-scoring-debt.ts';
-import {maintainStoredMetadata,listMetadataTargets} from './research-metadata-targeted.ts';
+import {maintainStoredMetadata,listMetadataTargets,validateTargetedMetadata} from './research-metadata-targeted.ts';
 import {prepareMaintenance} from './research-maintenance.ts';
 import {metadataDiagnostics} from './research-metadata-diagnostics.ts';
 import {OperationTrace,operationFailure,operationCall,operationRequestId,operationReason,requestOutcome} from './research-operations.ts';
@@ -303,7 +303,7 @@ async function researchApiInner(request:Request,env:any,runtimeBudget?:RuntimeBu
   try{if(!env.HKIS_OWNER_EMAIL)throw new AIError('owner_setup_required',503,'尚未配置所有者');if(request.headers.has('origin')||request.headers.has('oai-authenticated-user-id')||request.headers.has('oai-authenticated-user-email'))owner(request,env);
    if(request.method==='GET')return json(await listMetadataTargets(db,u.searchParams));
    if(request.method!=='POST')return json({code:'method_not_allowed'},405);if(request.headers.has('origin')&&(request.headers.get('origin')!==u.origin||request.headers.get('x-hkis-request')!=='1'))throw new AIError('owner_required',403,'请求来源验证失败');
-   if(Number(request.headers.get('content-length'))>24000)throw new AIError('invalid_selection',413,'输入过长');const body=await readBody(request);return json(await maintainStoredMetadata(db,env,body,runtimeBudget));
+   if(Number(request.headers.get('content-length'))>24000)throw new AIError('invalid_selection',413,'输入过长');const body=await readBody(request);validateTargetedMetadata(body);const verifiedOwner=body.mode==='primary_only'?owner(request,env):undefined;return json(body.apply===true?await operation('metadata',body,trace=>maintainStoredMetadata(db,env,body,runtimeBudget,verifiedOwner,trace)):await maintainStoredMetadata(db,env,body,runtimeBudget,verifiedOwner));
   }catch(e){return json({code:e instanceof AIError?e.code:'targeted_metadata_unavailable'},e instanceof AIError?e.status:503)}
  }
  // These previews are query-only even when old initialization repairs remain.
