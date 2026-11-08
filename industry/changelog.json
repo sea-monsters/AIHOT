@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-11-07T14:07:00Z",
+  "latestVersion": "2026-11-08T07:53:09Z",
   "releases": [
+    {
+      "id": "hkis-primary-maintenance-ui-20261108",
+      "at": "2026-11-08T07:53:09Z",
+      "kind": "feature",
+      "basis": "record",
+      "title": "站主免费定向补全入口",
+      "body": [
+        "论文库支持选择一至三篇既存论文，先查看字段缺口，再由站主明确执行出版页与 Crossref 免费核验。",
+        "预览后的记录版本变化会阻止执行；请求结果不明确时保留请求编号与意图，供只读核查，避免重复提交。"
+      ],
+      "sources": [
+        {
+          "label": "定向元数据维护说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/targeted-metadata.md"
+        }
+      ]
+    },
     {
       "id": "hkis-targeted-primary-20261107",
       "at": "2026-11-07T14:07:00Z",
