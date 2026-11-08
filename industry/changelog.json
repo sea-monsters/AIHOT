@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-11-08T07:53:09Z",
+  "latestVersion": "2026-11-08T08:09:21Z",
   "releases": [
+    {
+      "id": "hkis-primary-ui-result-20261108",
+      "at": "2026-11-08T08:09:21Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "避免定向补全结果混淆",
+      "body": [
+        "同一选择重新预检或执行时清除上次结果，避免将旧成功误认为新请求的结果。",
+        "未知回执继续保留原编号和意图，不自动重发。"
+      ],
+      "sources": [
+        {
+          "label": "定向元数据维护说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/targeted-metadata.md"
+        }
+      ]
+    },
     {
       "id": "hkis-primary-maintenance-ui-20261108",
       "at": "2026-11-08T07:53:09Z",
