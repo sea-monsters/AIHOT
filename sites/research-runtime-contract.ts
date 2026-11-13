@@ -4,7 +4,7 @@ export const RUNTIME_CONTRACT='hkis-runtime-v1';
 export const RUNTIME_ROOT='/api/hkis/runtime/v1';
 export const RUNTIME_MANIFEST_PATH=RUNTIME_ROOT+'/manifest';
 export const RUNTIME_READBACK_PATH=RUNTIME_ROOT+'/readback';
-export const RUNTIME_CAPABILITIES=['frozen-writes-v1','bounded-collection-v1','scheduled-cohorts-v1','unknown-stop-v1','collection-first-v1','cooldown-resume-v1'] as const;
+export const RUNTIME_CAPABILITIES=['frozen-writes-v1','bounded-collection-v1','scheduled-cohorts-v1','unknown-stop-v1','collection-first-v1','cooldown-resume-v1','orphan-reconcile-v1'] as const;
 export const RUNTIME_CODES=['runtime_manifest_invalid','runtime_protocol_unsupported','runtime_capability_unsupported','runtime_budget_invalid','runtime_freeze_required','runtime_changed','runtime_expired','runtime_operation_rejected','runtime_disabled','runtime_source_unavailable','runtime_goal_changed'] as const;
 export const RUNTIME_PATHS:Record<string,string>={
  '/api/site/research/run/plan':RUNTIME_ROOT+'/plan',
@@ -16,6 +16,7 @@ export const RUNTIME_PATHS:Record<string,string>={
  '/api/site/research/batch/start':RUNTIME_ROOT+'/start',
  '/api/site/research/batch/collect':RUNTIME_ROOT+'/collect',
  '/api/site/research/batch/finish':RUNTIME_ROOT+'/finish',
+ '/api/site/research/batch/reconcile':RUNTIME_ROOT+'/reconcile',
 };
 export const RUNTIME_HEADERS={contract:'x-hkis-runtime-contract',configHash:'x-hkis-config-hash',sourceRevision:'x-hkis-site-source',bootstrapSource:'x-hkis-bootstrap-source',startedAt:'x-hkis-run-started-at',slot:'x-hkis-runtime-slot'} as const;
 export const RUNTIME_CEILINGS={totalMs:540000,collectionCalls:60,collection8Ms:260000,collection20Ms:330000,collectionSliceMs:75000,collectionConcurrency:3};
@@ -97,6 +98,7 @@ export function runtimeOperationBody(path:string,body:any,frozen:any,now=Date.no
  else if(path.endsWith('/daily/generate')){shape(['maxCalls','sourceDay']);target();integer(body.maxCalls,1,s.dailyMaxCalls);if(frozen.slot!==8||left<190000)fail('runtime_operation_rejected')}
  else if(path.endsWith('/batch/start')){shape(['slot']);if(body.slot!==frozen.slot)fail('runtime_operation_rejected')}
  else if(path.endsWith('/batch/collect')){shape(body.resumeAfterCooldown===true?['batchKey','maxMs','maxCalls','concurrency','resumeAfterCooldown']:['batchKey','maxMs','maxCalls','concurrency']);integer(body.maxMs,1,m.limits.collectionSliceMs);integer(body.maxCalls,1,m.limits.collectionCalls);integer(body.concurrency,1,m.limits.collectionConcurrency)}
+ else if(path.endsWith('/batch/reconcile')){shape(['batchKey','operationId']);if(typeof body.operationId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.operationId))fail('runtime_operation_rejected')}
  else if(path.endsWith('/batch/finish')){shape(['batchKey','maxMs','deadlineAt']);integer(body.maxMs,1,6000);deadline()}
  else fail('runtime_operation_rejected');
  if('batchKey' in body&&body.batchKey!==new Date(Date.parse(frozen.startedAt)+8*3600000).toISOString().slice(0,10)+'/'+String(frozen.slot).padStart(2,'0'))fail('runtime_operation_rejected');

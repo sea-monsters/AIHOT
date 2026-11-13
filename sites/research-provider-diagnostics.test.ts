@@ -52,3 +52,9 @@ test('publisher retry records the first 5xx as failed before the successful atte
   assert.ok(!JSON.stringify(events).includes('PRIVATE_RESPONSE'));
  }finally{globalThis.fetch=original}
 });
+test('publisher authorization, rate limit and non-transient 5xx never retry',async()=>{
+ const original=globalThis.fetch;try{for(const status of [403,429,500,501]){let calls=0;globalThis.fetch=async()=>{calls++;return new Response('',{status,headers:{'retry-after':'1'}})};await assert.rejects(readURL('https://ieeexplore.ieee.org/rss/TOC7361.XML','xml',Date.now()+10000),(e:any)=>e.httpStatus===status);assert.equal(calls,1,String(status));}}finally{globalThis.fetch=original}
+});
+test('cancellation after a retryable publisher response prevents a second request',async()=>{
+ const original=globalThis.fetch,controller=new AbortController();let calls=0;try{globalThis.fetch=async()=>{calls++;controller.abort();return new Response('',{status:503,headers:{'retry-after':'1'}})};await assert.rejects(readURL('https://ieeexplore.ieee.org/rss/TOC7361.XML','xml',Date.now()+10000,undefined,undefined,undefined,controller.signal));assert.equal(calls,1)}finally{globalThis.fetch=original}
+});

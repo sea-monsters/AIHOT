@@ -1,4 +1,4 @@
-import {collectionReadback} from './research-readback.ts';
+import {collectionReadback,reconcileCollection} from './research-readback.ts';
 import {frozenRuntimeBudget,assertRuntimeBudget} from './research-runtime-budget.ts';
 import {AIError,owner,readBody} from './ai/security.ts';
 import {researchApi} from './research.ts';
@@ -50,6 +50,7 @@ export async function researchRuntimeApi(request:Request,env:any){
   description=await runtimeDescription(revision);
   const frozen=await validateFrozenRuntime(request,revision);
   const body=runtimeOperationBody(path,await readBody(request),frozen);
+  if(path==='/api/site/research/batch/reconcile')return respond(await reconcileCollection(env.DB,body,frozen,automationId));
   const maintenance=typeof body.sourceDay==='string'?await assertMaintenanceTarget(env.DB,{sourceDay:body.sourceDay,reportDate:reportDay(body.sourceDay)},new Date(),{allowCompleted:path==='/api/site/research/daily/generate'}):undefined;
   const budget=frozenRuntimeBudget(frozen,maintenance);
   delete body.sourceDay;

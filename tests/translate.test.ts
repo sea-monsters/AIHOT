@@ -61,10 +61,12 @@ before(async () => {
             VALUES (${SOURCE}, 'Test translate', 'rss', 'T1', 'editorial', true, false, '2100-01-01')`;
 });
 after(async () => {
+  const simulationFetches = (globalThis as any)[Symbol.for("hkis.test.translation.fetch.attempts")];
   await app.close();
   await provider.close();
   await stopBoss();
   await closeDb();
+  if (process.env.HKIS_TRANSLATION_SIMULATION === "1") assert.equal(simulationFetches?.dispatched, 0, "simulation dispatched no fetch");
 });
 
 test("a text corrected while its translation was running is translated again, and the old translation is not shown", async () => {

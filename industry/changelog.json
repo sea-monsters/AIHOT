@@ -1,8 +1,96 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-11-08T08:09:21Z",
+  "latestVersion": "2026-11-13T12:46:56Z",
   "releases": [
+    {
+      "id": "hkis-collection-unified-main-20261113",
+      "at": "2026-11-13T12:46:56Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "采集异常对账与兼容修复",
+      "body": [
+        "同一请求保留原编号和意图，重放不重复采集；已提交捕获仅在完整证据验证后恢复入库。",
+        "短租约仅用于固定自动采集合同，独立及手动采集保留原租约；合并保留手动批次、维护入口和更新依赖。",
+        "隔离验证与生产部署分别核实；平台暂停策略及缺少历史捕获证明的旧任务不作为已自动修复。"
+      ],
+      "sources": [
+        {
+          "label": "采集对账设计与验证边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/hkis-reconciliation-design.md"
+        }
+      ]
+    },
+    {
+      "id": "hkis-v124-orphan-closure-20261113",
+      "at": "2026-11-13T03:13:29Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "完善采集中断后的安全恢复",
+      "body": [
+        "以已发布版本为基线保留迁移与托管配置，缩短新来源租约并补充同一操作的有界核对。",
+        "仅以已提交片段的原子来源证明恢复本地记录；未知操作不重复外发，迟到写入继续受保护。",
+        "代码验收不等于生产恢复；隔离网关验证及原任务切换仍须独立完成。"
+      ],
+      "sources": [
+        {
+          "label": "前向移植与验收记录",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/hkis-verification-package.md"
+        }
+      ]
+    },
+    {
+      "id": "hkis-valve-reconciliation-audit-20261113",
+      "at": "2026-11-13T02:51:39Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "补充关闭安全阀的验证",
+      "body": [
+        "增加模型安全阀关闭时的无外发检查，保留待解决的数据库测试前提与采集未知状态对账设计。",
+        "新设计尚未部署；云端验证和生产版本核对仍是上线条件。"
+      ],
+      "sources": [
+        {
+          "label": "分层验收说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/hkis-verification-package.md"
+        }
+      ]
+    },
+    {
+      "id": "hkis-verification-package-20261113",
+      "at": "2026-11-13T02:38:07Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "完善采集验收工具",
+      "body": [
+        "整理可重复执行的离线、隔离 Worker 和云端网关验收入口，覆盖回执、去重、失败恢复和安全边界。",
+        "发布仍需核对生产差异和真实网关；隔离模拟结果不代表生产采集已恢复。"
+      ],
+      "sources": [
+        {
+          "label": "分层验收说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/hkis-verification-package.md"
+        }
+      ]
+    },
+    {
+      "id": "hkis-collection-readback-20261113",
+      "at": "2026-11-13T02:19:02Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "改善采集超时后的核对",
+      "body": [
+        "缩短自动采集单次请求，降低网关长请求中断风险。",
+        "未知响应后在原时限内有限次核对同一操作；仅在状态确认允许时收尾，不重放未知采集。",
+        "无 DOI 时以同来源稳定地址保守匹配，标题相同不足以合并；出版方限流或拒绝不会触发重试。"
+      ],
+      "sources": [
+        {
+          "label": "采集执行状态说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/execution-state.md"
+        }
+      ]
+    },
     {
       "id": "hkis-primary-ui-result-20261108",
       "at": "2026-11-08T08:09:21Z",
@@ -82,7 +170,10 @@
         "沿用原始截止时间与来源、分页额度；未知结果、未确认落库或再次限流时安全停止，不重放先前来源。此规则需要固定执行器和站点配套更新。"
       ],
       "sources": [
-        {"label": "限流后续采说明", "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/collection-goals.md"}
+        {
+          "label": "限流后续采说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/collection-goals.md"
+        }
       ]
     },
     {
@@ -96,7 +187,27 @@
         "采集在既有分页额度内为旧游标预留机会，日报在已登记待办间轮换，保留真实积压与冷却状态；来源调用上限的生效须与计划任务一同切换。"
       ],
       "sources": [
-        {"label": "采集状态实现", "url": "https://github.com/sea-monsters/AIHOT/blob/main/industry/changelog.json"}
+        {
+          "label": "采集状态实现",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/industry/changelog.json"
+        }
+      ]
+    },
+    {
+      "id": "hkis-release-source-marker-20261102",
+      "at": "2026-11-02T00:37:33Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "修复发布版本标识",
+      "body": [
+        "修复发布产物缺少源码版本标识，恢复自动运行前的只读契约校验。",
+        "发布前校验实际构建产物与当前源码一致；不改变采集任务、模型设置或历史数据。"
+      ],
+      "sources": [
+        {
+          "label": "自动运行契约",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/stable-research-runtime.md"
+        }
       ]
     },
     {
@@ -110,8 +221,48 @@
         "跨年时间显示补充年份；本次是选择性适配，不代表完整合并上游引擎或验证外部模型服务。"
       ],
       "sources": [
-        {"label": "上游审查与适配记录", "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/upstream-sync.md"},
-        {"label": "上游审查范围", "url": "https://github.com/KKKKhazix/AIHOT/compare/b3998dc6fc138eb9659f33f55eb38c1c716f0d57...d4e0374d6b32ab75681f2beffb2c52b91dbd93ab"}
+        {
+          "label": "上游审查与适配记录",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/upstream-sync.md"
+        },
+        {
+          "label": "上游审查范围",
+          "url": "https://github.com/KKKKhazix/AIHOT/compare/b3998dc6fc138eb9659f33f55eb38c1c716f0d57...d4e0374d6b32ab75681f2beffb2c52b91dbd93ab"
+        }
+      ]
+    },
+    {
+      "id": "hkis-retire-minimal-probe-20261101",
+      "at": "2026-11-01T20:40:32Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "移除临时模型探测入口",
+      "body": [
+        "单次授权的临时文本测试结束后移除入口；保留 HTTP 530 状态未知的诊断修复和防重放记录。",
+        "上游返回 530 的来源与模型兼容性仍未确认；不会自动重试或调整已保存设置。"
+      ],
+      "sources": [
+        {
+          "label": "模型助手及接入说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/ai-assistant.md"
+        }
+      ]
+    },
+    {
+      "id": "hkis-temporary-minimal-probe-20261101",
+      "at": "2026-11-01T20:31:13Z",
+      "kind": "feature",
+      "basis": "record",
+      "title": "限时单次模型连接诊断",
+      "body": [
+        "经所有者授权，提供指定接入点与模型的限时一次性文本测试：固定短句、128 输出 tokens，不发送工具或思考参数。",
+        "使用已有的身份验证、额度和回执；不变更已保存设置，不自动重试，结果不代表工具或模型全部功能兼容。该临时入口在测试后移除。"
+      ],
+      "sources": [
+        {
+          "label": "模型助手及接入说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/ai-assistant.md"
+        }
       ]
     },
     {
@@ -184,6 +335,24 @@
       ]
     },
     {
+      "id": "hkis-sites-isolation-model-reset-20261031",
+      "at": "2026-10-31T15:19:00Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "隔离测试清理旧模型设置并保留分阶段证据",
+      "body": [
+        "仅测试夹具重置同时清除旧合成模型设置，回归预先放入旧假模型行，保持未配置模型的明确验收条件。",
+        "运行器在最终回查和断言前提供固定结构的脱敏结果与快照回调，单项失败仍保留已完成阶段证据。",
+        "不改变生产模型设置或采集逻辑，不放宽收尾、回执、历史不变及零付费请求断言。"
+      ],
+      "sources": [
+        {
+          "label": "隔离验收边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/execution-state.md"
+        }
+      ]
+    },
+    {
       "id": "hkis-isolated-owner-diagnostics-20261031",
       "at": "2026-10-31T15:00:31Z",
       "kind": "fix",
@@ -197,6 +366,24 @@
       "sources": [
         {
           "label": "隔离绑定与安全bootstrap诊断",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/execution-state.md"
+        }
+      ]
+    },
+    {
+      "id": "hkis-sites-isolation-owner-diagnostics-20261031",
+      "at": "2026-10-31T14:54:00Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "补齐隔离夹具配置与引导失败诊断",
+      "body": [
+        "受双重隔离绑定保护的测试入口恢复旧夹具的合成所有者配置，不写入真实身份、凭证或认证请求头。",
+        "隔离回归仅提供DB与两个测试绑定，防止本地隐含配置掩盖云端缺项。",
+        "引导失败仅输出固定枚举诊断、退出码与输出字节数；敏感内容拒绝展示，未知结果只读回查而不重放。"
+      ],
+      "sources": [
+        {
+          "label": "隔离验收边界",
           "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/execution-state.md"
         }
       ]
@@ -220,6 +407,25 @@
       ]
     },
     {
+      "id": "hkis-sites-isolation-receipt-evidence-20261031",
+      "at": "2026-10-31T14:49:00Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "加强隔离验收的收尾响应与回执一致性检查",
+      "body": [
+        "隔离测试记录固定枚举的实际收尾响应，要求 complete、partial 或 rejected 与根回执状态逐项对应。",
+        "修复测试夹具重置时外键子表清理顺序，并覆盖已存在阅读记录及历史日报的隔离库；非JSON失败报告路由和状态并只读回查，不重放写入。",
+        "未终止批次必须没有完成时间，保留总体结果、精确收尾次数、历史数据和零付费请求断言。",
+        "仅加强合成测试证据，不改变生产采集逻辑；真实云端验收与上线仍分别确认。"
+      ],
+      "sources": [
+        {
+          "label": "严格隔离验收合同",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/execution-state.md"
+        }
+      ]
+    },
+    {
       "id": "hkis-reconciliation-receipt-review-20261031",
       "at": "2026-10-31T14:41:50Z",
       "kind": "fix",
@@ -233,6 +439,25 @@
       "sources": [
         {
           "label": "执行证据及严格隔离验收合同",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/execution-state.md"
+        }
+      ]
+    },
+    {
+      "id": "hkis-sites-operation-intent-20261031",
+      "at": "2026-10-31T14:41:00Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "补齐采集操作回执与执行状态核对",
+      "body": [
+        "采集入口先保存操作意图摘要，同一操作编号不重发，意图冲突或回执不明时保守停止。",
+        "最近窗口分别展示调用、批次登记、覆盖、后处理和简报状态，等待核对不再误显示为未登记。",
+        "清单预检仅对无应用响应的可恢复读取故障执行一次有界重试，保持原时间预算；不重试未知写入。",
+        "本条记录源码维护；隔离验收与正式上线分别确认，不新增调度、手动批次、凭证或付费调用。"
+      ],
+      "sources": [
+        {
+          "label": "实现与边界",
           "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/execution-state.md"
         }
       ]
@@ -475,6 +700,24 @@
       ]
     },
     {
+      "id": "hkis-release-source-artifact-guard-20261027",
+      "at": "2026-10-27T02:00:34Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "发布前校验干净源码与编译产物版本一致",
+      "body": [
+        "为正式发布增加独立门禁：工作区必须干净，Worker内所有编译源码版本必须精确匹配当前提交，拒绝空版本、旧产物或混合版本；普通本地构建仍可用于隔离测试。",
+        "明确官方流程先提交，再干净构建、校验和打包；同一源码版本重新保存可能复用旧归档，线上恢复须以新发布版本及runtime回读为准。",
+        "不改变运行协议、身份校验、采集预算、密钥或补全默认关闭设置；本条不冒充生产恢复证明。"
+      ],
+      "sources": [
+        {
+          "label": "发布门禁及官方流程说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/anysearch.md"
+        }
+      ]
+    },
+    {
       "id": "hkis-anysearch-recovery-fairness-20261027",
       "at": "2026-10-27T01:34:41Z",
       "kind": "fix",
@@ -619,6 +862,24 @@
         {
           "label": "稳定契约、数据保护与固定任务全文",
           "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/stable-research-runtime.md"
+        }
+      ]
+    },
+    {
+      "id": "hkis-hosted-pipeline-adaptation-20261023",
+      "at": "2026-10-23T14:21:10Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "将采集管线修复适配至现役站点基线",
+      "body": [
+        "在现役v99源码上精确移植手动刷新安全标记与失败停止、评分保留与并发保护、覆盖统计和未来冻结证据修复；补充准入失败的三类门控回读诊断，不以未知结果重试写入。",
+        "保留全部122条既有站点日志，补录仓库上游择取及修复记录；不引入未上线manual批次，不升级本次托管依赖，不修改来源、预算、访问权限、历史数据或已发布简报。",
+        "本条时间为适配维护记录，不冒充上线时间；部署及自动任务固定源码须配套核验，旧评分积压不因代码修复而宣称已清空。"
+      ],
+      "sources": [
+        {
+          "label": "管线审查与部署边界",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/ingestion-pipeline-review.md"
         }
       ]
     },

@@ -17,6 +17,9 @@ const requests: number[] = [];
 let answer = async (_id: number) => Response.json({ code: 0 });
 
 before(async () => {
+  if (process.env.HKIS_TRANSLATION_SIMULATION !== "1" || !(globalThis as any)[Symbol.for("hkis.test.notification.state")]) throw Error("test_notification_simulation_required");
+  const actual = await import(new URL("../packages/backend/src/config.ts", import.meta.url).href);
+  if (config === actual.config || actual.config.feishuContentPushEnabled !== false) throw Error("test_notification_double_required");
   config.devAdmin = { displayName: T };
   process.env.TEST_DELIVERY_WEBHOOK = WEBHOOK;
   // Exercise the live branch entirely in-process; any unexpected network request fails the test.

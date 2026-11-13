@@ -34,7 +34,7 @@ async function evaluate(rows: RelationGoldRow[], providerUrl: string, concurrenc
       "scripts/eval-relations.ts", "--gold", gold, "--models", "deepseek-flash", "--concurrency", String(concurrency),
     ], {
       cwd: REPO_ROOT,
-      env: { ...process.env, MODEL_CALLS_ENABLED: "true", DEEPSEEK_BASE_URL: `${providerUrl}/v1`, DEEPSEEK_API_KEY: "test-key" },
+      env: { ...process.env, MODEL_CALLS_ENABLED: "false", DEEPSEEK_BASE_URL: `${providerUrl}/v1`, DEEPSEEK_API_KEY: "test-key" },
       timeout: 15_000,
     });
     report = stdout.split("\n").find((line) => line.startsWith("report: "))?.slice(8);

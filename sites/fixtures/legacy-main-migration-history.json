@@ -1,0 +1,50 @@
+{
+  "sourceRevision": "aa2bbdf62ab37ed9c928e201e3db2b9db407f9a1",
+  "entries": [
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1792547311323,
+      "tag": "0025_manual_batches",
+      "breakpoints": true,
+      "sha256": "88699b01fb54b4eb617b860eaf007c9fef98187017d72b76ebd0a43882700448",
+      "sql": "ALTER TABLE `research_batches` ADD `mode` text NOT NULL DEFAULT 'scheduled';--> statement-breakpoint\nCREATE INDEX `idx_research_batches_mode_started` ON `research_batches` (`mode`,`started_at`);\n"
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1793062219372,
+      "tag": "0026_anysearch_metadata",
+      "breakpoints": true,
+      "sha256": "e16369b3822196e639d6a290b285bb8b87cbe2c15f3f3767db2224c1f7449f82",
+      "sql": "ALTER TABLE `anysearch_settings` ADD `metadata_enabled` integer DEFAULT 0 NOT NULL;\n"
+    },
+    {
+      "idx": 27,
+      "version": "6",
+      "when": 1793069092405,
+      "tag": "0027_metadata_jobs",
+      "breakpoints": true,
+      "sha256": "cb5b09e3b524718c8ce15eea06499886a939509a5ec3765ac8459f3549220720",
+      "sql": "CREATE TABLE `research_metadata_jobs` (\n\t`paper_id` text PRIMARY KEY NOT NULL,\n\t`owner_id` text NOT NULL,\n\t`fields_json` text NOT NULL,\n\t`status` text NOT NULL,\n\t`state_json` text NOT NULL,\n\t`baseline_json` text NOT NULL,\n\t`gain_json` text NOT NULL,\n\t`created_at` text NOT NULL,\n\t`updated_at` text NOT NULL\n);\n"
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1793112941406,
+      "tag": "0028_aminer_fallback",
+      "breakpoints": true,
+      "sha256": "4b615084e1940e8ae08dc2ad104c246c377028c7b456ea096a5c2863264f18b9",
+      "sql": "CREATE TABLE `aminer_budget_grants` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`owner_id` text NOT NULL,\n\t`fingerprint` text NOT NULL,\n\t`contract_version` text NOT NULL,\n\t`config_revision` integer NOT NULL,\n\t`max_detail_calls` integer NOT NULL,\n\t`reserved_detail_calls` integer DEFAULT 0 NOT NULL,\n\t`max_search_calls` integer NOT NULL,\n\t`reserved_search_calls` integer DEFAULT 0 NOT NULL,\n\t`unit_cost_fen` integer NOT NULL,\n\t`created_at` text NOT NULL,\n\t`expires_at` text NOT NULL,\n\t`revoked_at` text\n);\n--> statement-breakpoint\nCREATE INDEX `idx_aminer_grants_owner` ON `aminer_budget_grants` (`owner_id`,`created_at`);--> statement-breakpoint\nCREATE TABLE `aminer_requests` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`owner_id` text NOT NULL,\n\t`identity_key` text NOT NULL,\n\t`operation` text NOT NULL,\n\t`config_revision` integer NOT NULL,\n\t`grant_id` text NOT NULL,\n\t`fingerprint` text NOT NULL,\n\t`status` text NOT NULL,\n\t`dispatch_token` text NOT NULL,\n\t`reserved_cost_fen` integer NOT NULL,\n\t`result_json` text,\n\t`error_code` text,\n\t`http_status` integer,\n\t`created_at` text NOT NULL,\n\t`finished_at` text\n);\n--> statement-breakpoint\nCREATE INDEX `idx_aminer_requests_owner` ON `aminer_requests` (`owner_id`,`created_at`);--> statement-breakpoint\nCREATE INDEX `idx_aminer_requests_identity` ON `aminer_requests` (`owner_id`,`identity_key`,`operation`);--> statement-breakpoint\nCREATE TABLE `aminer_settings` (\n\t`owner_id` text PRIMARY KEY NOT NULL,\n\t`credentials_ciphertext` text,\n\t`enabled` integer DEFAULT 0 NOT NULL,\n\t`data_use_authorized` integer DEFAULT 0 NOT NULL,\n\t`authorization_ref` text,\n\t`revision` integer DEFAULT 1 NOT NULL,\n\t`updated_at` text NOT NULL,\n\t`blocked_code` text,\n\t`cooldown_until` integer DEFAULT 0 NOT NULL,\n\t`next_allowed` integer DEFAULT 0 NOT NULL,\n\t`lease_until` integer DEFAULT 0 NOT NULL,\n\t`lease_token` text\n);\n"
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1793456017672,
+      "tag": "0029_operation_intent",
+      "breakpoints": true,
+      "sha256": "c4c3fe2fded3e02b8219821df787a87d29b3f2cc4b35d1df434964d6b077120b",
+      "sql": "ALTER TABLE `research_operations` ADD `intent_hash` text;"
+    }
+  ]
+}

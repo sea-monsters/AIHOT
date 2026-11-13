@@ -54,7 +54,7 @@ async function evaluate(rows: GoldRow[], providers: { prefilter: string; score: 
       cwd: REPO_ROOT,
       env: {
         ...process.env,
-        MODEL_CALLS_ENABLED: "true",
+        MODEL_CALLS_ENABLED: "false",
         SCORE_MODEL: "glm-5.3-flash-selection",
         PREFILTER_MODEL: "qwen3.7-flash",
         DASHSCOPE_BASE_URL: `${providers.prefilter}/v1`,

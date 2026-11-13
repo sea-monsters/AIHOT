@@ -37,3 +37,21 @@ test('late acknowledgement cannot overwrite a terminal attempt or a newer operat
 test('journal pressure preserves retained root intents and fails closed rather than evicting their admission tombstones',async()=>{
  const f=fixture();try{const at=new Date().toISOString();f.sql.prepare("WITH RECURSIVE n(i) AS(SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i<10000) INSERT INTO research_operations(id,request_id,phase,state,severity,known,started_at,observed_at) SELECT 'request:retained-'||i,'retained-'||i,'batch_collect','started','info',0,?,? FROM n").run(at,at);const r=await operationCall(f.db,'batch_collect',{},f.action,f.request());assert.equal(r.reason,'operation_journal_full');assert.equal(f.actions(),0);assert.equal(f.sql.prepare("SELECT count(*) n FROM research_operations WHERE id LIKE 'request:retained-%'").get()!.n,10000)}finally{f.sql.close()}
 });
+
+test('Production 0028 preserves historical intent rows; appended 0029 preserves manual batch mode',()=>{
+ const previous=JSON.parse(readFileSync('drizzle/meta/0027_snapshot.json','utf8')),next=JSON.parse(readFileSync('drizzle/meta/0028_snapshot.json','utf8'));
+ assert.equal(next.prevId,previous.id);assert.notEqual(next.id,previous.id);assert.equal(next.tables.research_operations.columns.intent_hash.notNull,false);delete next.tables.research_operations.columns.intent_hash;
+ for(const snapshot of [previous,next]){delete snapshot.id;delete snapshot.prevId;}assert.deepEqual(next,previous);
+ const journal=JSON.parse(readFileSync('drizzle/meta/_journal.json','utf8')).entries;assert.equal(journal.at(-1).idx,29);assert.equal(journal.at(-1).tag,'0029_manual_batches');
+ const sql=new DatabaseSync(':memory:');try{for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')&&Number(f.slice(0,4))<=27).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
+ sql.exec("INSERT INTO research_operations(id,request_id,phase,state,severity,known,started_at,observed_at) VALUES('legacy','legacy','batch_collect','ok','info',1,'old','old')");const before=sql.prepare('SELECT * FROM research_operations').get();sql.exec(readFileSync('drizzle/0028_operation_intent.sql','utf8'));const after=sql.prepare('SELECT * FROM research_operations').get();assert.equal(after!.intent_hash,null);delete after!.intent_hash;assert.deepEqual(after,before);assert.equal(sql.prepare("SELECT count(*) n FROM pragma_table_info('research_batches') WHERE name='mode'").get()!.n,0);sql.exec(readFileSync('drizzle/0029_manual_batches.sql','utf8'));assert.equal(sql.prepare("SELECT count(*) n FROM pragma_table_info('research_batches') WHERE name='mode'").get()!.n,1);assert.deepEqual({...sql.prepare('SELECT * FROM research_operations').get()},{...before,intent_hash:null});
+ }finally{sql.close()}
+});
+
+test('concurrent duplicate admission returns the in-flight receipt without executing twice',async()=>{
+ const f=fixture();let release!:()=>void;const gate=new Promise<void>(r=>release=r);let entered!:()=>void;const active=new Promise<void>(r=>entered=r);
+ try{const req=f.request(),body={batchKey:'2026-10-31/20',maxCalls:1};let calls=0;const first=operationCall(f.db,'batch_collect',body,async()=>{calls++;entered();await gate;return {status:'ok',batchKey:body.batchKey}},req);await active;
+  const [same,changed]=await Promise.all([operationCall(f.db,'batch_collect',body,f.action,req),operationCall(f.db,'batch_collect',{...body,maxCalls:2},f.action,req)]);
+  assert.equal(same.reason,'operation_already_recorded');assert.equal(same.receipt.known,false);assert.equal(same.receipt.endedAt,null);assert.equal(changed.reason,'operation_request_conflict');assert.equal(calls,1);assert.equal(f.actions(),0);release();assert.equal((await first).status,'ok');const replay=await operationCall(f.db,'batch_collect',body,f.action,req);assert.equal(replay.receipt.known,true);assert.equal(calls,1);assert.equal(f.actions(),0);assert.equal(f.sql.prepare("SELECT count(*) n FROM research_settings WHERE key LIKE 'collection-budget:%'").get()!.n,0);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
+ }finally{release();f.sql.close()}
+});

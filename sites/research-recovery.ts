@@ -1,3 +1,4 @@
+import {storedOriginInvalid,verifyReconciledCaptures} from './research-capture-proof.ts';
 import {AIError} from './ai/security.ts';
 import {drainIngestion} from './research-ingestion.ts';
 import {OperationTrace,operationFailure} from './research-operations.ts';
@@ -5,12 +6,13 @@ import {collectionIdle,metadataIdle,processingIdle,databaseNowSql,fencedRunDatab
 export const RECOVERY_LIMITS={requestMs:6000,reserveMs:1500,statements:250,leaseMs:15000,slices:4};
 const stamp=()=>new Date().toISOString();
 const unresolved="NOT EXISTS(SELECT 1 FROM research_runs WHERE entry_point='local_recovery' AND finished_at IS NULL AND status IN ('running','unknown','interrupted'))";
-const provenOrigins="NOT EXISTS(SELECT 1 FROM research_ingestion_work w LEFT JOIN research_runs r ON r.id=w.origin_run_id WHERE w.status='pending' AND (r.id IS NULL OR r.source_id IS NOT w.source_id OR r.batch_key IS NOT w.origin_batch_key OR r.status IS NOT 'persist_pending' OR coalesce(r.close_reason,'') NOT IN ('work_pending','record_conflict') OR r.finished_at IS NOT NULL))";
+const provenOrigins="NOT EXISTS(SELECT 1 FROM research_ingestion_work w LEFT JOIN research_runs r ON r.id=w.origin_run_id WHERE w.status='pending' AND "+storedOriginInvalid+")";
 const safe=`${collectionIdle} AND ${metadataIdle} AND ${processingIdle} AND ${unresolved} AND ${provenOrigins}`;
 /** Same proof for explicit recovery and legacy sync; current capture may drain
  * its own work, but cannot adopt an unknown actor's remaining fragments. */
 export async function assertStoredRecoveryEligible(db:any,sourceId?:string,currentRunId=''){
- const state=await db.prepare("SELECT EXISTS(SELECT 1 FROM research_runs WHERE entry_point='local_recovery' AND id<>? AND finished_at IS NULL AND status IN ('running','unknown','interrupted')) uncertain,EXISTS(SELECT 1 FROM research_ingestion_work w LEFT JOIN research_runs r ON r.id=w.origin_run_id WHERE w.status='pending' AND w.origin_run_id<>?"+(sourceId?' AND w.source_id=?':'')+" AND (r.id IS NULL OR r.source_id IS NOT w.source_id OR r.batch_key IS NOT w.origin_batch_key OR r.status IS NOT 'persist_pending' OR coalesce(r.close_reason,'') NOT IN ('work_pending','record_conflict') OR r.finished_at IS NOT NULL)) unproven").bind(currentRunId,currentRunId,...(sourceId?[sourceId]:[])).first();if(state.uncertain)throw new AIError('ingestion_recovery_unknown',409,'恢复运行尚未确认，先回读核对，不跨入口继续提交');if(state.unproven)throw new AIError('ingestion_origin_review_required',409,'持久片段来源未确认，先核对原运行，不跨入口恢复');
+ const state=await db.prepare("SELECT EXISTS(SELECT 1 FROM research_runs WHERE entry_point='local_recovery' AND id<>? AND finished_at IS NULL AND status IN ('running','unknown','interrupted')) uncertain,EXISTS(SELECT 1 FROM research_ingestion_work w LEFT JOIN research_runs r ON r.id=w.origin_run_id WHERE w.status='pending' AND w.origin_run_id<>?"+(sourceId?' AND w.source_id=?':'')+" AND "+storedOriginInvalid+") unproven,EXISTS(SELECT 1 FROM research_ingestion_work w JOIN research_runs r ON r.id=w.origin_run_id WHERE w.status='pending' AND r.status='interrupted') needsProof").bind(currentRunId,currentRunId,...(sourceId?[sourceId]:[])).first();if(state.uncertain)throw new AIError('ingestion_recovery_unknown',409,'恢复运行尚未确认，先回读核对，不跨入口继续提交');if(state.unproven)throw new AIError('ingestion_origin_review_required',409,'持久片段来源未确认，先核对原运行，不跨入口恢复');
+ if(state.needsProof&&!await verifyReconciledCaptures(db))throw new AIError('ingestion_origin_review_required',409,'持久片段校验不一致，停止本地恢复');
 }
 export async function pendingWorkCounts(db:any){const r=await db.prepare("SELECT count(*) items,coalesce(sum(records),0) records,min(observed_at) oldestAt FROM research_ingestion_work WHERE status='pending'").first();return {items:Number(r.items),records:Number(r.records),oldestAt:r.oldestAt||null};}
 /** Read-only, bounded attribution; no payloads, secrets, or inferred production cause. */
@@ -21,6 +23,7 @@ export async function recoverIngestion(rawDb:any,options:any={}){
  if(!Number.isInteger(maxMs)||maxMs<1||maxMs>RECOVERY_LIMITS.requestMs)throw new AIError('invalid_deadline',400,'本地恢复时限应在1–6000毫秒');
  const caller=options.deadlineAt===undefined?Infinity:Date.parse(options.deadlineAt);if(!Number.isFinite(caller)&&caller!==Infinity)throw new AIError('invalid_deadline',400,'整轮截止时点无效');const deadline=Math.min(start+maxMs,caller);
  const empty={known:true,processedItems:0,processed:0,remainingItems:before.items,remaining:before.records};if(!before.items)return {status:'ok',attempted:0,recovery:empty};
+ if(!await verifyReconciledCaptures(rawDb))return {status:'deferred',reason:'ingestion_origin_review_required',attempted:0,recovery:empty};
  if(Date.now()+RECOVERY_LIMITS.reserveMs>=deadline)return {status:'deferred',reason:'deadline',attempted:0,recovery:empty};
  const id=crypto.randomUUID(),until=new Date(Date.now()+RECOVERY_LIMITS.leaseMs).toISOString(),key='lock:__metadata__',value=until+'|'+id;
  const admitted=await rawDb.batch([

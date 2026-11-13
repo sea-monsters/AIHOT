@@ -180,36 +180,36 @@
     {
       "idx": 25,
       "version": "6",
-      "when": 1792547311323,
-      "tag": "0025_manual_batches",
+      "when": 1793065307919,
+      "tag": "0025_anysearch_metadata",
       "breakpoints": true
     },
     {
       "idx": 26,
       "version": "6",
-      "when": 1793062219372,
-      "tag": "0026_anysearch_metadata",
+      "when": 1793072296579,
+      "tag": "0026_metadata_jobs",
       "breakpoints": true
     },
     {
       "idx": 27,
       "version": "6",
-      "when": 1793069092405,
-      "tag": "0027_metadata_jobs",
+      "when": 1793115353427,
+      "tag": "0027_aminer_fallback",
       "breakpoints": true
     },
     {
       "idx": 28,
       "version": "6",
-      "when": 1793112941406,
-      "tag": "0028_aminer_fallback",
+      "when": 1793457676000,
+      "tag": "0028_operation_intent",
       "breakpoints": true
     },
     {
       "idx": 29,
       "version": "6",
-      "when": 1793456017672,
-      "tag": "0029_operation_intent",
+      "when": 1794571200000,
+      "tag": "0029_manual_batches",
       "breakpoints": true
     }
   ]

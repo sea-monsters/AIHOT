@@ -45,9 +45,11 @@ let n = 0;
 async function submit(): Promise<{ id: number; file: string }> {
   n += 1;
   // Submitted while forwarding is off, so the test drives every attempt itself.
-  delete process.env.FEISHU_INTERNAL_ENABLED;
+  const simulation = (globalThis as any)[Symbol.for("hkis.test.notification.state")];
+  if (process.env.HKIS_TRANSLATION_SIMULATION !== "1" || !simulation) throw Error("test_notification_simulation_required");
+  simulation.internal = false;
   const { id } = await submitFeedback({ content: `反馈 ${T}-${n}`, screenshot: { mime: "image/png", data: Buffer.concat([PNG, Buffer.from(`${T}-${n}`)]) }, ip: `203.0.113.${n}`, userAgent: "test" });
-  process.env.FEISHU_INTERNAL_ENABLED = "true";
+  simulation.internal = true;
   const [row] = await sql<{ screenshot_key: string }[]>`SELECT screenshot_key FROM feedback WHERE id = ${id}`;
   return { id, file: path.join(config.dataDir, "feedback-screenshots", row!.screenshot_key.slice("local:".length)) };
 }

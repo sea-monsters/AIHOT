@@ -31,12 +31,14 @@ for (const [name, model] of Object.entries(AIHOT_MODELS)) process.env[name] ??= 
  */
 export async function stub(answer: (hit: number, req: { url: string; body: string }) => unknown) {
   let hits = 0;
+  const registryKey = Symbol.for("hkis.test.stub.registry");
+  const registry = (globalThis as any)[registryKey] ??= new Map<string, (req: { url: string; body: string }) => Promise<unknown>>();
+  const invoke = async (req: { url: string; body: string }) => { hits += 1; return answer(hits, req); };
   const server = http.createServer((req, res) => {
     const chunks: Buffer[] = [];
     req.on("data", (c: Buffer) => chunks.push(c));
     req.on("end", async () => {
-      hits += 1;
-      const out = await answer(hits, { url: req.url ?? "/", body: Buffer.concat(chunks).toString("utf8") });
+      const out = await invoke({ url: req.url ?? "/", body: Buffer.concat(chunks).toString("utf8") });
       const reply = out instanceof Reply ? out : { status: 200, json: out };
       res.writeHead(reply.status, { "content-type": "application/json" });
       res.end(JSON.stringify(reply.json));
@@ -44,7 +46,8 @@ export async function stub(answer: (hit: number, req: { url: string; body: strin
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
   const { port } = server.address() as { port: number };
-  return { url: `http://127.0.0.1:${port}`, hits: () => hits, close: () => new Promise<void>((resolve) => server.close(() => resolve())) };
+  const url = `http://127.0.0.1:${port}`;registry.set(url, invoke);
+  return { url, hits: () => hits, close: () => new Promise<void>((resolve) => server.close(() => {registry.delete(url);resolve()})) };
 }
 
 /** A stub answer with its own status (e.g. a provider's 503); anything else is a 200 JSON body. */

@@ -1,5 +1,6 @@
 import {AIError} from './ai/security.ts';
 export const SOURCE_LEASE_MS=10*60*1000;
+export const SOURCE_SETTLE_GRACE_MS=5000;
 export const BATCH_CLOSE_AFTER_MS=540000;
 export const batchBudgetMs=(batch:any)=>batch?.mode==='manual'?540000:batch.slot===8?260000:330000;
 // No read-side mutation. Deadline exhaustion says nothing about completion.
@@ -30,14 +31,19 @@ export async function reconcileBatches(db:any,at=new Date()){
  ]);
  return {closed:Number(results[0]?.meta?.changes||0),closedAt:now};
 }
-export async function admitRun(db:any,sourceId:string,batchKey:string|null,entryPoint:string,started:string){
- const id=crypto.randomUUID(),until=new Date(Date.now()+SOURCE_LEASE_MS).toISOString(),lockValue=until+'|'+id,key='lock:'+sourceId;
+export async function admitRun(db:any,sourceId:string,batchKey:string|null,entryPoint:string,started:string,requestDeadline?:number){
+ // New bounded collection requests cannot hold a ten-minute lease beyond the
+ // entire automation. Legacy/metadata callers retain their existing lease.
+ const now=Date.now();
+ if(requestDeadline!==undefined&&(!Number.isFinite(requestDeadline)||requestDeadline<=now))return null;
+ const leaseEnd=requestDeadline===undefined?now+SOURCE_LEASE_MS:Math.min(now+SOURCE_LEASE_MS,requestDeadline+SOURCE_SETTLE_GRACE_MS);
+ const id=crypto.randomUUID(),until=new Date(leaseEnd).toISOString(),lockValue=until+'|'+id,key='lock:'+sourceId;
  // A standalone source must not enter a batch that already owns discovery.
  // Keep this in the INSERT SELECT so it also guards a conflicting lock update;
  // collectionIdle itself would reject the lock inserted by our own first write.
  const batchCapacity=`(SELECT count(*) FROM research_runs WHERE batch_key=? AND phase='collection' AND status='running' AND coalesce(lease_until,strftime('%Y-%m-%dT%H:%M:%fZ',started_at,'+10 minutes'))>${databaseNowSql})<3`;
- const allowed=processingIdle+' AND '+finalizingAdmissionOpen+' AND '+(sourceId==='__metadata__'?collectionIdle+' AND '+ingestionIdle:(batchKey?"EXISTS(SELECT 1 FROM research_batches WHERE key=? AND status='running') AND "+batchCapacity+' AND '+metadataIdle:"NOT EXISTS(SELECT 1 FROM research_batches WHERE status='running') AND "+metadataIdle));
- const batchArgs=batchKey&&sourceId!=='__metadata__'?[batchKey,batchKey]:[];
+ const allowed='? > '+databaseNowSql+' AND '+processingIdle+' AND '+finalizingAdmissionOpen+' AND '+(sourceId==='__metadata__'?collectionIdle+' AND '+ingestionIdle:(batchKey?"EXISTS(SELECT 1 FROM research_batches WHERE key=? AND status='running') AND "+batchCapacity+' AND '+metadataIdle:"NOT EXISTS(SELECT 1 FROM research_batches WHERE status='running') AND "+metadataIdle));
+ const batchArgs=[until,...(batchKey&&sourceId!=='__metadata__'?[batchKey,batchKey]:[])];
  const result=await db.batch([
   db.prepare(`INSERT INTO research_settings(key,value) SELECT ?,? WHERE ${allowed} ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE research_settings.value<?`).bind(key,lockValue,...batchArgs,started),
   db.prepare("UPDATE research_runs SET status='interrupted',closed_at=?,close_reason='source_lease_expired' WHERE source_id=? AND status='running' AND EXISTS(SELECT 1 FROM research_settings WHERE key=? AND value=?)").bind(started,sourceId,key,lockValue),

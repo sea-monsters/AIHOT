@@ -20,6 +20,7 @@ const provider = await stub((hit) => ({ id: `stub-${hit}`, choices: [{ message: 
 process.env.DEEPSEEK_BASE_URL = `${provider.url}/v1`;
 process.env.DEEPSEEK_API_KEY = "test-key";
 
+const guardedProvider = await import(new URL("../packages/backend/src/providers/llm.ts", import.meta.url).href);
 const ask = (subject: string) =>
   chatJson({ model: "deepseek-flash", purpose: "invariant_test", subject, promptVersion: "t1", system: "s", user: `input ${subject}`, schema: z.object({ ok: z.boolean() }) });
 
@@ -94,12 +95,12 @@ test("with the valve off nothing is sent", async () => {
   config.modelCallsEnabled = false;
   try {
     const before = provider.hits();
-    await assert.rejects(ask(`valve-${tag()}`), /disabled/);
+    await assert.rejects(guardedProvider.chatJson({ model: "deepseek-flash", purpose: "invariant_test", subject: `valve-${tag()}`, promptVersion: "t1", system: "s", user: "input", schema: z.object({ ok: z.boolean() }) }), /disabled/);
     assert.equal(provider.hits(), before);
     process.env.DASHSCOPE_API_KEY = "test-key";
     assert.equal(embeddingsAvailable(), false);
   } finally {
-    config.modelCallsEnabled = true;
+    config.modelCallsEnabled = false;
     delete process.env.DASHSCOPE_API_KEY;
   }
 });

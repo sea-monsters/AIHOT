@@ -85,3 +85,9 @@ bootstrap子进程缺少可解析终态时，错误仅含固定工具错误码�
 verifyIsolatedExecution新增可选evidenceDirectory，默认写入被Git忽略的`.sites-runtime/isolated-results/<source>/<generation>/attempt-*`。本地attempt目录只用于区分文件，不更换远端generation或业务batchKey。每份JSON以0600权限临时写入后rename原子替换，按顺序保存before-snapshot、info、setup、result、snapshot，最后才核对场景断言并保存summary。读取失败或断言失败保存安全failure；此前已经落盘的结果保留，不自动重新运行场景。
 
 保存的是固定字段投影：根回执、batch、HTTP状态、计数、受控原因码和safeSlotResult；不会保存响应正文、密钥、任意错误文本或stdout/stderr。token的原始/编码反射也拒绝写入。verify返回或安全错误对象携带evidenceDirectory供操作人核查；缺summary不等于没有提交，必须先查result/snapshot和服务器状态。测试明确覆盖最终读回中断与读回后断言失败两种情况，且setup均只一次。
+
+## 2026-11-13 采集网关超时修复候选
+
+生产只读证据显示，08 时 collect 网关返回 503，Worker 在约 51.5 秒被取消；执行器立即只读回一次得到活动租约，随后停止。该现象支持长请求与过早单次核对共同造成等待对账，但不能证明所有采集失败同因。固定执行器曾允许 75 秒 slice。候选将新执行器 collection-first 单次上限收紧到 35 秒，原 540 秒、60 来源调用额度和窗口不变；此值降低风险，不保证网关或 D1 总在此时限内响应。未知 collect 只对同一操作最多进行十二次只读核对，间隔 5 秒，受原截止限制；只有明确 settled 且 mayFinish 才调用既有收尾，未知、取消或未确认不重采、不虚构完成。新来源租约按请求绝对截止加 5 秒封顶，旧租约不缩短；无活动工作且证据不确定时，独立 POST 对账只可标记 interrupted，不可宣称 finished。pending capture 与缺失根回执的下一轮恢复仍须完整验收。旧固定 SHA 不会自动更新，站点代码发布也不会改变调度平台暂停策略。
+
+同一请求 ID 的意图哈希和原子准入仍防止重复动作；相同请求返回已保存回执，意图不同时拒绝，活动和未知回执不能授权重采。论文层按规范 DOI 唯一约束或同来源相同 URL 匹配；无 DOI 且仅标题相同时不自动合并，可能保留待核对的重复记录，不能承诺全部别名都能去重。无 DOI 旧记录不会在此次维护中改写。出版商只在明确返回 502/503/504 时按已有预算进行至多一次等待后重试，403、429、其他错误及取消不重试；Crossref 页请求保持独立额度和原有行为。此限制不把传输中断或数据库 ACK 丢失变成可重试证明。

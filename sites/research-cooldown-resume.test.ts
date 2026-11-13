@@ -47,8 +47,8 @@ test('a second 429 finishes without another wait or third collection',async()=>{
 });
 
 test('the deployed 81908fc bootstrap rejects the added capability until pinned alongside the site',async()=>{
- const {execFileSync}=await import('node:child_process'),{mkdtemp,writeFile,rm}=await import('node:fs/promises'),{join}=await import('node:path'),{tmpdir}=await import('node:os'),{pathToFileURL}=await import('node:url');const dir=await mkdtemp(join(tmpdir(),'hkis-old-contract-'));
- try{const path=join(dir,'contract.ts'),old=execFileSync('git',['show','81908fc848091b555b0813d5f3a7b4f307de2da3:sites/research-runtime-contract.ts'],{encoding:'utf8'});await writeFile(path,old);const previous=await import(pathToFileURL(path).href);assert.throws(()=>previous.validateRuntimeManifest(structuredClone(DEFAULT_RUNTIME_MANIFEST)),(e:any)=>e.code==='runtime_capability_unsupported');}finally{await rm(dir,{recursive:true,force:true})}
+ const {createHash}=await import('node:crypto'),{mkdtemp,writeFile,rm,readFile}=await import('node:fs/promises'),{join}=await import('node:path'),{tmpdir}=await import('node:os'),{pathToFileURL}=await import('node:url');const dir=await mkdtemp(join(tmpdir(),'hkis-old-contract-'));
+ try{const path=join(dir,'contract.ts'),old=await readFile('sites/fixtures/runtime-contract-81908fc.ts','utf8');assert.equal(createHash('sha256').update(old).digest('hex'),'3b105251f7027d44b5cc8cbaef670f34a88eb805a56ef6769816493e60832fb1');await writeFile(path,old);const previous=await import(pathToFileURL(path).href);assert.throws(()=>previous.validateRuntimeManifest(structuredClone(DEFAULT_RUNTIME_MANIFEST)),(e:any)=>e.code==='runtime_capability_unsupported');}finally{await rm(dir,{recursive:true,force:true})}
 });
 
 test('a late wake-up cannot reset the collection deadline or dispatch another request',async()=>{

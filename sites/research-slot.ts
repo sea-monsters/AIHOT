@@ -146,10 +146,28 @@ async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started
   collectionCallsKnown=false;collectionStoppedAt=now();collectionStopReason='outcome_unknown';mark('collection','unknown','collection_contract_unconfirmed');
   const operationId=safeOperationId(v?.sentRequestId);
   if(!operationId||v?.operationIdMismatch||v?.diagnostic?.code==='runtime_changed'||remaining()<3000)return outcome('unknown','collection_outcome_unknown_do_not_finish_in_flight');
-  const read=await invoke('collection_readback',RUNTIME_READBACK_PATH+'?batchKey='+encodeURIComponent(batchKey!)+'&operationId='+operationId,undefined,Math.min(15000,remaining()-1000));
-  if(read?.status!=='ok'||read.readbackContract!=='collection-readback-v1'||read.batchKey!==batchKey||read.operationId!==operationId||read.known!==true){collectionReadback={known:false,operationId,conclusion:'not_confirmed',mayFinish:false};return outcome('unknown','collection_readback_unconfirmed')}
-  collectionReadback={known:true,operationId,conclusion:read.conclusion,mayFinish:read.mayFinish===true,batchStatus:read.batch?.batchStatus,pendingItems:read.work?.pendingItems,pendingRecords:read.work?.pendingRecords,active:read.work?.active===true};
+  let read:any;
+  const attributedRead=(value:any)=>value?.known===true||value?.attributed===true&&value?.admissionUnconfirmed===true;
+  // Poll only the same operation, within the original budget. A live lease is
+  // not proof of failure and never authorizes another collect.
+  for(let attempt=0;attempt<12;attempt++){
+   read=await invoke('collection_readback',RUNTIME_READBACK_PATH+'?batchKey='+encodeURIComponent(batchKey!)+'&operationId='+operationId,undefined,Math.min(15000,remaining()-1000));
+   if(read?.status!=='ok'||read.readbackContract!=='collection-readback-v1'||read.batchKey!==batchKey||read.operationId!==operationId||!attributedRead(read)||read.conclusion!=='in_flight'||attempt===11||remaining()<20000)break;
+   await sleep(5000);
+  }
+  if(read?.status!=='ok'||read.readbackContract!=='collection-readback-v1'||read.batchKey!==batchKey||read.operationId!==operationId||!attributedRead(read)){collectionReadback={known:false,operationId,conclusion:'not_confirmed',mayFinish:false};return outcome('unknown','collection_readback_unconfirmed')}
+  collectionReadback={known:read.known===true,operationId,conclusion:read.conclusion,mayFinish:read.mayFinish===true,batchStatus:read.batch?.batchStatus,pendingItems:read.work?.pendingItems,pendingRecords:read.work?.pendingRecords,active:read.work?.active===true};
   if(read.conclusion==='terminal'&&['finished','interrupted'].includes(read.batch?.batchStatus)){mark('collection','partial','collection_response_reconciled');return outcome('partial','collection_response_reconciled')}
+  if(read.conclusion==='needs_review'&&read.mayInterrupt===true&&read.work?.active===false&&remaining()>=15000){
+   const closed=await invoke('collection_reconcile','/api/site/research/batch/reconcile',{batchKey,operationId},Math.min(10000,remaining()-3000));
+   // A lost reconcile ACK is itself uncertain: only GET the original collect,
+   // never repeat the closure POST or collect with a fresh operation ID.
+   read=closed?.status==='ok'&&closed.readbackContract==='collection-readback-v1'&&closed.batchKey===batchKey&&closed.operationId===operationId&&attributedRead(closed)?closed:await invoke('collection_readback',RUNTIME_READBACK_PATH+'?batchKey='+encodeURIComponent(batchKey!)+'&operationId='+operationId,undefined,Math.min(15000,remaining()-1000));
+   if(read?.status==='ok'&&read.readbackContract==='collection-readback-v1'&&read.batchKey===batchKey&&read.operationId===operationId&&attributedRead(read)&&read.conclusion==='terminal'&&read.batch?.batchStatus==='interrupted'){
+    collectionReadback={...collectionReadback,conclusion:'terminal',batchStatus:'interrupted',mayFinish:false};mark('collection','interrupted','collection_interrupted_after_unknown');goals.collection.nextAction='review_committed_state';return outcome('partial','collection_interrupted_after_unknown');
+   }
+   return outcome('unknown','collection_reconcile_unconfirmed');
+  }
   if(read.conclusion!=='settled'||read.mayFinish!==true){mark('collection','unknown',read.conclusion==='in_flight'?'collection_readback_in_flight':'collection_readback_needs_review');return outcome('unknown',read.conclusion==='in_flight'?'collection_readback_in_flight':'collection_readback_needs_review')}
   // The original collect is never replayed. Only a proved-settled operation
   // permits the existing bounded local finish; optional/paid stages remain stopped.
@@ -195,7 +213,7 @@ async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started
   while(collectionCalls<limits.collectionCalls&&!control.stop){
    if(!control.nextSourceId&&!resumeAfterCooldown){collectionStopReason='no_dispatchable_source';break}
    const left=collectionDeadline-now();if(left<30000){collectionStopReason='collection_time_budget';break}
-   const maxMs=Math.min(limits.collectionSliceMs,left-15000),maxCalls=limits.collectionCalls-collectionCalls;collectionRequests++;
+   const maxMs=Math.min(limits.collectionSliceMs,35000,left-15000),maxCalls=limits.collectionCalls-collectionCalls;collectionRequests++;
    const v=await invoke('collection','/api/site/research/batch/collect',{batchKey,maxMs,maxCalls,concurrency:limits.collectionConcurrency,...(resumeAfterCooldown?{resumeAfterCooldown:true}:{})},maxMs+15000);
    if(!v||v.status==='unknown'||v.batchKey!==batchKey||!Array.isArray(v.results)||!Number.isInteger(v.calls)||v.calls<0||v.calls>maxCalls||v.calls!==v.results.length||!v.collectionControl||typeof v.collectionControl.stop!=='boolean'||typeof v.stopReason!=='string'){
     return readbackUnknownCollect(v);

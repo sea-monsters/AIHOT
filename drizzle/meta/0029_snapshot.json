@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "5e315380-28ad-4cfe-a55d-1cb2bc3fd703",
-  "prevId": "eb5f4056-2177-4735-a9b6-097031b02026",
+  "id": "a2708fb1-0150-406f-97d2-a2e780e43c77",
+  "prevId": "82cd86d8-6833-4751-b75e-fe857e31056a",
   "tables": {
     "ai_preferences": {
       "name": "ai_preferences",
@@ -1707,14 +1707,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "mode": {
-          "name": "mode",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'scheduled'"
-        },
         "status": {
           "name": "status",
           "type": "text",
@@ -1756,9 +1748,26 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "mode": {
+          "name": "mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'scheduled'"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "idx_research_batches_mode_started": {
+          "name": "idx_research_batches_mode_started",
+          "columns": [
+            "mode",
+            "started_at"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -2838,13 +2847,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "intent_hash": {
-          "name": "intent_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "run_id": {
           "name": "run_id",
           "type": "text",
@@ -2983,6 +2985,13 @@
           "notNull": true,
           "autoincrement": false,
           "default": 0
+        },
+        "intent_hash": {
+          "name": "intent_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {

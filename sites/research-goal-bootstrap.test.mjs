@@ -12,14 +12,29 @@ import {pathToFileURL} from 'node:url';
 // evidence that a native Worker committed data or verified an actual archive.
 const files=['run-stable-research-slot.mjs','run-research-slot.mjs','research-slot.ts','research-diagnostics.ts','research-runtime-contract.ts'];
 const oldPin='2d2d07f903593274e801dd18307827a6f0043ae9';
+// Sites and GitHub use separate commit graphs. These five legacy bootstrap
+// blobs were verified against the public oldPin; never substitute newer code.
+const sitesOldPin='f90a79b0683634f4bb826574ad97e9464c930cb4';
+const legacyBlobs=['eb82128067453b8f837a8ee737e6328906dbd067','7029fcdc39efed9105b86b79c3d10b89aa1b31d8','25636ae10694fbbe1ee8782202870bf30cc32b67','8fcf66d2265776faa6ca3e03c665deac0e5f42b9','4f77d891e8b9d572f69f74640473ec608fa03c2e'];
 const root=await mkdtemp(join(tmpdir(),'hkis-goal-bootstrap-')),candidate=join(root,'candidate'),legacy=join(root,'legacy');
 await mkdir(join(candidate,'sites'),{recursive:true});
 for(const file of files)await copyFile(resolve('sites',file),join(candidate,'sites',file));
 const git=(cwd,...args)=>execFileSync('git',args,{cwd,encoding:'utf8',stdio:['ignore','pipe','ignore'],timeout:10000}).trim();
 git(candidate,'init');git(candidate,'add','.');git(candidate,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-m','Synthetic goal bootstrap fixture');
 const candidatePin=git(candidate,'rev-parse','HEAD');
-git(process.cwd(),'clone','--shared','--no-checkout',process.cwd(),legacy);git(legacy,'checkout','--detach',oldPin);
-assert.equal(git(legacy,'rev-parse','HEAD'),oldPin);assert.equal(git(legacy,'status','--porcelain'),'');
+let legacyPin=null;
+for(const pin of [oldPin,sitesOldPin]){try{git(process.cwd(),'cat-file','-e',pin+'^{commit}');legacyPin=pin;break}catch{}}
+if(legacyPin){
+ for(const [i,file] of files.entries())assert.equal(git(process.cwd(),'rev-parse',legacyPin+':sites/'+file),legacyBlobs[i]);
+ git(process.cwd(),'clone','--shared','--no-checkout',process.cwd(),legacy);git(legacy,'checkout','--detach',legacyPin);
+}else{
+ // Source archives have no historical commit graph. Preserve the exact verified
+ // historical blobs, never replace them with current source or skip this test.
+ await mkdir(join(legacy,'sites'),{recursive:true});
+ for(const [i,file] of files.entries()){const from=resolve('sites/fixtures/legacy-goal-bootstrap',file);assert.equal(git(process.cwd(),'hash-object','--no-filters',from),legacyBlobs[i]);await copyFile(from,join(legacy,'sites',file));}
+ git(legacy,'init');git(legacy,'add','.');git(legacy,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-m','Exact historical bootstrap blob fixture');legacyPin=git(legacy,'rev-parse','HEAD');
+}
+assert.equal(git(legacy,'rev-parse','HEAD'),legacyPin);assert.equal(git(legacy,'status','--porcelain'),'');
 after(()=>rm(root,{recursive:true,force:true}));
 
 const harness=join(root,'harness.mjs');
@@ -121,7 +136,7 @@ process.stdout.write('HARNESS '+JSON.stringify({requests,freezeChecks,credential
 const sentinel='SYNTHETIC_GOAL_STDIN_CREDENTIAL_SENTINEL';
 async function run(extra={}){
  const spec={slot:8,writeAt:'2026-10-25T00:00:00.000Z',startedAt:'2026-10-25T00:00:00.000Z',...extra};
- spec.expectedPin=spec.legacyRunner?oldPin:candidatePin;
+ spec.expectedPin=spec.legacyRunner?legacyPin:candidatePin;
  const input={baseUrl:'https://fixture.chatgpt.site',allowedOrigins:['https://fixture.chatgpt.site'],token:sentinel,automationStartedAt:spec.startedAt,slot:spec.slot,expectedBootstrapSource:spec.expectedPin,budgetMs:540000,collectionCalls:spec.legacyRunner?35:60};
  return new Promise((resolve,reject)=>{
   const child=spawn(process.execPath,[harness,JSON.stringify(spec)],{cwd:spec.legacyRunner?legacy:candidate,stdio:['pipe','pipe','pipe'],env:{...process.env,COLLECT_ENABLED:'false',MODEL_CALLS_ENABLED:'false',FEISHU_ENABLED:'false',INDEXNOW_SUBMIT_ENABLED:'false'}});

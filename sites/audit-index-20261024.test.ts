@@ -30,14 +30,14 @@ test('audit: saved title index follows final Crossref-preferred title and preser
  }finally{sql.close()}
 });
 
-test('audit: DOI-less canonical-title replay after RSS retitle deduplicates without changing original first_seen',async()=>{
+test('audit: DOI-less title without a stable URL does not merge and preserves the original first_seen',async()=>{
  const {sql,db}=fixture();try{
   const p=paper(),saved=await savePaper(db,p,t1,{runId:'original-run',batchKey:null});
   await savePaper(db,{...p,title:'RSS alternate device transport evidence and modelling title',discovery:'publisher-rss',provenance:{...p.provenance,title:'publisher-rss'}},t2);
   const recovered=await savePaper(db,{...p,doi:null,url:'https://example.invalid/new-link',discovery:'publisher-rss',provenance:{...p.provenance,title:'publisher-rss'}},t3);
-  assert.equal(recovered.id,saved.id);assert.equal(recovered.added,0);
-  assert.equal(sql.prepare('SELECT count(*) n FROM research_papers').get()!.n,1);
-  const row=sql.prepare('SELECT * FROM research_papers').get()!;assert.equal(row.first_seen,t1);assert.equal(row.doi,p.doi);
+  assert.notEqual(recovered.id,saved.id);assert.equal(recovered.added,1);
+  assert.equal(sql.prepare('SELECT count(*) n FROM research_papers').get()!.n,2);
+  const row=sql.prepare('SELECT * FROM research_papers WHERE id=?').get(saved.id)!;assert.equal(row.first_seen,t1);assert.equal(row.doi,p.doi);
   assert.equal(sql.prepare('SELECT run_id FROM research_batch_members').get()!.run_id,'original-run');
  }finally{sql.close()}
 });

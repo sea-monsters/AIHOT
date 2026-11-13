@@ -36,8 +36,9 @@ after(async () => {
 });
 
 test("an outage is announced once, repeated hourly, and closed with one recovery", async () => {
-  process.env.COLLECT_ENABLED = "true";
-  process.env.MODEL_CALLS_ENABLED = "true";
+  const simulation = (globalThis as any)[Symbol.for("hkis.test.notification.state")];
+  if (process.env.HKIS_TRANSLATION_SIMULATION !== "1" || !simulation) throw Error("test_notification_simulation_required");
+  Object.assign(simulation, { collecting: true, models: true });
   const t0 = Date.now();
   await sql`INSERT INTO settings (key, value, updated_by) VALUES ('alerts.state', ${sql.json({ "receipts.unknown": { title: "付费请求结果未知", since: new Date(t0 - 86400_000).toISOString(), sentAt: new Date(t0 - 3600_000).toISOString() } })}, 'test')
             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`;

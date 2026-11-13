@@ -1,3 +1,4 @@
+import {captureFingerprint} from './research-capture-proof.ts';
 import {planPaperWrite} from './research.ts';
 import {planMetadataQueue,mergeCandidate} from './research-enrichment.ts';
 import {dailyCohortKey} from './research-attribution.ts';
@@ -22,13 +23,17 @@ export async function captureIngestion(db:any,sourceId:string,channel:'crossref'
  // kept until every child has committed, even when recovery spans days.
  await db.prepare("DELETE FROM research_ingestion_work WHERE id IN (SELECT w.id FROM research_ingestion_work w WHERE w.status='done' AND NOT EXISTS(SELECT 1 FROM research_ingestion_work p WHERE p.group_id=w.group_id AND p.status='pending') AND (w.observed_at<? OR (SELECT count(*) FROM research_ingestion_work)>384) ORDER BY w.observed_at,w.ordinal LIMIT 128)").bind(new Date(Date.now()-86400000).toISOString()).run();
  const id=crypto.randomUUID(),at=stamp(),cohort=isManualBatchKey(batchKey)?batchKey:(cohortKey===undefined?dailyCohortKey(at):cohortKey),writes=chunks.map((c,i)=>db.prepare('INSERT INTO research_ingestion_work(id,group_id,ordinal,source_id,channel,origin_run_id,origin_batch_key,daily_cohort_key,observed_at,status,payload_json,checkpoint_json,records) VALUES(?,?,?,?,?,?,?,?,?,\'pending\',?,?,?)').bind(id+':'+i,id,i,sourceId,channel,runId,batchKey,cohort,at,JSON.stringify(c),i===0?JSON.stringify(checkpoint):'{}',c.length));
+ const fragments=await Promise.all(chunks.map(async(c,i)=>{const row={id:id+':'+i,group_id:id,ordinal:i,source_id:sourceId,channel,origin_run_id:runId,origin_batch_key:batchKey,daily_cohort_key:cohort,observed_at:at,payload_json:JSON.stringify(c),checkpoint_json:i===0?JSON.stringify(checkpoint):'{}',records:c.length};return {id:row.id,hash:await captureFingerprint(row)}}));
+ // The receipt and all fragments commit under the same run fence. json_set
+ // merges concurrent group receipts instead of replacing other run details.
+ writes.push(db.prepare("UPDATE research_runs SET details_json=json_set(details_json,?,json(?)) WHERE id=? AND source_id=? AND batch_key IS ?").bind('$.captureProofs."'+id+'"',JSON.stringify({contract:'fenced-capture-v1',sourceId,batchKey,fragments}),runId,sourceId,batchKey));
  try{await db.batch(writes);}catch(e){if(String(e).includes('research_ingestion_capacity'))throw Object.assign(Error('capture_capacity'),{ingestionDeferred:'capture_capacity'});throw e;}return id;
 }
-function match(rows:any[],p:any){const doi=normalizeDoi(p.doi),title=normalizedTitle(p.title);return rows.filter(r=>doi&&r.doi===doi||r.source_id===p.sourceId&&(r.url===p.url||r.normalized_title===title&&[...title].length>24)&&(!r.doi||!doi||r.doi===doi)).sort((a,b)=>(a.doi===doi?0:1)-(b.doi===doi?0:1)||(a.id<b.id?-1:a.id>b.id?1:0))[0]||null;}
+function match(rows:any[],p:any){const doi=normalizeDoi(p.doi);return rows.filter(r=>doi&&r.doi===doi||r.source_id===p.sourceId&&r.url===p.url&&(!r.doi||!doi||r.doi===doi)).sort((a,b)=>(a.doi===doi?0:1)-(b.doi===doi?0:1)||(a.id<b.id?-1:a.id>b.id?1:0))[0]||null;}
 async function preload(db:any,entries:any[]){
  if(!entries.length)return {cached:db,papers:[],queueMap:new Map<string,any>(),memberMap:new Map<string,any>(),recordMap:new Map<string,any>(),ids:[]};
  const inputs=entries.map(e=>e.paper),refs=inputs.map(p=>[normalizeDoi(p.doi)||null,p.sourceId,p.url,normalizedTitle(p.title)]);
- const papers=(await db.prepare("SELECT DISTINCT p.* FROM research_papers p JOIN json_each(?) c ON p.doi=json_extract(c.value,'$[0]') OR ((p.url=json_extract(c.value,'$[2]') OR (p.normalized_title=json_extract(c.value,'$[3]') AND length(p.normalized_title)>24)) AND p.source_id=json_extract(c.value,'$[1]') AND (p.doi IS NULL OR json_extract(c.value,'$[0]') IS NULL OR p.doi=json_extract(c.value,'$[0]')))").bind(JSON.stringify(refs)).all()).results;
+ const papers=(await db.prepare("SELECT DISTINCT p.* FROM research_papers p JOIN json_each(?) c ON p.doi=json_extract(c.value,'$[0]') OR (p.url=json_extract(c.value,'$[2]') AND p.source_id=json_extract(c.value,'$[1]') AND (p.doi IS NULL OR json_extract(c.value,'$[0]') IS NULL OR p.doi=json_extract(c.value,'$[0]')))").bind(JSON.stringify(refs)).all()).results;
  const ids=await Promise.all(inputs.map(async p=>match(papers,p)?.id||await rawHash(normalizeDoi(p.doi)||p.sourceId+':'+p.url))),refsQueue=await Promise.all(inputs.map(async p=>[await key(p),p.sourceId]));
  for(const p of inputs){const row=match(papers,p);if(row?.doi)refsQueue.push([row.doi,p.sourceId]);}
  const [queues,members,records]=await Promise.all([
@@ -39,7 +44,7 @@ async function preload(db:any,entries:any[]){
  const queueMap=new Map<string,any>(queues.results.map((r:any)=>[r.doi+'|'+r.source_id,r])),memberMap=new Map<string,any>(members.results.map((r:any)=>[r.paper_id,r])),recordMap=new Map<string,any>(records.results.map((r:any)=>[r.id,r]));
  const cached={findMetadataAliases:async(sourceId:string,lookupKey:string)=>[...queueMap.values()].filter((r:any)=>{const p=parse(r.provider_json||'{}');return r.source_id===sourceId&&(p.anysearch?.originKey===lookupKey||p.aminer?.originKey===lookupKey)}).slice(0,2),prepare(q:string){let base=db.prepare(q);if(!q.startsWith('SELECT'))return base;let args:any[]=[];return {bind(...a:any[]){args=a;base=base.bind(...a);return this},async first(){
   if(q.includes('FROM research_enrichment_queue WHERE doi=? AND source_id=?'))return queueMap.get(args[0]+'|'+args[1])||null;
-  if(q.startsWith('SELECT * FROM research_papers WHERE doi=? OR'))return match(papers,{doi:args[0],url:args[1],title:args[2],sourceId:args[3]});
+  if(q.startsWith('SELECT * FROM research_papers WHERE doi=? OR'))return match(papers,{doi:args[0],url:args[1],sourceId:args[2]});
   if(q==='SELECT * FROM research_papers WHERE doi=?')return papers.find((r:any)=>r.doi===args[0])||null;
   if(q.includes('FROM research_batch_members WHERE paper_id=?'))return memberMap.get(args[0])||null;
   return base.first();},all:()=>base.all(),run:()=>base.run()};}};
@@ -49,8 +54,8 @@ async function preload(db:any,entries:any[]){
  * planning against the shared snapshot; never submit two stale CAS writes. */
 function collapseEntries(papers:any[],entries:any[]){
  const groups=new Map<string,any>();
- const same=(a:any,b:any)=>a.sourceId===b.sourceId&&(a.url===b.url||normalizedTitle(a.title)===normalizedTitle(b.title)&&[...normalizedTitle(a.title)].length>24);
- for(const entry of entries){const p=entry.paper,doi=normalizeDoi(p.doi),row=match(papers,p),ambiguous=!doi&&papers.filter(r=>r.source_id===p.sourceId&&(r.url===p.url||r.normalized_title===normalizedTitle(p.title))&&r.doi).length>1;
+ const same=(a:any,b:any)=>a.sourceId===b.sourceId&&a.url===b.url;
+ for(const entry of entries){const p=entry.paper,doi=normalizeDoi(p.doi),row=match(papers,p),ambiguous=!doi&&papers.filter(r=>r.source_id===p.sourceId&&r.url===p.url&&r.doi).length>1;
   let id=ambiguous?'ambiguous:'+p.sourceId+':'+p.url:row?'row:'+row.id:doi?'doi:'+doi:null;
   if(!id){const related=entries.filter(e=>same(e.paper,p)&&!match(papers,e.paper)),known=[...new Set(related.map(e=>normalizeDoi(e.paper.doi)).filter(Boolean))];
    if(known.length>1)throw Object.assign(Error('ambiguous fresh paper identity'),{code:'record_conflict'});

@@ -1,1 +1,0 @@
-ALTER TABLE `research_operations` ADD `intent_hash` text;
