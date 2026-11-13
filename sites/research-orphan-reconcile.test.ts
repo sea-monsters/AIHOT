@@ -1,4 +1,4 @@
-import {test} from 'node:test';
+import {test,beforeEach} from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,readdirSync} from 'node:fs';
@@ -7,6 +7,9 @@ import {admitRun,fencedRunDatabase,SOURCE_LEASE_MS,SOURCE_SETTLE_GRACE_MS} from 
 import {logReference} from './runtime-logs.ts';
 import {freezeRuntime,runtimeDescription,runtimeOperationBody,DEFAULT_RUNTIME_MANIFEST} from './research-runtime-contract.ts';
 import {runResearchSlot} from './research-slot.ts';
+// Every case uses a legal 20:00 local slot; real wall time must not change CAS expectations.
+// Test-scoped Date mocks reset automatically; fixture_now keeps SQLite on the same clock.
+beforeEach(t=>t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-11-13T12:01:00.000Z')}));
 const source='a'.repeat(40),bootstrap='b'.repeat(40),operation='11111111-2222-4333-8444-555555555555',automation='22222222-2222-4333-8444-555555555555';
 function fixture(){
  // Keep the database fence clock aligned with mocked Date in runtime tests.
@@ -52,8 +55,8 @@ test('runner closes a proved idle orphan once; lost closure ACK only gets readba
  assert.equal(r.reason,'collection_interrupted_after_unknown');assert.equal(r.collectionCalls,null);assert.equal(calls.filter(p=>p.endsWith('/reconcile')).length,1);assert.equal(calls.filter(p=>p.endsWith('/collect')).length,1);assert.equal(calls.some(p=>p.endsWith('/finish')),false);assert.equal(calls.filter(p=>p.includes('/readback?')).length,lostAck?2:1);
  }
 });
-test('runtime reconcile is POST-only, frozen and private, with no provider dispatch or finished success',async(t)=>{
- const realNow=Date.now(),now=new Date(realNow);now.setUTCHours(12,1,0,0);t.mock.timers.enable({apis:['Date'],now:now.getTime()});const f=fixture(),previous=globalThis.fetch,oldSource=process.env.HKIS_BUILD_SHA;let network=0;
+test('runtime reconcile is POST-only, frozen and private, with no provider dispatch or finished success',async()=>{
+ const f=fixture(),previous=globalThis.fetch,oldSource=process.env.HKIS_BUILD_SHA;let network=0;
  try{const {researchRuntimeApi}=await import('./research-runtime.ts'),{frozenRuntimeHeaders,RUNTIME_PATHS}=await import('./research-runtime-contract.ts');process.env.HKIS_BUILD_SHA=source;globalThis.fetch=async()=>{network++;throw Error('No provider traffic')};const c=await setup(f),url='https://fixture.chatgpt.site'+RUNTIME_PATHS['/api/site/research/batch/reconcile'],headers={...frozenRuntimeHeaders(c.frozen),'x-hkis-automation-id':automation,'content-type':'application/json'},env={DB:f.db,HKIS_OWNER_EMAIL:'fixture-owner@example.invalid'};
  const get=await researchRuntimeApi(new Request(url,{headers}),env);assert.equal(get.status,405);
  const rejected=await researchRuntimeApi(new Request(url,{method:'POST',headers:{...headers,origin:'https://evil.invalid'},body:JSON.stringify(c.body)}),env);assert.equal(rejected.status,403);assert.equal(f.sql.prepare('SELECT status FROM research_batches').get()!.status,'running');
@@ -89,4 +92,34 @@ test('late root admission after orphan closure reaches real collector without di
  const result=await operationCall(f.db,'batch_collect',{batchKey:c.key,maxMs:35000,maxCalls:60,concurrency:3},async()=>collectBatchSlice(f.db,c.key,async()=>{dispatch++;throw Error('late provider must not dispatch')},{maxMs:35000,maxCalls:60,concurrency:3}),new Request('https://fixture.invalid',{headers:{'x-hkis-operation-id':operation,'x-hkis-automation-id':automation}}));
  assert.equal(result.stopReason,'batch_closed');assert.equal(dispatch,0);assert.equal(f.sql.prepare('SELECT status FROM research_batches').get()!.status,'interrupted');assert.equal(f.sql.prepare('SELECT count(*) n FROM research_runs').get()!.n,0);
  }finally{f.sql.close()}
+});
+
+test('next-window recovery adopts only complete fenced captures after idle deadline closure, including canceled actors',async(t)=>{
+ const {captureIngestion}=await import('./research-ingestion.ts'),{initResearch,researchApi}=await import('./research.ts'),{fromCrossref}=await import('./research-domain.ts'),{RESEARCH_SOURCES}=await import('./research-config.ts'),{startBatch}=await import('./research-batches.ts');
+ for(const kind of ['running','canceled','canceled_long','no_proof','changed','missing_fragment','active_lock']){
+  t.mock.timers.setTime(Date.parse('2026-11-13T12:01:00Z'));
+  const f=fixture(),oldFetch=globalThis.fetch;let requests=0;globalThis.fetch=async()=>{requests++;throw Error('external I/O forbidden')};
+  try{
+   const c=await setup(f);await initResearch(f.db);const run=await admitRun(f.db,'ieee-ted',c.key,'service',new Date().toISOString(),kind==='canceled_long'?undefined:Date.now()+20000);assert.ok(run);
+   const paper=fromCrossref({DOI:'10.9999/next-window',title:['Synthetic TCAD transistor study'],type:'journal-article',published:{'date-parts':[[2026,11,1]]}},RESEARCH_SOURCES.find(s=>s.id==='ieee-ted')!)!;
+   await captureIngestion(fencedRunDatabase(f.db,run.id),'ieee-ted','rss',Array.from({length:kind==='missing_fragment'?21:1},(_,i)=>({paper:{...paper,doi:paper.doi+'-'+i,url:paper.url+'-'+i},store:true,scope:false})),run.id,c.key);
+   if(kind.startsWith('canceled'))f.sql.prepare("UPDATE research_runs SET status='unknown',close_reason='client_canceled',closed_at=? WHERE id=?").run(new Date().toISOString(),run.id);
+   if(kind==='no_proof')f.sql.prepare("UPDATE research_runs SET details_json='{}' WHERE id=?").run(run.id);
+   if(kind==='changed')f.sql.exec("UPDATE research_ingestion_work SET payload_json='[]'");
+   if(kind==='missing_fragment')f.sql.exec('DELETE FROM research_ingestion_work WHERE ordinal=1');
+   if(kind==='canceled_long'){f.sql.prepare('DELETE FROM research_settings WHERE key=?').run(run.key);t.mock.timers.setTime(Date.parse('2026-11-13T12:10:00Z'));const {reconcileBatches}=await import('./research-lifecycle.ts');await reconcileBatches(f.db);assert.equal(f.sql.prepare('SELECT status FROM research_batches WHERE key=?').get(c.key)!.status,'interrupted');assert.equal(f.sql.prepare('SELECT status FROM research_runs WHERE id=?').get(run.id)!.status,'unknown');}
+   t.mock.timers.setTime(Date.parse('2026-11-14T00:01:00Z'));
+   if(kind==='active_lock')f.sql.prepare('UPDATE research_settings SET value=? WHERE key=?').run(new Date(Date.now()+60000).toISOString()+'|active',run.key);
+   const response=await researchApi(new Request('https://fixture.chatgpt.site/api/site/research/ingestion/recover',{method:'POST',headers:{'content-type':'application/json'},body:'{}'}),{DB:f.db,HKIS_OWNER_EMAIL:'fixture-owner@example.invalid'});assert.equal(response!.status,200);const result=await response!.json();
+   const batch=f.sql.prepare('SELECT status,close_reason FROM research_batches WHERE key=?').get(c.key)!;
+   if(kind==='active_lock'){assert.equal(batch.status,'running');assert.equal(result.status,'deferred')}
+   else{assert.equal(batch.status,'interrupted');assert.equal(batch.close_reason,'client_disconnected_or_deadline');
+    if(['running','canceled','canceled_long'].includes(kind)){assert.equal(result.status,'ok',JSON.stringify(result));assert.equal(f.sql.prepare('SELECT count(*) n FROM research_papers').get()!.n,1);assert.equal(f.sql.prepare("SELECT count(*) n FROM research_ingestion_work WHERE status='pending'").get()!.n,0);
+     if(kind.startsWith('canceled'))assert.equal(JSON.parse(f.sql.prepare('SELECT details_json FROM research_runs WHERE id=?').get(run.id)!.details_json).priorCloseReason,'client_canceled');
+     const next=await startBatch(f.db,8,new Date());assert.equal(next.status,'running');assert.equal(next.collectionControl.stop,false);assert.ok(await admitRun(f.db,'ieee-ted',next.batchKey,'service',new Date().toISOString(),Date.now()+20000));
+    }else{assert.equal(result.reason,'ingestion_origin_review_required');assert.equal(f.sql.prepare("SELECT count(*) n FROM research_ingestion_work WHERE status='pending'").get()!.n,1)}
+   }
+   const root=f.sql.prepare("SELECT known,ended_at FROM research_operations WHERE id='root'").get()!;assert.equal(root.known,0);assert.equal(root.ended_at,null);assert.equal(requests,0);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
+  }finally{globalThis.fetch=oldFetch;f.sql.close()}
+ }
 });

@@ -27,6 +27,10 @@ export async function reconcileBatches(db:any,at=new Date()){
  const results=await db.batch([
   db.prepare(`UPDATE research_batches SET status='interrupted',closed_at=?,close_reason='client_disconnected_or_deadline' WHERE status='running' AND strftime('%Y-%m-%dT%H:%M:%fZ',started_at,'+${BATCH_CLOSE_AFTER_MS/1000} seconds')<=? AND ${noActiveBatchWork}`).bind(now,now,now,now),
   db.prepare("UPDATE research_runs SET status='interrupted',closed_at=?,close_reason='batch_interrupted' WHERE status='running' AND batch_key IN (SELECT key FROM research_batches WHERE status='interrupted') AND coalesce(lease_until,strftime('%Y-%m-%dT%H:%M:%fZ',started_at,'+10 minutes'))<=?").bind(now,now),
+  // A canceled/unknown source may already have released its execution status.
+  // Normalize only expired collection actors in a deadline-closed, idle batch;
+  // retained capture proofs still undergo full validation before local recovery.
+  db.prepare(`UPDATE research_runs SET status='interrupted',closed_at=?,close_reason='batch_interrupted',details_json=json_set(details_json,'$.priorCloseReason',close_reason) WHERE status IN ('unknown','interrupted') AND phase='collection' AND finished_at IS NULL AND coalesce(close_reason,'')<>'batch_interrupted' AND coalesce(lease_until,strftime('%Y-%m-%dT%H:%M:%fZ',started_at,'+10 minutes'))<=? AND batch_key IN (SELECT key FROM research_batches WHERE status='interrupted' AND close_reason='client_disconnected_or_deadline' AND closed_at>=strftime('%Y-%m-%dT%H:%M:%fZ',started_at,'+${BATCH_CLOSE_AFTER_MS/1000} seconds') AND ${noActiveBatchWorkAt(databaseNowSql)})`).bind(now,now),
   db.prepare("UPDATE research_operations SET state='unknown',known=0,severity='warning',reason='lease_expired',observed_at=? WHERE ended_at IS NULL AND run_id IN (SELECT id FROM research_runs WHERE status='interrupted')").bind(now),
  ]);
  return {closed:Number(results[0]?.meta?.changes||0),closedAt:now};

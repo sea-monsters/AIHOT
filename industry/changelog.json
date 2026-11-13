@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-11-13T12:46:56Z",
+  "latestVersion": "2026-11-13T13:25:36Z",
   "releases": [
+    {
+      "id": "hkis-next-window-capture-recovery-20261113",
+      "at": "2026-11-13T13:25:36Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "修复进程中断后的跨窗口本地恢复",
+      "body": [
+        "采集进程未能执行当轮对账时，下轮仅在批次与租约已安全关闭、捕获片段证明完整且逐片校验通过后恢复本地记录。",
+        "取消后未知状态同样保留原始证据；缺失或被改动的片段继续阻断，不重复外发原请求，不伪造已完成回执。",
+        "补充跨窗口、取消、完整性和测试时钟验收；代码维护记录不代表生产已发布。"
+      ],
+      "sources": [
+        {
+          "label": "采集恢复设计",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/hkis-reconciliation-design.md"
+        }
+      ]
+    },
     {
       "id": "hkis-collection-unified-main-20261113",
       "at": "2026-11-13T12:46:56Z",

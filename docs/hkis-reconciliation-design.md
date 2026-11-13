@@ -49,3 +49,11 @@ additional supplier/model call during recovery. These are offline API/SQLite
 checks, not evidence that a real gateway delay has been reproduced. The frozen
 collector's existing isolated-cloud slow-provider scenario remains required
 when validating the new candidate revision.
+
+## 跨窗口进程死亡的本地恢复
+
+进程在捕获事务提交后完全退出时，当轮显式 `reconcile` 可能从未执行。下一轮既有 `reconcileBatches` 通过超时与无活动租约的原子条件关闭批次，原因是 `client_disconnected_or_deadline`。此路径不能被误当作没有捕获证据。
+
+候选只为该关闭原因增加严格的本地恢复资格：批次关闭必须晚于启动 540 秒，来源关闭不得早于批次关闭，来源租约必须已经到期，来源不得标记 finished。仍必须具备原子提交的 `fenced-capture-v1`，所有片段数量、来源、批次、序号与 SHA-256 全部吻合。取消后的 unknown 来源只在批次已经按上述条件关闭且无活动工作时归一化；保留先前关闭原因，不补造根请求完成或 known 回执，不重放原采集。
+
+缺失证明、删除片段、修改内容、活动锁以及尚未到期的租约继续阻断。此修复不改变数据库结构、出版商限制、身份与同源策略，也不能防止平台主动暂停任务。下一窗口测试使用合成时钟推进，不代表重现真实网关断连。

@@ -5,9 +5,12 @@ import {initResearch,savePaper,researchApi} from '../research.ts';
 import {RESEARCH_SOURCES} from '../research-config.ts';
 import {builtSourceRevision,diagnosticCode,diagnosticStatus,diagnosticId} from '../research-diagnostics.ts';
 import {startBatch} from '../research-batches.ts';
+import {admitRun,fencedRunDatabase} from '../research-lifecycle.ts';
+import {captureIngestion} from '../research-ingestion.ts';
+import {fromCrossref} from '../research-domain.ts';
 import {executionState} from '../research-execution-state.ts';
 const project='appgprj_6ae204a96b3c8191bb8c49e469635b5b',NativeDate=Date;
-const scenarios=['normal','lost_response','active_lease','finish_race','cancel_after_commit','undispatched','d1_ack_loss','no_model','duplicate','admission_ack_loss','slow_provider'];
+const scenarios=['normal','lost_response','active_lease','finish_race','cancel_after_commit','undispatched','d1_ack_loss','no_model','duplicate','admission_ack_loss','slow_provider','next_window_running','next_window_cancel_unknown'];
 let clock=0,clockOffsetMs:number|null=null,scenario='',supplierCalls=0,modelCalls=0;
 const syntheticNow=()=>clockOffsetMs===null?(clock||NativeDate.now()):NativeDate.now()+clockOffsetMs;
 (globalThis as any).Date=class extends NativeDate{constructor(...args:any[]){super(...(args.length?args:[syntheticNow()]) as [any])}static now(){return syntheticNow()}};
@@ -28,7 +31,7 @@ async function history(db:any){return JSON.stringify([await db.prepare("SELECT *
 async function snapshot(db:any,c:any){
  if(!c)return {contract:'isolated-fixture-v2',configured:false,sourceRevision:builtSourceRevision()};
  const [batch,events,papers,paid,root]=await Promise.all([db.prepare('SELECT key,status,started_at,finished_at FROM research_batches WHERE key=?').bind(c.batchKey).first(),db.prepare('SELECT phase,http_status,outcome,supplier_calls,model_calls FROM hkis_fixture_events WHERE generation=? ORDER BY id').bind(c.generation).all(),db.prepare('SELECT count(*) n FROM research_papers').first(),db.prepare('SELECT (SELECT count(*) FROM ai_receipts)+(SELECT count(*) FROM aminer_requests)+(SELECT count(*) FROM anysearch_requests) n').first(),db.prepare("SELECT phase,state,known,reason,batch_key,ended_at FROM research_operations WHERE id LIKE 'request:%' ORDER BY started_at,id LIMIT 60").all()]);
- return {contract:'isolated-fixture-v2',configured:true,sourceRevision:builtSourceRevision(),generation:c.generation,scenario:c.scenario,syntheticNow:new NativeDate(c.clockOffsetMs===null||c.clockOffsetMs===undefined?c.clock:NativeDate.now()+c.clockOffsetMs).toISOString(),syntheticClock:true,realGatewayFaultReproduced:false,slowEvidence:c.scenario==='slow_provider'?{runs:(await db.prepare('SELECT status,started_at,lease_until FROM research_runs WHERE batch_key=?').bind(c.batchKey).all()).results,pendingRecords:Number((await db.prepare("SELECT coalesce(sum(records),0) n FROM research_ingestion_work WHERE status='pending'").first()).n)}:null,batch,events:events.results,operations:root.results,papers:Number(papers.n),paidRequests:Number(paid.n),historyUnchanged:await history(db)===c.history};
+ return {contract:'isolated-fixture-v2',configured:true,sourceRevision:builtSourceRevision(),generation:c.generation,scenario:c.scenario,syntheticNow:new NativeDate(c.clockOffsetMs===null||c.clockOffsetMs===undefined?c.clock:NativeDate.now()+c.clockOffsetMs).toISOString(),syntheticClock:true,realGatewayFaultReproduced:false,nextWindowEvidence:c.oldBatchKey?{oldBatch:await db.prepare('SELECT key,status,close_reason,finished_at FROM research_batches WHERE key=?').bind(c.oldBatchKey).first(),oldRoot:await db.prepare('SELECT state,known,reason,ended_at FROM research_operations WHERE id=?').bind('fixture-disappeared:'+c.generation).first(),oldRun:await db.prepare('SELECT status,close_reason,finished_at FROM research_runs WHERE id=?').bind(c.oldRunId).first(),pendingRecords:Number((await db.prepare("SELECT coalesce(sum(records),0) n FROM research_ingestion_work WHERE status='pending'").first()).n),paperCopies:Number((await db.prepare("SELECT count(*) n FROM research_papers WHERE doi='10.9999/hkis-isolated-operation'").first()).n)}:null,slowEvidence:c.scenario==='slow_provider'?{runs:(await db.prepare('SELECT status,started_at,lease_until FROM research_runs WHERE batch_key=?').bind(c.batchKey).all()).results,pendingRecords:Number((await db.prepare("SELECT coalesce(sum(records),0) n FROM research_ingestion_work WHERE status='pending'").first()).n)}:null,batch,events:events.results,operations:root.results,papers:Number(papers.n),paidRequests:Number(paid.n),historyUnchanged:await history(db)===c.history};
 }
 // Test-only time adapter. Both prepared predicates and the isolated D1 trigger
 // advance with real wall time using the same fixed offset. No production SQL changes.
@@ -47,7 +50,7 @@ async function setup(db:any,body:any){
  const rank=(name:string)=>name==='paper_reader_state'?0:name==='research_papers'?2:1;
  tables.sort((a:any,b:any)=>rank(a.name)-rank(b.name)||String(a.name).localeCompare(String(b.name)));
  await db.batch(tables.map((t:any)=>db.prepare('DELETE FROM "'+String(t.name).replaceAll('"','""')+'"')));
- const next=new NativeDate();next.setUTCDate(next.getUTCDate()+1);next.setUTCHours(12,1,0,0);clock=next.getTime();clockOffsetMs=body.scenario==='slow_provider'?clock-NativeDate.now():null;scenario=body.scenario;
+ const next=new NativeDate();next.setUTCDate(next.getUTCDate()+1);next.setUTCHours(12,1,0,0);clock=next.getTime();clockOffsetMs=(body.scenario==='slow_provider'||body.scenario.startsWith('next_window_'))?clock-NativeDate.now():null;scenario=body.scenario;
  await db.prepare('CREATE TABLE IF NOT EXISTS hkis_fixture_clock(id INTEGER PRIMARY KEY,modifier TEXT NOT NULL)').run();await db.prepare('INSERT INTO hkis_fixture_clock VALUES(1,?) ON CONFLICT(id) DO UPDATE SET modifier=excluded.modifier').bind(((clockOffsetMs||0)/1000).toFixed(3)+' seconds').run();
  const fence=await db.prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='research_run_write_fence'").first();if(fence&&!fence.sql.includes('hkis_fixture_clock'))await db.batch([db.prepare('DROP TRIGGER research_run_write_fence'),db.prepare(fence.sql.replace("strftime('%Y-%m-%dT%H:%M:%fZ','now')","strftime('%Y-%m-%dT%H:%M:%fZ','now',coalesce((SELECT modifier FROM hkis_fixture_clock WHERE id=1),'0 seconds'))"))]);
  const fixtureDay=new NativeDate(clock).toISOString().slice(0,10);await initResearch(db);
@@ -73,6 +76,28 @@ export default {async fetch(request:Request,env:any){
  if(u.pathname==='/fixture/setup'&&request.method==='POST')return setup(db,await request.json());
  const c=await control(db);if(u.pathname==='/fixture/snapshot'&&request.method==='GET')return json(await snapshot(db,c));
  if(!c)return json({code:'fixture_not_configured'},409);clock=c.clock;clockOffsetMs=c.clockOffsetMs??null;scenario=c.scenario;supplierCalls=0;modelCalls=0;
+ // One-shot, isolated-only simulation of a process disappearing after durable
+ // capture. No old request is executed or reconciled. Next-window work uses the
+ // public runtime below, with the SQL and JS clock advanced together.
+ if(u.pathname==='/fixture/next-window'&&request.method==='POST'){
+  let body:any;try{body=await request.json()}catch{return json({code:'invalid_fixture'},400)}
+  if(!body||!scenario.startsWith('next_window_')||Object.keys(body).join(',')!=='generation'||body.generation!==c.generation)return json({code:'invalid_fixture'},400);
+  const claim=await db.prepare('INSERT OR IGNORE INTO research_settings(key,value) VALUES(?,?)').bind('fixture-next-window:'+c.generation,'claimed').run();if(claim.meta?.changes!==1)return json({code:'fixture_already_attempted'},409);
+  const aligned=clockDb(db,clockOffsetMs!);
+  const old=await startBatch(aligned,20,new Date());
+  if(old.status!=='running'||old.batchKey!==c.batchKey)throw Error('fixture old batch admission failed');
+  const run=await admitRun(aligned,journal.id,c.batchKey,'service',new Date().toISOString(),Date.now()+20000);if(!run)throw Error('fixture source admission failed');
+  const paper=fromCrossref({DOI:'10.9999/hkis-isolated-operation',title:['Synthetic TCAD transistor operation lifecycle fixture'],type:'journal-article',ISSN:[journal.issn],published:{'date-parts':[[new Date().getUTCFullYear(),new Date().getUTCMonth()+1,new Date().getUTCDate()]]},abstract},journal)!;
+  await captureIngestion(fencedRunDatabase(aligned,run.id),journal.id,'rss',[{paper,store:true,scope:false}],run.id,c.batchKey);
+  await db.prepare("INSERT INTO research_operations(id,request_id,batch_key,phase,state,severity,known,started_at,observed_at) VALUES(?,?,?,'batch_collect','started','info',0,?,?)").bind('fixture-disappeared:'+c.generation,c.generation,c.batchKey,new Date().toISOString(),new Date().toISOString()).run();
+  if(scenario==='next_window_cancel_unknown')await db.prepare("UPDATE research_runs SET status='unknown',close_reason='client_canceled' WHERE id=?").bind(run.id).run();
+  const before={pendingRecords:Number((await db.prepare("SELECT coalesce(sum(records),0) n FROM research_ingestion_work WHERE status='pending'").first()).n),paperCopies:Number((await db.prepare("SELECT count(*) n FROM research_papers WHERE doi='10.9999/hkis-isolated-operation'").first()).n),runStatus:(await db.prepare('SELECT status FROM research_runs WHERE id=?').bind(run.id).first()).status};
+  const next=new NativeDate(clock);next.setUTCDate(next.getUTCDate()+1);next.setUTCHours(0,1,0,0);clock=next.getTime();clockOffsetMs=clock-NativeDate.now();
+  for(const source of RESEARCH_SOURCES.slice(1))await db.prepare('INSERT INTO research_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind('crossref:'+source.id,JSON.stringify({lastHeadAttemptAt:next.toISOString()})).run();
+  c.oldBatchKey=c.batchKey;c.oldRunId=run.id;c.batchKey=next.toISOString().slice(0,10)+'/08';c.clock=clock;c.clockOffsetMs=clockOffsetMs;
+  await db.batch([db.prepare('UPDATE hkis_fixture_clock SET modifier=? WHERE id=1').bind((clockOffsetMs/1000).toFixed(3)+' seconds'),db.prepare('UPDATE hkis_fixture_control SET value=? WHERE id=1').bind(JSON.stringify(c))]);
+  return json({before,...await snapshot(db,c)});
+ }
  if(u.pathname==='/fixture/execution'&&request.method==='GET')return json(await executionState(db,{verified:true,periods:[{from:'2037-03-01T00:00:00.000Z',to:null}]}));
  // Fixed legacy compatibility probe, only inside the owner-private isolated
  // fixture. No caller-selected source/path/budget and no runtime context.
