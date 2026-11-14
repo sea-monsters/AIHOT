@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {decodeIsolatedBootstrap} from './isolated-bootstrap-driver.mjs';
+import {decodeIsolatedBootstrap,isolatedBootstrapProcessFailure} from './isolated-bootstrap-driver.mjs';
 const token='SYNTHETIC/TOKEN+PRIVATE',source='a'.repeat(40),bootstrap='b'.repeat(40);
 test('missing bootstrap outcome retains only safe runner code, exit and exact byte counts',()=>{
  const stdout='HKIS_DIAGNOSTIC '+JSON.stringify({code:'owner_setup_required'})+'\n',stderr='Untrusted secret-looking body must not escape';
@@ -27,4 +27,13 @@ test('missing result retains bounded stdout diagnostics without raw text; sensit
  const stdout=Array.from({length:11},(_,i)=>'HKIS_DIAGNOSTIC '+JSON.stringify({phase:'batch_finish',state:'unknown',code:'request_timeout',durationMs:i,httpStatus:null,applicationReached:false,body:'NEVER_EXPOSE'})).join('\n');
  assert.throws(()=>decodeIsolatedBootstrap(stdout,'untrusted stderr',2,token),e=>{assert.equal(e.diagnostic.events.length,8);assert.equal(e.diagnostic.events[0].durationMs,3);assert.equal(e.diagnostic.events.at(-1).code,'request_timeout');assert.ok(!JSON.stringify(e).includes('NEVER_EXPOSE'));assert.ok(!JSON.stringify(e).includes('untrusted stderr'));return true});
  const secretId='11111111-2222-4333-8444-555555555555';assert.throws(()=>decodeIsolatedBootstrap('HKIS_DIAGNOSTIC '+JSON.stringify({requestId:secretId}),'',2,secretId),e=>e.code==='isolated_bootstrap_sensitive_output'&&!JSON.stringify(e).includes(secretId)&&e.diagnostic.events.length===0);
+});
+
+test('timeout and child error discard all unscanned output even when a credential is a valid diagnostic UUID',()=>{
+ const credential='11111111-2222-4333-8444-555555555555';
+ const stdout='HKIS_DIAGNOSTIC '+JSON.stringify({phase:'batch_finish',state:'unknown',code:'request_timeout',requestId:credential,automationId:credential,body:'SENSITIVE_BODY'}),stderr='SENSITIVE_STDERR '+credential;
+ for(const kind of ['timeout','error']){const e=isolatedBootstrapProcessFailure(kind,stdout,stderr);assert.equal(e.code,kind==='timeout'?'isolated_bootstrap_timeout':'isolated_bootstrap_process_error');assert.deepEqual(e.diagnostic,{runnerCode:'other',exitCode:null,stdoutBytes:Buffer.byteLength(stdout),stderrBytes:Buffer.byteLength(stderr),events:[]});assert.equal(JSON.stringify(e).includes(credential),false);assert.equal(e.message.includes(credential),false);assert.equal(JSON.stringify(e).includes('SENSITIVE'),false);}
+});
+test('timeout and child error handlers both use the count-only process-failure projection',async()=>{
+ const {readFile}=await import('node:fs/promises');const code=await readFile(new URL('./isolated-bootstrap-driver.mjs',import.meta.url),'utf8');assert.ok(code.includes("reject(isolatedBootstrapProcessFailure('timeout',stdout,stderr))"));assert.ok(code.includes("reject(isolatedBootstrapProcessFailure('error',stdout,stderr))"));assert.equal(code.includes('processDiagnostic(stdout,stderr,null)'),false);
 });

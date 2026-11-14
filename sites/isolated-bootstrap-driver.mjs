@@ -22,6 +22,11 @@ function processDiagnostic(stdout,stderr,exitCode){
  return {runnerCode,exitCode:Number.isInteger(exitCode)?exitCode:null,stdoutBytes:Buffer.byteLength(stdout),stderrBytes:Buffer.byteLength(stderr),events:safeEvents(events)};
 }
 function processFailure(code,diagnostic){return Object.assign(Error('Isolated bootstrap stopped: '+code+'; runner='+diagnostic.runnerCode+'; exit='+diagnostic.exitCode+'; stdoutBytes='+diagnostic.stdoutBytes+'; stderrBytes='+diagnostic.stderrBytes+'. Read snapshot without replay.'),{code,diagnostic})}
+/** Process failure can occur before a complete token scan. Keep byte counts only. */
+export function isolatedBootstrapProcessFailure(kind,stdout,stderr){
+ const code=kind==='timeout'?'isolated_bootstrap_timeout':'isolated_bootstrap_process_error';
+ return processFailure(code,{runnerCode:'other',exitCode:null,stdoutBytes:Buffer.byteLength(stdout),stderrBytes:Buffer.byteLength(stderr),events:[]});
+}
 /** No stdout/stderr/body is returned, including on malformed or sensitive output. */
 export function decodeIsolatedBootstrap(stdout,stderr,exitCode,token){
  const diagnostic=processDiagnostic(stdout,stderr,exitCode),secrets=typeof token==='string'&&token?[token,encodeURIComponent(token),JSON.stringify(token).slice(1,-1)]:[];
@@ -42,9 +47,9 @@ export async function runPinnedIsolatedBootstrap({origin,token,expectedSource,ex
  const input={baseUrl:origin,allowedOrigins:[origin],token,automationStartedAt:startedAt,slot:20,expectedBootstrapSource:source,budgetMs:540000,collectionCalls:60};
  const result=await new Promise((resolveResult,reject)=>{
   const child=spawn(process.execPath,['--input-type=module','-e',script],{stdio:['pipe','pipe','pipe']});let stdout='',stderr='';
-  const timer=setTimeout(()=>{child.kill('SIGTERM');reject(processFailure('isolated_bootstrap_timeout',processDiagnostic(stdout,stderr,null)))},550000);
+  const timer=setTimeout(()=>{child.kill('SIGTERM');reject(isolatedBootstrapProcessFailure('timeout',stdout,stderr))},550000);
   child.stdout.on('data',b=>{stdout+=b;if(Buffer.byteLength(stdout)>2000000)child.kill('SIGTERM')});child.stderr.on('data',b=>{stderr+=b;if(Buffer.byteLength(stderr)>200000)child.kill('SIGTERM')});
-  child.on('error',()=>{clearTimeout(timer);reject(processFailure('isolated_bootstrap_process_error',processDiagnostic(stdout,stderr,null)))});
+  child.on('error',()=>{clearTimeout(timer);reject(isolatedBootstrapProcessFailure('error',stdout,stderr))});
   child.on('close',code=>{clearTimeout(timer);try{resolveResult(decodeIsolatedBootstrap(stdout,stderr,code,token))}catch(e){reject(e)}});
   child.stdin.end(JSON.stringify(input)+'\n');input.token='';
  });
