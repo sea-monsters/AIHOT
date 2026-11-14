@@ -142,6 +142,24 @@ async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started
   steps.push({phase,status:v?.status||v?.batchStatus||(v?.brief?'ok':'unknown'),reason:v?.reason||reasonOf(v),blocked:v?.blocked||null,cohort:body?.cohort||null,startedMs:at-started,endedMs:now()-started,runId:v?.runId,requestId:v?.requestId,sentRequestId:v?.sentRequestId,operationIdMismatch:v?.operationIdMismatch===true,...Object.fromEntries(['ready','abstained','deferred','scopePending','remainingQueued','remainingMetadata','attempted','reservedUnsent','unknownAttempts'].map(k=>[k,v?.[k]??null])),pages:Array.isArray(v?.crossrefPages)?v.crossrefPages.length:Array.isArray(v?.results)?v.results.reduce((n:number,r:any)=>n+(Array.isArray(r?.crossrefPages)?r.crossrefPages.length:0),0):null,calls:v?.calls??null,stopReason:v?.stopReason??null});
   return v;
  };
+ // Continue only confirmed, monotonic local progress. Each request remains
+ // capped at six seconds and a hard slice bound protects a stalled clock.
+ const localSlices=async(kind:'finish'|'recover',key?:string)=>{
+  let previousItems=Infinity,previousRecords=Infinity;
+  for(let slice=0;slice<32;slice++){
+   if(remaining()<15000)return {status:'deferred',reason:'ingestion_pending',localState:'next_scheduled_window'};
+   const finish=kind==='finish',body=finish?{batchKey:key,maxMs:Math.min(6000,remaining()-3000),deadlineAt:new Date(deadline).toISOString()}:{maxMs:6000,deadlineAt:new Date(deadline).toISOString()};
+   const v=await invoke(finish?'finish':'local_recovery',finish?'/api/site/research/batch/finish':'/api/site/research/ingestion/recover',body,15000),p=v?.recovery;
+   const pending=finish?v?.code==='ingestion_pending':v?.status==='partial'&&v?.reason==='ingestion_pending';
+   if(!pending)return v;
+   if(p?.known!==true||p?.confirmed!==true||!Number.isInteger(p.processedItems)||p.processedItems<0||!Number.isInteger(p.remainingItems)||p.remainingItems<=0||p.remainingItems>previousItems)return v;
+   if(Number.isInteger(p.remaining)&&p.remaining>previousRecords)return v;
+   const recordProgress=Number.isInteger(p.processed)&&p.processed>0&&Number.isInteger(p.remaining)&&p.remaining>=0&&p.remaining<previousRecords;
+   if((p.processedItems===0&&!recordProgress)||(p.remainingItems===previousItems&&!recordProgress))return v;
+   previousItems=p.remainingItems;if(Number.isInteger(p.remaining)&&p.remaining>=0)previousRecords=p.remaining;
+  }
+  return {status:'deferred',reason:'ingestion_pending',localState:'next_scheduled_window'};
+ };
  const readbackUnknownCollect=async(v:any)=>{
   collectionCallsKnown=false;collectionStoppedAt=now();collectionStopReason='outcome_unknown';mark('collection','unknown','collection_contract_unconfirmed');
   const operationId=safeOperationId(v?.sentRequestId);
@@ -171,24 +189,12 @@ async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started
   if(read.conclusion!=='settled'||read.mayFinish!==true){mark('collection','unknown',read.conclusion==='in_flight'?'collection_readback_in_flight':'collection_readback_needs_review');return outcome('unknown',read.conclusion==='in_flight'?'collection_readback_in_flight':'collection_readback_needs_review')}
   // The original collect is never replayed. Only a proved-settled operation
   // permits the existing bounded local finish; optional/paid stages remain stopped.
-  let finish:any=null;for(let slice=0;slice<4;slice++){
-   if(remaining()<15000)return outcome('unknown','collection_finish_unconfirmed');
-   finish=await invoke('finish','/api/site/research/batch/finish',{batchKey,maxMs:Math.min(6000,remaining()-3000),deadlineAt:new Date(deadline).toISOString()},15000);const p=finish?.recovery;
-   if(finish?.code!=='ingestion_pending'||p?.known!==true||p?.confirmed!==true||!Number.isInteger(p.processedItems)||p.processedItems<=0||!Number.isInteger(p.remainingItems)||p.remainingItems<=0)break;
-  }
+  const finish=await localSlices('finish',batchKey!);
   if(!finish||goalBarrier(finish)||finish.batchStatus!=='finished')return outcome('unknown','collection_finish_unconfirmed');
   coverage=coverageEvidence(finish);mark('collection','partial','collection_response_reconciled');return outcome('partial','collection_response_reconciled');
  };
- const recover=async()=>{for(let slice=0;slice<4;slice++){
-  if(remaining()<15000)return {status:'deferred',reason:'deadline'};
-  const v=await invoke('local_recovery','/api/site/research/ingestion/recover',{maxMs:6000,deadlineAt:new Date(deadline).toISOString()},15000),p=v?.recovery;
-  if(v?.status==='partial'&&v.reason==='ingestion_pending'&&p?.known===true&&p?.confirmed===true&&Number.isInteger(p.processedItems)&&p.processedItems>0&&Number.isInteger(p.remainingItems)&&p.remainingItems>0)continue;
-  if(goalBarrier(v))return v;
-  if(p?.known!==true||p?.confirmed!==true)return {status:'unknown',reason:'recovery_unconfirmed'};
-  if(v.status==='ok'&&p.remainingItems===0)return v;
-  if(v.status!=='partial'||v.reason!=='ingestion_pending'||!Number.isInteger(p.processedItems)||p.processedItems<=0||!Number.isInteger(p.remainingItems)||p.remainingItems<=0)return {status:'deferred',reason:'ingestion_pending'};
- }return {status:'deferred',reason:'ingestion_pending'};};
- const stop=(key:string,v:any,fallback:string)=>{const status=goalBarrier(v)||'blocked',reason=reasonOf(v)||fallback;mark(key,status,reason);return outcome(status,reason)};
+ const recover=async()=>{const v=await localSlices('recover');if(v?.status==='ok')return v.recovery?.known===true&&v.recovery?.confirmed===true&&v.recovery?.remainingItems===0?v:{status:'unknown',reason:'recovery_unconfirmed'};return v||{status:'unknown',reason:'recovery_unconfirmed'};};
+ const stop=(key:string,v:any,fallback:string)=>{const status=v?.localState==='next_scheduled_window'?'deferred':goalBarrier(v)||'blocked',reason=reasonOf(v)||fallback;mark(key,status,reason);return outcome(status,reason)};
  if(!policy.enabled){mark('collection','deferred','runtime_disabled');return outcome('deferred','runtime_disabled')}
  if(remaining()<15000){mark('collection','deferred','core_budget_insufficient');return outcome('deferred','core_budget_insufficient')}
  const before=await recover();if(goalBarrier(before)||before.status!=='ok')return stop('collection',before,'recovery_unconfirmed');
@@ -199,14 +205,14 @@ async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started
   if(plan.status!=='ok'||plan.dailyWorkRecorded!==true||!validDay(target?.sourceDay)||!validDay(target?.reportDate)||target.sourceDay>=today||Date.parse(target.reportDate+'T00:00:00Z')-Date.parse(target.sourceDay+'T00:00:00Z')!==86400000){mark('collection','unknown','goal_plan_unconfirmed');return outcome('unknown','goal_plan_unconfirmed')}
   for(const k of ['metadata_previous','rules_previous','assessment','daily'])Object.assign(goals[k],target);
  }
- // At least start15 + one settled collection slice30 + four finish slices60.
+ // Reserve two minutes for bounded local finalization, including D1 latency.
  // Optional outputs never spend this core admission reserve.
- if(remaining()<105000){mark('collection','deferred','core_budget_insufficient');return outcome('deferred','core_budget_insufficient')}
- preparationMs=now()-started;collectionBudgetMs=Math.min(slot===8?limits.collection8Ms:limits.collection20Ms,remaining()-60000);
+ if(remaining()<165000){mark('collection','deferred','core_budget_insufficient');return outcome('deferred','core_budget_insufficient')}
+ preparationMs=now()-started;collectionBudgetMs=Math.min(slot===8?limits.collection8Ms:limits.collection20Ms,remaining()-120000);
  const batch=await invoke('start','/api/site/research/batch/start',{slot},15000);
  if(goalBarrier(batch)||!batch?.batchKey)return stop('collection',batch,'batch_not_terminal');
  batchKey=batch.batchKey;if(batch.collectionContract!=='bounded-v1'){mark('collection','unknown','collection_contract_unconfirmed');return outcome('unknown','collection_contract_unconfirmed')}
- mark('collection','pending');collectionDeadline=Math.min(now()+collectionBudgetMs,deadline-60000);
+ mark('collection','pending');collectionDeadline=Math.min(now()+collectionBudgetMs,deadline-120000);
  let control=batch.collectionControl,resumeAfterCooldown=false,waitedForCooldown=false;
  if(batch.status==='running'){
   if(!control||typeof control.stop!=='boolean'||control.nextAction==='readback_reconcile'){mark('collection','blocked','collection_interrupted_readback_reconcile');return outcome('blocked','collection_interrupted_readback_reconcile')}
@@ -233,11 +239,7 @@ async function runCollectionFirstSlot(call:Call,slot:8|20,now:()=>number,started
    if(v.calls===0||['deferred','blocked','busy'].includes(v.status)||!['slice_deadline','slice_call_limit'].includes(v.stopReason))break;
   }
   collectionStopReason??=control?.reason||(collectionCalls>=limits.collectionCalls?'call_budget':'collection_stopped');collectionStoppedAt=now();
-  let finish:any=null;for(let slice=0;slice<4;slice++){
-   if(remaining()<15000){mark('collection','deferred','finish_unconfirmed_do_not_start_maintenance');return outcome('deferred','finish_unconfirmed_do_not_start_maintenance')}
-   finish=await invoke('finish','/api/site/research/batch/finish',{batchKey,maxMs:Math.min(6000,remaining()-3000),deadlineAt:new Date(deadline).toISOString()},15000);const p=finish?.recovery;
-   if(finish?.code!=='ingestion_pending'||p?.known!==true||p?.confirmed!==true||!Number.isInteger(p.processedItems)||p.processedItems<=0||!Number.isInteger(p.remainingItems)||p.remainingItems<=0)break;
-  }
+  const finish=await localSlices('finish',batchKey!);
   if(!finish||goalBarrier(finish)||finish.batchStatus!=='finished')return stop('collection',finish,'finish_unconfirmed_do_not_start_maintenance');
   coverage=coverageEvidence(finish);
  }else if(batch.status==='finished'){collectionStoppedAt=now();coverage=coverageEvidence(batch.coverage);collectionStopReason=control?.reason||'batch_closed'}

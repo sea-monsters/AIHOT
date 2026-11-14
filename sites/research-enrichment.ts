@@ -61,10 +61,18 @@ export async function planMetadataQueue(db:any,incoming:Paper,scopePending=false
    const aliases=typeof db.findMetadataAliases==='function'?await db.findMetadataAliases(incoming.sourceId,lookupKey):(await db.prepare("SELECT * FROM research_enrichment_queue WHERE source_id=? AND (json_extract(provider_json,'$.anysearch.originKey')=? OR json_extract(provider_json,'$.aminer.originKey')=?) LIMIT 2").bind(incoming.sourceId,lookupKey,lookupKey).all()).results;
    if(aliases.length>1)throw new AIError('record_conflict',409,'发现标识对应多个补全记录，保留已有证据');previous=aliases[0]||null;
   }
-  const priorPaper=previous?parse(previous.paper_json,null):null;const p=priorPaper?mergeCandidate(incoming,priorPaper):incoming;
+  let priorPaper=previous?parse(previous.paper_json,null):null;
+  let observedStored=incoming.doi?await db.prepare('SELECT * FROM research_papers WHERE doi=?').bind(incoming.doi).first():run?.firstSeen?await db.prepare('SELECT * FROM research_papers WHERE doi=? OR (url=? AND source_id=? AND (doi IS NULL OR ? IS NULL OR doi=?)) ORDER BY CASE WHEN doi=? THEN 0 ELSE 1 END,id LIMIT 1').bind(null,incoming.url,incoming.sourceId,null,null,null).first():null;
+  if(!incoming.doi&&observedStored?.doi){const matches=await db.prepare('SELECT count(DISTINCT doi) n FROM research_papers WHERE source_id=? AND url=? AND doi IS NOT NULL').bind(incoming.sourceId,incoming.url).first();if(Number(matches?.n)>1)observedStored=null;}
+  // Compare capture time to the committed observation, not queue processing time.
+  const olderCapture=!!(observedStored?.last_seen&&run?.firstSeen&&run.firstSeen<observedStored.last_seen);
+  const candidate=olderCapture?rowPaper(observedStored):incoming;
+  let p=priorPaper?mergeCandidate(candidate,priorPaper):candidate;
+  let key=normalizeDoi(p.doi)||'id:'+await digest({source:p.sourceId,url:p.url,title:normalizedTitle(p.title)});
+  if(olderCapture&&key!==lookupKey){const target=await db.prepare('SELECT * FROM research_enrichment_queue WHERE doi=? AND source_id=?').bind(key,p.sourceId).first();if(target&&previous&&target.doi!==previous.doi)throw new AIError('record_conflict',409,'旧片段对应多个补全记录，停止本地恢复');if(target&&!previous){previous=target;priorPaper=parse(previous.paper_json,null);p=priorPaper?mergeCandidate(candidate,priorPaper):candidate;key=normalizeDoi(p.doi)||'id:'+await digest({source:p.sourceId,url:p.url,title:normalizedTitle(p.title)});}}
   const unchanged=!!priorPaper&&await digest(metadataFields(priorPaper))===await digest(metadataFields(p));
-  const key=normalizeDoi(p.doi)||'id:'+await digest({source:p.sourceId,url:p.url,title:normalizedTitle(p.title)}),hash=await digest(metadataFields(p));
-  const stored=p.doi?await db.prepare('SELECT * FROM research_papers WHERE doi=?').bind(p.doi).first():null;
+  const hash=await digest(metadataFields(p));
+  const stored=p.doi?(p.doi===incoming.doi?observedStored:await db.prepare('SELECT * FROM research_papers WHERE doi=?').bind(p.doi).first()):null;
   const member=stored?await db.prepare('SELECT run_id,batch_key,daily_cohort_key,first_seen FROM research_batch_members WHERE paper_id=?').bind(stored.id).first():null;
   const firstSeen=member?.first_seen||stored?.first_seen||run?.firstSeen||now,originBatchKey=member?.batch_key??run?.batchKey??null,manual=isManualBatchKey(originBatchKey),cohort=manual?null:(member?.daily_cohort_key??run?.cohortKey??dailyCohortKey(firstSeen));
   const freshCrossref=p.discovery==='crossref'||stored?.metadata_checked_at&&Date.parse(stored.metadata_checked_at)>Date.now()-6*3600000;

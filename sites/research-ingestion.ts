@@ -1,5 +1,5 @@
 import {captureFingerprint} from './research-capture-proof.ts';
-import {planPaperWrite} from './research.ts';
+import {planPaperWrite,rowPaper} from './research.ts';
 import {planMetadataQueue,mergeCandidate} from './research-enrichment.ts';
 import {dailyCohortKey} from './research-attribution.ts';
 import {normalizeDoi,normalizedTitle} from './research-domain.ts';
@@ -35,7 +35,7 @@ async function preload(db:any,entries:any[]){
  const inputs=entries.map(e=>e.paper),refs=inputs.map(p=>[normalizeDoi(p.doi)||null,p.sourceId,p.url,normalizedTitle(p.title)]);
  const papers=(await db.prepare("SELECT DISTINCT p.* FROM research_papers p JOIN json_each(?) c ON p.doi=json_extract(c.value,'$[0]') OR (p.url=json_extract(c.value,'$[2]') AND p.source_id=json_extract(c.value,'$[1]') AND (p.doi IS NULL OR json_extract(c.value,'$[0]') IS NULL OR p.doi=json_extract(c.value,'$[0]')))").bind(JSON.stringify(refs)).all()).results;
  const ids=await Promise.all(inputs.map(async p=>match(papers,p)?.id||await rawHash(normalizeDoi(p.doi)||p.sourceId+':'+p.url))),refsQueue=await Promise.all(inputs.map(async p=>[await key(p),p.sourceId]));
- for(const p of inputs){const row=match(papers,p);if(row?.doi)refsQueue.push([row.doi,p.sourceId]);}
+ for(const p of inputs){const row=match(papers,p);if(row)refsQueue.push([row.doi||await key(rowPaper(row)),p.sourceId]);}
  const [queues,members,records]=await Promise.all([
   db.prepare("SELECT DISTINCT q.* FROM research_enrichment_queue q JOIN json_each(?) c ON q.source_id=json_extract(c.value,'$[1]') AND (q.doi=json_extract(c.value,'$[0]') OR json_extract(q.provider_json,'$.anysearch.originKey')=json_extract(c.value,'$[0]') OR json_extract(q.provider_json,'$.aminer.originKey')=json_extract(c.value,'$[0]'))").bind(JSON.stringify(refsQueue)).all(),
   db.prepare('SELECT * FROM research_batch_members WHERE paper_id IN (SELECT value FROM json_each(?))').bind(JSON.stringify(ids)).all(),

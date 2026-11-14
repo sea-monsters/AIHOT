@@ -96,14 +96,15 @@ test('late root admission after orphan closure reaches real collector without di
 
 test('next-window recovery adopts only complete fenced captures after idle deadline closure, including canceled actors',async(t)=>{
  const {captureIngestion}=await import('./research-ingestion.ts'),{initResearch,researchApi}=await import('./research.ts'),{fromCrossref}=await import('./research-domain.ts'),{RESEARCH_SOURCES}=await import('./research-config.ts'),{startBatch}=await import('./research-batches.ts');
- for(const kind of ['running','canceled','canceled_long','no_proof','changed','missing_fragment','active_lock']){
+ for(const kind of ['running','persist_pending','canceled','canceled_long','no_proof','changed','missing_fragment','active_lock']){
   t.mock.timers.setTime(Date.parse('2026-11-13T12:01:00Z'));
   const f=fixture(),oldFetch=globalThis.fetch;let requests=0;globalThis.fetch=async()=>{requests++;throw Error('external I/O forbidden')};
   try{
    const c=await setup(f);await initResearch(f.db);const run=await admitRun(f.db,'ieee-ted',c.key,'service',new Date().toISOString(),kind==='canceled_long'?undefined:Date.now()+20000);assert.ok(run);
    const paper=fromCrossref({DOI:'10.9999/next-window',title:['Synthetic TCAD transistor study'],type:'journal-article',published:{'date-parts':[[2026,11,1]]}},RESEARCH_SOURCES.find(s=>s.id==='ieee-ted')!)!;
-   await captureIngestion(fencedRunDatabase(f.db,run.id),'ieee-ted','rss',Array.from({length:kind==='missing_fragment'?21:1},(_,i)=>({paper:{...paper,doi:paper.doi+'-'+i,url:paper.url+'-'+i},store:true,scope:false})),run.id,c.key);
+   await captureIngestion(fencedRunDatabase(f.db,run.id),'ieee-ted','rss',Array.from({length:['missing_fragment','persist_pending'].includes(kind)?21:1},(_,i)=>({paper:{...paper,doi:paper.doi+'-'+i,url:paper.url+'-'+i},store:true,scope:false})),run.id,c.key);
    if(kind.startsWith('canceled'))f.sql.prepare("UPDATE research_runs SET status='unknown',close_reason='client_canceled',closed_at=? WHERE id=?").run(new Date().toISOString(),run.id);
+   if(kind==='persist_pending'){f.sql.prepare("UPDATE research_runs SET status='persist_pending',close_reason='work_pending',closed_at=? WHERE id=?").run(new Date().toISOString(),run.id);f.sql.prepare('DELETE FROM research_settings WHERE key=?').run(run.key);}
    if(kind==='no_proof')f.sql.prepare("UPDATE research_runs SET details_json='{}' WHERE id=?").run(run.id);
    if(kind==='changed')f.sql.exec("UPDATE research_ingestion_work SET payload_json='[]'");
    if(kind==='missing_fragment')f.sql.exec('DELETE FROM research_ingestion_work WHERE ordinal=1');
@@ -114,7 +115,7 @@ test('next-window recovery adopts only complete fenced captures after idle deadl
    const batch=f.sql.prepare('SELECT status,close_reason FROM research_batches WHERE key=?').get(c.key)!;
    if(kind==='active_lock'){assert.equal(batch.status,'running');assert.equal(result.status,'deferred')}
    else{assert.equal(batch.status,'interrupted');assert.equal(batch.close_reason,'client_disconnected_or_deadline');
-    if(['running','canceled','canceled_long'].includes(kind)){assert.equal(result.status,'ok',JSON.stringify(result));assert.equal(f.sql.prepare('SELECT count(*) n FROM research_papers').get()!.n,1);assert.equal(f.sql.prepare("SELECT count(*) n FROM research_ingestion_work WHERE status='pending'").get()!.n,0);
+    if(['running','persist_pending','canceled','canceled_long'].includes(kind)){assert.equal(result.status,'ok',JSON.stringify(result));assert.equal(f.sql.prepare('SELECT count(*) n FROM research_papers').get()!.n,kind==='persist_pending'?21:1);assert.equal(f.sql.prepare("SELECT count(*) n FROM research_ingestion_work WHERE status='pending'").get()!.n,0);
      if(kind.startsWith('canceled'))assert.equal(JSON.parse(f.sql.prepare('SELECT details_json FROM research_runs WHERE id=?').get(run.id)!.details_json).priorCloseReason,'client_canceled');
      const next=await startBatch(f.db,8,new Date());assert.equal(next.status,'running');assert.equal(next.collectionControl.stop,false);assert.ok(await admitRun(f.db,'ieee-ted',next.batchKey,'service',new Date().toISOString(),Date.now()+20000));
     }else{assert.equal(result.reason,'ingestion_origin_review_required');assert.equal(f.sql.prepare("SELECT count(*) n FROM research_ingestion_work WHERE status='pending'").get()!.n,1)}

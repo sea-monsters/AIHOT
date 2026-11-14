@@ -38,7 +38,7 @@ test('actual slot plus HTTP pipeline finalizes bounded collection before mainten
  }finally{globalThis.fetch=original;f.sql.close()}
 });
 
-async function staged(f:any,key:string,n=137){const at=new Date().toISOString();f.sql.prepare("INSERT INTO research_batches(key,date,slot,status,sources_json,started_at) VALUES(?,?,20,'running',?,?)").run(key,key.slice(0,10),JSON.stringify([source.id]),at);const lease=await admitRun(f.db,source.id,key,'fixture',at),db=fencedRunDatabase(f.db,lease.id);await captureIngestion(db,source.id,'rss',parsePublisherRSS(fixtureXML(n),source).map(paper=>({paper,store:true,scope:false})),lease.id,key);f.sql.prepare("UPDATE research_runs SET status='persist_pending',close_reason='work_pending',closed_at=? WHERE id=?").run(at,lease.id);f.sql.prepare('DELETE FROM research_settings WHERE key=?').run(lease.key);return lease;}
+async function staged(f:any,key:string,n=137,xml=fixtureXML(n),store=true){const at=new Date().toISOString();f.sql.prepare("INSERT INTO research_batches(key,date,slot,status,sources_json,started_at) VALUES(?,?,20,'running',?,?)").run(key,key.slice(0,10),JSON.stringify([source.id]),at);const lease=await admitRun(f.db,source.id,key,'fixture',at),db=fencedRunDatabase(f.db,lease.id);await captureIngestion(db,source.id,'rss',parsePublisherRSS(xml,source).map(paper=>({paper,store,scope:!store})),lease.id,key);f.sql.prepare("UPDATE research_runs SET status='persist_pending',close_reason='work_pending',closed_at=? WHERE id=?").run(at,lease.id);f.sql.prepare('DELETE FROM research_settings WHERE key=?').run(lease.key);return lease;}
 
 test('fresh candidate slices require confirmed committed progress; no progress/unknown never loops or opens metadata',async()=>{
  for(const mode of ['progress','none','unconfirmed','unknown']){let finishes=0,metadata=0;const result=await runResearchSlot(async(path)=>{if(path.endsWith('/ingestion/recover'))return {status:'ok',recovery:{known:true,confirmed:true,remainingItems:0,processedItems:0}};if(path.endsWith('/start'))return {status:'running',batchKey:'fixture',collectionControl:{stop:true}};if(path.endsWith('/finish')){finishes++;if(mode==='unknown')return {status:'unknown'};if(finishes===3&&mode==='progress')return {batchStatus:'finished'};return {status:'deferred',code:'ingestion_pending',recovery:{known:true,confirmed:mode!=='unconfirmed',processedItems:mode==='none'?0:2,remainingItems:8-finishes*2}};}if(path.endsWith('/enrich'))metadata++;return {status:'ok'};},20,()=>0);assert.equal(finishes,mode==='progress'?3:1);assert.equal(metadata,mode==='progress'?1:0);assert.equal(result.status==='unknown',mode==='unknown');}
@@ -75,4 +75,47 @@ test('finish deadline before dispatch is deferred, while a sent unconfirmed fini
 
 test('HTTP 200 cannot forge recovery confirmation or trigger another finish; exact 409 generates confirmation',async()=>{
  const body={status:'deferred',code:'ingestion_pending',recovery:{known:true,confirmed:true,processedItems:1,remainingItems:2}};let finishes=0,maintenance=0;const result=await runResearchSlot(async(path)=>{if(path.endsWith('/start'))return {status:'running',batchKey:'fixture',collectionControl:{stop:true}};if(path.endsWith('/finish')){finishes++;return slotOutcome(Response.json(body,{status:200}));}maintenance++;return {status:'ok'};},20,()=>0);assert.equal(finishes,1);assert.equal(maintenance,0);assert.equal(result.status,'deferred');const forged=await slotOutcome(Response.json(body,{status:200}));assert.notEqual(forged.recovery.confirmed,true);const rejected=await slotOutcome(Response.json({...body,recovery:{...body.recovery,confirmed:false}},{status:409}));assert.equal(rejected.recovery.confirmed,true);assert.equal(rejected.recovery.processedItems,1);
+});
+
+test('synthetic D1 latency is measured before and during local drain without external I/O',async(t)=>{
+ t.mock.timers.enable({apis:['Date'],now:future20()});const f=fixture(),oldFetch=globalThis.fetch;
+ try{
+  await initResearch(f.db);const key=monthWindow().endDate+'/20';await staged(f,key,137);
+  const base=f.db,delay=20;
+  f.env.DB={prepare(q:string){const p=base.prepare(q);const wrap:any={bind(...args:any[]){p.bind(...args);return wrap},async first(){t.mock.timers.tick(delay);return p.first()},async all(){t.mock.timers.tick(delay);return p.all()},async run(){t.mock.timers.tick(delay);return p.run()},runSync(){return p.runSync()}};return wrap},async batch(statements:any[]){t.mock.timers.tick(delay);return base.batch(statements)}};
+  globalThis.fetch=async()=>{throw Error('unexpected external call')};
+  const response=await post(f.env,'batch/finish',{batchKey:key,maxMs:6000,deadlineAt:new Date(Date.now()+30000).toISOString()});assert.ok([200,409].includes(response.status));
+  const row=f.sql.prepare("SELECT details_json FROM research_runs WHERE source_id=? ORDER BY started_at DESC LIMIT 1").get(FINALIZE_SOURCE) as any;assert.ok(row);const details=JSON.parse(row.details_json);assert.ok(details.preDrainMs>=delay);assert.ok(details.drainMs>=delay);assert.ok(details.preDrainMs+details.drainMs<6000);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
+ }finally{globalThis.fetch=oldFetch;f.sql.close()}
+});
+
+test('another batch pending for the same paper blocks metadata, scoring and daily after current batch finishes',async(t)=>{
+ t.mock.timers.enable({apis:['Date'],now:future20()});const f=fixture(),oldFetch=globalThis.fetch;
+ try{
+  await initResearch(f.db);const day=monthWindow().endDate,old=day+'/08',current=day+'/20';await staged(f,old,1);t.mock.timers.tick(1000);await staged(f,current,1,fixtureXML(1).replace('Synthetic TCAD transistor closing fixture 0','Synthetic TCAD transistor updated closing fixture 0'));
+  globalThis.fetch=async()=>{throw Error('external I/O forbidden')};
+  const closed=await post(f.env,'batch/finish',{batchKey:current,maxMs:6000});assert.equal(closed.status,200,JSON.stringify(await closed.clone().json()));
+  assert.equal(f.sql.prepare("SELECT count(*) n FROM research_ingestion_work WHERE origin_batch_key=? AND status='pending'").get(old)!.n,1);
+  assert.equal(f.sql.prepare('SELECT count(*) n FROM research_papers').get()!.n,1);assert.match(String(f.sql.prepare('SELECT title FROM research_papers').get()!.title),/updated/);
+  const enriched=await(await post(f.env,'enrich',{cohort:'current',maxMs:6000})).json() as any;assert.equal(enriched.reason,'collection_in_progress');
+  const scoring=await(await post(f.env,'process',{cohort:'current',maxPapers:1,maxMs:6000})).json() as any;assert.equal(scoring.reason,'ingestion_pending');assert.equal(scoring.attempted,0);
+  t.mock.timers.tick(12*3600000);
+  const daily=await(await post(f.env,'daily/generate',{maxCalls:1})).json() as any;assert.equal(daily.reason,'pending_collection');assert.equal(daily.attempted,0);
+  const after=await(await post(f.env,'enrich',{cohort:'current',maxMs:6000})).json() as any;assert.equal(after.reason,'pending_metadata');assert.equal(after.ingestionProcessed,1);assert.equal(f.sql.prepare("SELECT count(*) n FROM research_ingestion_work WHERE status='pending'").get()!.n,0);assert.match(String(f.sql.prepare('SELECT title FROM research_papers').get()!.title),/updated/);assert.match(JSON.parse(String(f.sql.prepare('SELECT paper_json FROM research_enrichment_queue LIMIT 1').get()!.paper_json)).title,/updated/);assert.equal(f.sql.prepare('SELECT count(*) n FROM research_papers').get()!.n,1);assert.equal(f.sql.prepare("SELECT count(*) n FROM research_runs WHERE entry_point='maintenance'").get()!.n,0);
+  assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);assert.equal(f.sql.prepare('SELECT count(*) n FROM research_daily').get()!.n,0);
+ }finally{globalThis.fetch=oldFetch;f.sql.close()}
+});
+
+test('late scope-only capture cannot replace a newer queued candidate',async(t)=>{
+ t.mock.timers.enable({apis:['Date'],now:future20()});const f=fixture(),oldFetch=globalThis.fetch;
+ try{await initResearch(f.db);const day=monthWindow().endDate,old=day+'/08',current=day+'/20';await staged(f,old,1,fixtureXML(1),false);t.mock.timers.tick(1000);await staged(f,current,1,fixtureXML(1).replace('Synthetic TCAD transistor closing fixture 0','Synthetic TCAD transistor updated closing fixture 0'));
+ globalThis.fetch=async()=>{throw Error('external I/O forbidden')};assert.equal((await post(f.env,'batch/finish',{batchKey:current,maxMs:6000})).status,200);t.mock.timers.tick(12*3600000);const after=await(await post(f.env,'enrich',{cohort:'current',maxMs:6000})).json() as any;assert.equal(after.reason,'pending_metadata');assert.match(JSON.parse(String(f.sql.prepare('SELECT paper_json FROM research_enrichment_queue LIMIT 1').get()!.paper_json)).title,/updated/);assert.match(String(f.sql.prepare('SELECT title FROM research_papers').get()!.title),/updated/);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
+ }finally{globalThis.fetch=oldFetch;f.sql.close()}
+});
+
+test('late DOI-less scope-only capture keeps the newer stable-URL candidate',async(t)=>{
+ t.mock.timers.enable({apis:['Date'],now:future20()});const f=fixture(),oldFetch=globalThis.fetch;
+ try{await initResearch(f.db);const day=monthWindow().endDate,old=day+'/08',current=day+'/20',xml=fixtureXML(1).replace('https://doi.org/10.9999/closing-0','https://example.org/stable-paper');await staged(f,old,1,xml,false);t.mock.timers.tick(1000);await staged(f,current,1,xml.replace('Synthetic TCAD transistor closing fixture 0','Synthetic TCAD transistor updated closing fixture 0'));
+ globalThis.fetch=async()=>{throw Error('external I/O forbidden')};assert.equal((await post(f.env,'batch/finish',{batchKey:current,maxMs:6000})).status,200);t.mock.timers.tick(12*3600000);const after=await(await post(f.env,'enrich',{cohort:'current',maxMs:6000})).json() as any;assert.equal(after.reason,'pending_metadata');assert.equal(f.sql.prepare("SELECT count(*) n FROM research_ingestion_work WHERE status='pending'").get()!.n,0);assert.match(JSON.parse(String(f.sql.prepare('SELECT paper_json FROM research_enrichment_queue LIMIT 1').get()!.paper_json)).title,/updated/);assert.match(String(f.sql.prepare('SELECT title FROM research_papers').get()!.title),/updated/);assert.equal(f.sql.prepare('SELECT count(*) n FROM ai_receipts').get()!.n,0);
+ }finally{globalThis.fetch=oldFetch;f.sql.close()}
 });

@@ -1,8 +1,27 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-11-13T13:25:36Z",
+  "latestVersion": "2026-11-14T12:40:34Z",
   "releases": [
+    {
+      "id": "hkis-bounded-local-pending-20261114",
+      "at": "2026-11-14T12:40:34Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "改进已捕获片段的有界本地收尾",
+      "body": [
+        "在原有预算内为本地入库预留时间，仅在确认片数或记录数减少时有界续片；响应未确认时停止，不重放采集。",
+        "预算不足时保留待处理状态，下一原定窗口先对账和恢复；阶段耗时单独记录，不将剩余时间误称为前置开销。",
+        "较旧捕获片段晚于同篇论文的新记录入库时保守保留较新字段，防止后续补全和分析使用倒退的元数据。",
+        "代码维护不代表生产部署或既有批次已恢复。"
+      ],
+      "sources": [
+        {
+          "label": "采集对账设计",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/hkis-reconciliation-design.md"
+        }
+      ]
+    },
     {
       "id": "hkis-next-window-capture-recovery-20261113",
       "at": "2026-11-13T13:25:36Z",

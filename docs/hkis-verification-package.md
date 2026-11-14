@@ -57,3 +57,5 @@
 `node --test sites/isolated-legacy-lease.test.mjs` 在独立临时构建的真实本机 Worker/D1 验证两种 legacy sync。云端使用 `NODE_USE_ENV_PROXY=1 node sites/verify-isolated-legacy-lease.mjs`，安全 stdin 的字段为 `site`（当次官方 get_site 结果）、`expectedSource`、`expectedBootstrapSource`、`confirmedSnapshotGeneration` 和 `mode`（`standalone` 或 `batch`）。每次仅对专用隔离站建立新 normal generation，并调用固定来源的窄探针；同代重复或改模式被拒绝。读取上次 snapshot 后才能开始，未知不自动重置。凭据不写文件，证据仅保存固定脱敏投影。
 
 历史 goal-bootstrap 测试随包携带五个经旧 Git blob ID 校验的精确源码文件。源码归档缺少旧 Git 历史时，可创建干净合成 checkout 测历史行为；不替换成当前代码，不跳过兼容性测试。SQLite 时钟与测试中的 mock Date 显式对齐，避免测试结果随真实执行时刻变化。
+
+本地待处理回归纳入 `boundaries`：确认进展超过四片、无进展、丢失确认、预算截止、模拟 D1 延迟及新旧批次同篇论文的全局屏障；`receipts` 覆盖跨窗口持久片段恢复与新批入场。以上均为合成测试，不代表生产批次已恢复。
