@@ -67,3 +67,5 @@
 云端复用 `NODE_USE_ENV_PROXY=1 node sites/verify-isolated-pending.mjs`。安全 stdin 严格接受 `{site,expectedSource,expectedBootstrapSource,confirmedSnapshotGeneration,scenario}`；`site` 必须为官方 `get_site` 的固定隔离项目 owner-private 对象。`expectedBootstrapSource` 仅绑定干净的本地执行源码 HEAD；此探针是本地候选 runner 调真实 Worker/D1，不代表稳定 bootstrap 全链路验收。需另跑稳定 bootstrap 配对矩阵。每次开始前确认上次 snapshot generation；未知仅回读，不自行重置。
 
 预算耗尽场景仅将客户端合成已耗时间推进到 526 秒，随后停止；下一固定合成窗口由既有合法恢复 API 先清空旧队列再开新批。结果分别记录真实墙钟和合成时间，不能声称重现真实 540 秒超时或真实网关截断。所有场景断言零付费、零模型及历史记录不变，合成供应商没有真实网络后备。
+
+标题重发现回归覆盖真实本地 SQLite 索引查询：较新标题入库、较旧捕获延迟恢复、同一记录再次被发现时，联合检查归一化标题、索引定位、身份数量、观测及处理时间顺序；覆盖 DOI 和唯一无 DOI URL。

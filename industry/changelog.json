@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-11-14T12:40:34Z",
+  "latestVersion": "2026-11-14T13:36:39Z",
   "releases": [
+    {
+      "id": "hkis-title-rediscovery-regression-20261114",
+      "at": "2026-11-14T13:36:39Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "补充旧片恢复后的标题索引回归",
+      "body": [
+        "验证新标题入库、旧片恢复和再次发现的完整顺序，同时检查标题索引、去重身份与观测时间不倒退。",
+        "覆盖 DOI 与唯一无 DOI 地址；本地合成测试不代表生产记录已修复。"
+      ],
+      "sources": [
+        {
+          "label": "采集恢复验收",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/hkis-reconciliation-design.md"
+        }
+      ]
+    },
     {
       "id": "hkis-bounded-local-pending-20261114",
       "at": "2026-11-14T12:40:34Z",
