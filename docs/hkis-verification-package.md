@@ -59,3 +59,11 @@
 历史 goal-bootstrap 测试随包携带五个经旧 Git blob ID 校验的精确源码文件。源码归档缺少旧 Git 历史时，可创建干净合成 checkout 测历史行为；不替换成当前代码，不跳过兼容性测试。SQLite 时钟与测试中的 mock Date 显式对齐，避免测试结果随真实执行时刻变化。
 
 本地待处理回归纳入 `boundaries`：确认进展超过四片、无进展、丢失确认、预算截止、模拟 D1 延迟及新旧批次同篇论文的全局屏障；`receipts` 覆盖跨窗口持久片段恢复与新批入场。以上均为合成测试，不代表生产批次已恢复。
+
+### 多片本地收尾隔离验收
+
+`node sites/test-isolated-pending-worker.mjs` 在本机 Miniflare 运行 `pending_many`、`pending_finish_lost`、`pending_budget`、`pending_queue_only`。真实采集请求完成后，双重隔离 guard 下使用固定来源和真实 `captureIngestion` 持久化 8 个单条片段；每个已提交片段注入 4.5 秒合成延迟，不能据此推断生产 D1 各阶段耗时。最后一片含较旧观测，分别验证已存论文和仅补全队列的新字段不倒退。
+
+云端复用 `NODE_USE_ENV_PROXY=1 node sites/verify-isolated-pending.mjs`。安全 stdin 严格接受 `{site,expectedSource,expectedBootstrapSource,confirmedSnapshotGeneration,scenario}`；`site` 必须为官方 `get_site` 的固定隔离项目 owner-private 对象。`expectedBootstrapSource` 仅绑定干净的本地执行源码 HEAD；此探针是本地候选 runner 调真实 Worker/D1，不代表稳定 bootstrap 全链路验收。需另跑稳定 bootstrap 配对矩阵。每次开始前确认上次 snapshot generation；未知仅回读，不自行重置。
+
+预算耗尽场景仅将客户端合成已耗时间推进到 526 秒，随后停止；下一固定合成窗口由既有合法恢复 API 先清空旧队列再开新批。结果分别记录真实墙钟和合成时间，不能声称重现真实 540 秒超时或真实网关截断。所有场景断言零付费、零模型及历史记录不变，合成供应商没有真实网络后备。

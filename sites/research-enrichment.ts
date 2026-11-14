@@ -67,7 +67,7 @@ export async function planMetadataQueue(db:any,incoming:Paper,scopePending=false
   if(!incoming.doi&&observedStored?.doi){const matches=await db.prepare('SELECT count(DISTINCT doi) n FROM research_papers WHERE source_id=? AND url=? AND doi IS NOT NULL').bind(incoming.sourceId,incoming.url).first();if(Number(matches?.n)>1)observedStored=null;}
   // Only the fenced ingestion row supplies a capture time; updated_at is processing time.
   const captureAt=run?.captureObservedAt,priorCapture=parse(previous?.provider_json)?._capture;
-  const validCapture=(v:any)=>typeof v==='string'&&Number.isFinite(Date.parse(v))&&new Date(v).toISOString()===v;
+  const validCapture=(v:any):v is string=>typeof v==='string'&&Number.isFinite(Date.parse(v))&&new Date(v).toISOString()===v;
   let queueCapture=priorCapture?.contract==='fenced-capture-time-v1'&&validCapture(priorCapture.observedAt)?priorCapture.observedAt:null;
   const queueNewer=!!(priorPaper&&validCapture(captureAt)&&queueCapture&&captureAt<queueCapture);
   const storedNewer=!!(observedStored?.last_seen&&validCapture(captureAt)&&captureAt<observedStored.last_seen);
