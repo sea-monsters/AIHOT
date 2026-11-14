@@ -51,7 +51,7 @@ async function localSourceEvidence(db:any,p:any){
 }
 
 /** Every candidate is retained. Read/transport limits never become deletion limits. */
-export async function planMetadataQueue(db:any,incoming:Paper,scopePending=false,run?:{runId:string;batchKey:string|null;firstSeen?:string;cohortKey?:string|null},now=stamp()){
+export async function planMetadataQueue(db:any,incoming:Paper,scopePending=false,run?:{runId:string;batchKey:string|null;firstSeen?:string;captureObservedAt?:string;cohortKey?:string|null},now=stamp()){
   const lookupKey=normalizeDoi(incoming.doi)||'id:'+await digest({source:incoming.sourceId,url:incoming.url,title:normalizedTitle(incoming.title)});
   let previous=await db.prepare('SELECT * FROM research_enrichment_queue WHERE doi=? AND source_id=?').bind(lookupKey,incoming.sourceId).first();
   // A verified DOI can rename the queue before the paper is saved. Retain
@@ -61,30 +61,38 @@ export async function planMetadataQueue(db:any,incoming:Paper,scopePending=false
    const aliases=typeof db.findMetadataAliases==='function'?await db.findMetadataAliases(incoming.sourceId,lookupKey):(await db.prepare("SELECT * FROM research_enrichment_queue WHERE source_id=? AND (json_extract(provider_json,'$.anysearch.originKey')=? OR json_extract(provider_json,'$.aminer.originKey')=?) LIMIT 2").bind(incoming.sourceId,lookupKey,lookupKey).all()).results;
    if(aliases.length>1)throw new AIError('record_conflict',409,'发现标识对应多个补全记录，保留已有证据');previous=aliases[0]||null;
   }
+  if(!incoming.doi&&incoming.url&&run?.captureObservedAt){const matches=typeof db.findMetadataUrlMatches==='function'?await db.findMetadataUrlMatches(incoming.sourceId,incoming.url):(await db.prepare("SELECT * FROM research_enrichment_queue WHERE source_id=? AND doi LIKE 'id:%' AND json_extract(paper_json,'$.doi') IS NULL AND json_extract(paper_json,'$.url')=? LIMIT 2").bind(incoming.sourceId,incoming.url).all()).results;if(matches.length>1||previous&&matches[0]&&previous.doi!==matches[0].doi)throw new AIError('record_conflict',409,'稳定地址对应多个补全记录，停止本地恢复');previous=previous||matches[0]||null;}
   let priorPaper=previous?parse(previous.paper_json,null):null;
   let observedStored=incoming.doi?await db.prepare('SELECT * FROM research_papers WHERE doi=?').bind(incoming.doi).first():run?.firstSeen?await db.prepare('SELECT * FROM research_papers WHERE doi=? OR (url=? AND source_id=? AND (doi IS NULL OR ? IS NULL OR doi=?)) ORDER BY CASE WHEN doi=? THEN 0 ELSE 1 END,id LIMIT 1').bind(null,incoming.url,incoming.sourceId,null,null,null).first():null;
   if(!incoming.doi&&observedStored?.doi){const matches=await db.prepare('SELECT count(DISTINCT doi) n FROM research_papers WHERE source_id=? AND url=? AND doi IS NOT NULL').bind(incoming.sourceId,incoming.url).first();if(Number(matches?.n)>1)observedStored=null;}
-  // Compare capture time to the committed observation, not queue processing time.
-  const olderCapture=!!(observedStored?.last_seen&&run?.firstSeen&&run.firstSeen<observedStored.last_seen);
-  const candidate=olderCapture?rowPaper(observedStored):incoming;
+  // Only the fenced ingestion row supplies a capture time; updated_at is processing time.
+  const captureAt=run?.captureObservedAt,priorCapture=parse(previous?.provider_json)?._capture;
+  const validCapture=(v:any)=>typeof v==='string'&&Number.isFinite(Date.parse(v))&&new Date(v).toISOString()===v;
+  let queueCapture=priorCapture?.contract==='fenced-capture-time-v1'&&validCapture(priorCapture.observedAt)?priorCapture.observedAt:null;
+  const queueNewer=!!(priorPaper&&validCapture(captureAt)&&queueCapture&&captureAt<queueCapture);
+  const storedNewer=!!(observedStored?.last_seen&&validCapture(captureAt)&&captureAt<observedStored.last_seen);
+  const aliases=parse(previous?.provider_json),legacyAlias=!!(priorPaper?.doi&&!incoming.doi&&(aliases.anysearch?.originKey===lookupKey||aliases.aminer?.originKey===lookupKey)&&await digest(metadataFields({...priorPaper,doi:null}))===await digest(metadataFields(incoming)));
+  if(priorPaper&&!observedStored&&validCapture(captureAt)&&!queueCapture&&!legacyAlias&&await digest(metadataFields(priorPaper))!==await digest(metadataFields(incoming)))throw new AIError('record_conflict',409,'旧补全队列缺少采集时间证明，停止自动覆盖');
+  const olderCapture=queueNewer||storedNewer||legacyAlias;
+  let candidate=legacyAlias?priorPaper:queueNewer&&(!storedNewer||queueCapture>=observedStored.last_seen)?priorPaper:storedNewer?rowPaper(observedStored):incoming;
   let p=priorPaper?mergeCandidate(candidate,priorPaper):candidate;
-  let key=normalizeDoi(p.doi)||'id:'+await digest({source:p.sourceId,url:p.url,title:normalizedTitle(p.title)});
-  if(olderCapture&&key!==lookupKey){const target=await db.prepare('SELECT * FROM research_enrichment_queue WHERE doi=? AND source_id=?').bind(key,p.sourceId).first();if(target&&previous&&target.doi!==previous.doi)throw new AIError('record_conflict',409,'旧片段对应多个补全记录，停止本地恢复');if(target&&!previous){previous=target;priorPaper=parse(previous.paper_json,null);p=priorPaper?mergeCandidate(candidate,priorPaper):candidate;key=normalizeDoi(p.doi)||'id:'+await digest({source:p.sourceId,url:p.url,title:normalizedTitle(p.title)});}}
+  let key=!p.doi&&previous?.doi?.startsWith('id:')&&priorPaper?.url===p.url?previous.doi:normalizeDoi(p.doi)||'id:'+await digest({source:p.sourceId,url:p.url,title:normalizedTitle(p.title)});
+  if(olderCapture&&key!==lookupKey){const target=await db.prepare('SELECT * FROM research_enrichment_queue WHERE doi=? AND source_id=?').bind(key,p.sourceId).first();if(target&&previous&&target.doi!==previous.doi)throw new AIError('record_conflict',409,'旧片段对应多个补全记录，停止本地恢复');if(target&&!previous){previous=target;priorPaper=parse(previous.paper_json,null);const evidence=parse(previous.provider_json)?._capture;queueCapture=evidence?.contract==='fenced-capture-time-v1'&&validCapture(evidence.observedAt)?evidence.observedAt:null;if(priorPaper&&queueCapture&&validCapture(captureAt)&&captureAt<queueCapture)candidate=priorPaper;p=priorPaper?mergeCandidate(candidate,priorPaper):candidate;key=normalizeDoi(p.doi)||'id:'+await digest({source:p.sourceId,url:p.url,title:normalizedTitle(p.title)});}}
   const unchanged=!!priorPaper&&await digest(metadataFields(priorPaper))===await digest(metadataFields(p));
   const hash=await digest(metadataFields(p));
   const stored=p.doi?(p.doi===incoming.doi?observedStored:await db.prepare('SELECT * FROM research_papers WHERE doi=?').bind(p.doi).first()):null;
   const member=stored?await db.prepare('SELECT run_id,batch_key,daily_cohort_key,first_seen FROM research_batch_members WHERE paper_id=?').bind(stored.id).first():null;
   const firstSeen=member?.first_seen||stored?.first_seen||run?.firstSeen||now,originBatchKey=member?.batch_key??run?.batchKey??null,manual=isManualBatchKey(originBatchKey),cohort=manual?null:(member?.daily_cohort_key??run?.cohortKey??dailyCohortKey(firstSeen));
   const freshCrossref=p.discovery==='crossref'||stored?.metadata_checked_at&&Date.parse(stored.metadata_checked_at)>Date.now()-6*3600000;
-  const priorProviders=parse(previous?.provider_json),providers={...(freshCrossref?{crossref:{status:'done',at:now,reason:'fresh_discovery'}}:{}),...(priorProviders.anysearch?.attempted?{anysearch:priorProviders.anysearch}:{}),...(priorProviders.aminer?.attempted?{aminer:priorProviders.aminer}:{})};
+  const priorProviders=parse(previous?.provider_json),latestCapture=(!previous||queueCapture)&&validCapture(captureAt)&&(!queueCapture||captureAt>queueCapture)?captureAt:queueCapture,providers={...(freshCrossref?{crossref:{status:'done',at:now,reason:'fresh_discovery'}}:{}),...(priorProviders.anysearch?.attempted?{anysearch:priorProviders.anysearch}:{}),...(priorProviders.aminer?.attempted?{aminer:priorProviders.aminer}:{}),...(latestCapture?{_capture:{contract:'fenced-capture-time-v1',observedAt:latestCapture}}:{})};
   const statement=db.prepare(`INSERT INTO research_enrichment_queue(doi,source_id,paper_json,input_hash,scope_pending,status,next_attempt_at,updated_at,first_seen,origin_run_id,origin_batch_key,daily_cohort_key,provider_json)
    VALUES(?,?,?,?,?,CASE WHEN (SELECT count(*) FROM research_enrichment_queue WHERE status IN ('pending','deferred','blocked') AND NOT(origin_run_id IS NULL AND daily_cohort_key IS NULL))<2000 THEN 'pending' ELSE 'overflow' END,?,?,?,?,?,?,?) ON CONFLICT(doi,source_id) DO UPDATE SET
    paper_json=excluded.paper_json,scope_pending=min(research_enrichment_queue.scope_pending,excluded.scope_pending),
    status=CASE WHEN ? THEN research_enrichment_queue.status WHEN research_enrichment_queue.status IN ('pending','deferred','blocked') THEN 'pending' ELSE excluded.status END,
    next_attempt_at=CASE WHEN ? THEN research_enrichment_queue.next_attempt_at ELSE excluded.next_attempt_at END,
-   provider_json=CASE WHEN ? THEN research_enrichment_queue.provider_json ELSE excluded.provider_json END,
+   provider_json=CASE WHEN ? THEN CASE WHEN json_type(excluded.provider_json,'$._capture')='object' THEN json_set(research_enrichment_queue.provider_json,'$._capture',json_extract(excluded.provider_json,'$._capture')) ELSE research_enrichment_queue.provider_json END ELSE excluded.provider_json END,
   updated_at=excluded.updated_at,input_hash=excluded.input_hash`).bind(key,p.sourceId,JSON.stringify(p),hash,scopePending?1:0,now,now,firstSeen,member?.run_id||run?.runId||null,originBatchKey,cohort,JSON.stringify(providers),unchanged?1:0,unchanged?1:0,unchanged?1:0);
- return {statement,key,paper:p,previous,unchanged,noop:unchanged&&previous.input_hash===hash&&previous.scope_pending<=(scopePending?1:0)};
+ return {statement,key,paper:p,previous,unchanged,noop:unchanged&&previous.input_hash===hash&&previous.scope_pending<=(scopePending?1:0)&&latestCapture===queueCapture};
 }
 export async function queueMetadata(db:any,papers:Paper[],scopePending=false,run?:{runId:string;batchKey:string|null;firstSeen?:string;cohortKey?:string|null}){
  const now=stamp();for(const incoming of papers)await (await planMetadataQueue(db,incoming,scopePending,run,now)).statement.run();return 0;
