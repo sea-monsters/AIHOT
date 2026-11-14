@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-11-14T13:36:39Z",
+  "latestVersion": "2026-11-14T14:11:29Z",
   "releases": [
+    {
+      "id": "hkis-pending-confirmed-outcome-20261114",
+      "at": "2026-11-14T14:11:29Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "收紧本地收尾验收判据",
+      "body": [
+        "同时核对客户端采集结论、精确批次和数据库终态；响应未确认不能仅凭已落库判定通过。",
+        "预算跨窗恢复保留下一轮结论，反例测试纳入可复用验收包；此维护记录不代表生产发布。"
+      ],
+      "sources": [
+        {
+          "label": "分层验收包",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/hkis-verification-package.md"
+        }
+      ]
+    },
     {
       "id": "hkis-title-rediscovery-regression-20261114",
       "at": "2026-11-14T13:36:39Z",

@@ -6,7 +6,7 @@ const suites={
   compatibility:['sites/production-baseline.test.mjs','sites/migration-history-preflight.test.mjs'],
   identity:['sites/research-scoring-recovery.test.ts','sites/research-ingestion-alias.test.ts','sites/audit-index-20261024.test.ts'],
   receipts:['sites/research-operation-intent.test.ts','sites/research-operation-checkpoints.test.ts','sites/research-readback.test.ts','sites/research-orphan-reconcile.test.ts'],
-  boundaries:['sites/isolated-pending-contract.test.mjs','sites/research-slot-local-progress.test.ts','sites/research-local-finalize.test.ts','sites/research-lease-scope.test.ts','sites/isolated-legacy-probe-contract.test.mjs','sites/research-provider-diagnostics.test.ts','sites/research-cooldown-resume.test.ts','sites/research-runtime.test.ts','sites/research-fence-invariants.test.ts','sites/verification-package.test.mjs','sites/isolated-slow-probe.test.mjs'],
+  boundaries:['sites/isolated-bootstrap-diagnostics.test.mjs','sites/isolated-pending-outcome.test.mjs','sites/isolated-pending-contract.test.mjs','sites/research-slot-local-progress.test.ts','sites/research-local-finalize.test.ts','sites/research-lease-scope.test.ts','sites/isolated-legacy-probe-contract.test.mjs','sites/research-provider-diagnostics.test.ts','sites/research-cooldown-resume.test.ts','sites/research-runtime.test.ts','sites/research-fence-invariants.test.ts','sites/verification-package.test.mjs','sites/isolated-slow-probe.test.mjs'],
   worker:['sites/test-isolated-execution-worker.mjs','sites/test-isolated-pending-worker.mjs'],
 };
 const argv=process.argv.slice(2);if(argv.includes('--list')){console.log(Object.keys(suites).join('\n'));process.exit(0)}
