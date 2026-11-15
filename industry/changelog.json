@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-11-14T14:11:29Z",
+  "latestVersion": "2026-11-15T00:24:08Z",
   "releases": [
+    {
+      "id": "hkis-legacy-recovery-evidence-20261115",
+      "at": "2026-11-15T00:24:08Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "保全旧队列冲突并对账恢复阶段",
+      "body": [
+        "旧队列缺少采集时序时不覆盖原字段，将未采用的捕获证据原子保全；身份歧义与真正提交未知仍停止。",
+        "只有持久日志证明尚未进入提交阶段，且租约、锁、并发与原预算均允许时才解除旧恢复阻塞；原未知回执不改写为成功。",
+        "新增跨窗、并发、证据清理和提交回执丢失的分层验收；维护记录不代表生产已部署或今早待处理片段已恢复。"
+      ],
+      "sources": [
+        {
+          "label": "本地恢复与保全设计",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/hkis-reconciliation-design.md"
+        }
+      ]
+    },
     {
       "id": "hkis-pending-confirmed-outcome-20261114",
       "at": "2026-11-14T14:11:29Z",

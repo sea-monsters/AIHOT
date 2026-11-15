@@ -67,3 +67,13 @@ when validating the new candidate revision.
 较早捕获迟于同一论文的较新已提交观测恢复时，保守保留较新论文字段，避免较旧字段倒灌到补全队列；已知身份冲突仍按既有规则阻断。该策略不会为未确认的旧采集补造外部结果。
 
 仅存补全队列而没有论文行时，队列保留从已验证的持久捕获行取得的时间，随队列变更在栅栏事务中原子写入，不使用处理时间 `updated_at` 推测新旧。无 DOI 只按来源和稳定 URL 唯一匹配；多个匹配或旧队列缺乏可比较证据且内容不同会阻断并等待核对，保留既有付费回执及片段。
+
+## 2026-11-15：旧队列兼容与恢复规划边界
+
+已复现代码缺陷：无采集时序证明的旧队列遇同一唯一身份的新字段，旧实现将确定性规划冲突记成unknown并阻塞所有后续恢复。这与今早record_conflict相符，但原生产journal的owner接口未授权当前service读取，不能仅凭泛错误码确定实际分支。
+
+候选只对闭合unknown actor最后持久阶段为preload、准确run/operation绑定、无任何未决commit或其他阶段、租约过期且无活动锁的情形作原子CAS退役；原root/phase unknown保持不变。对账共用原6秒/整轮预算，每次SQL边界检查取消/截止，数据库执行时再次守截止。真实commit ACK未知、缺journal、并发变化与活动锁均不释放。
+
+唯一身份的legacy字段冲突不覆盖queue/paper，不补造_capture；在同一fenced/CAS事务将完整capture及旧queue证据和未采用决策保存在独立耐久记录后才结束该work。归档key按work.id幂等，异值拒绝；后续done清理不删归档，大小/语句预算继续限制。多DOI、多个稳定URL/别名身份仍拒绝。pending诊断单独展示retainedEvidence的archives、conflictingEntries、capturedRecords，含义是保全待审，不是新字段已应用。不得丢失原始证据或以保全数量冒充论文数量。
+
+验收包含原f64独立故障刻画与修复候选分离、旧字段/paid tombstone保留、归档失败回滚、真实提交ACK未知、实际清理后证据存续、CAS并发重规划及下一窗口新批入场。隔离历史preload为显式合成历史seed，不声称在云端再次执行原f64。生产部署与主线推送另行验证，不手动补跑。

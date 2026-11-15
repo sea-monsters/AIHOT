@@ -39,12 +39,13 @@ export function decodeIsolatedBootstrap(stdout,stderr,exitCode,token){
 }
 /** Execute the exact clean checkout's full stable bootstrap. Credential input
  * is stdin-only and never part of argv, env, output or an artifact. */
-export async function runPinnedIsolatedBootstrap({origin,token,expectedSource,expectedBootstrapSource=expectedSource,startedAt}){
+export async function runPinnedIsolatedBootstrap({origin,token,expectedSource,expectedBootstrapSource=expectedSource,startedAt,slot=20}){
+ if(![8,20].includes(slot))throw Error('Invalid isolated bootstrap slot');
  const source=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),dirty=execFileSync('git',['status','--porcelain'],{encoding:'utf8'}).trim();
  if(dirty||source!==expectedBootstrapSource)throw Error('Full bootstrap requires the exact clean candidate checkout');
  const entry=pathToFileURL(resolve('sites/run-stable-research-slot.mjs')).href,clock=Date.parse(startedAt);
  const script=`const start=performance.now();Date.now=()=>${clock}+Math.floor(performance.now()-start);const {privateStableSlotMain}=await import(${JSON.stringify(entry)});await privateStableSlotMain().catch(()=>{process.exitCode=2});`;
- const input={baseUrl:origin,allowedOrigins:[origin],token,automationStartedAt:startedAt,slot:20,expectedBootstrapSource:source,budgetMs:540000,collectionCalls:60};
+ const input={baseUrl:origin,allowedOrigins:[origin],token,automationStartedAt:startedAt,slot,expectedBootstrapSource:source,budgetMs:540000,collectionCalls:60};
  const result=await new Promise((resolveResult,reject)=>{
   const child=spawn(process.execPath,['--input-type=module','-e',script],{stdio:['pipe','pipe','pipe']});let stdout='',stderr='';
   const timer=setTimeout(()=>{child.kill('SIGTERM');reject(isolatedBootstrapProcessFailure('timeout',stdout,stderr))},550000);

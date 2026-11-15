@@ -80,15 +80,32 @@ export async function drainIngestion(db:any,runId:string,trace:OperationTrace,de
    await trace.begin(work.channel+'_preload',work.channel==='rss'?'publisher_rss':'crossref',work.records,0,work.channel==='rss'?'rss_persist':'crossref_persist');
    const entries=parse(work.payload_json),cache=await preload(db,entries),root=work.ordinal===0||work.channel==='rss'?work:await db.prepare('SELECT * FROM research_ingestion_work WHERE group_id=? AND ordinal=0').bind(work.group_id).first(),checkpoint=parse(root.checkpoint_json);
    const last=(await db.prepare("SELECT count(*) n FROM research_ingestion_work WHERE group_id=? AND status='pending' AND id<>?").bind(work.group_id,work.id).first()).n===0;
-   const expected:any={papers:[],queues:[],members:[],records:[],settings:[],work:[expectation(work,{id:work.id})]},writes:any[]=[],paperTouch:string[]=[],recordTouch:string[]=[];let a=0,u=0,ambiguous=0;
+   const expected:any={papers:[],queues:[],members:[],records:[],settings:[],work:[expectation(work,{id:work.id})]},writes:any[]=[],paperTouch:string[]=[],recordTouch:string[]=[],retained:any[]=[];let a=0,u=0,ambiguous=0;
    for(const entry of collapseEntries(cache.papers,entries)){const p=entry.paper,origin={runId:work.origin_run_id,batchKey:work.origin_batch_key,deferScoring:true,firstSeen:work.observed_at,captureObservedAt:work.observed_at,cohortKey:work.daily_cohort_key};
     const plan=entry.store?await planPaperWrite(cache.cached,p,work.observed_at,origin):null,queued=await planMetadataQueue(cache.cached,plan&&!plan.skipped?plan.paper:p,entry.scope,origin);
-    if(plan?.skipped==='identity_ambiguous')ambiguous++;const prev=queued.previous;expected.queues.push(expectation(prev,{doi:queued.key,source_id:p.sourceId}));if(!queued.noop)writes.push(queued.statement);
+    if(plan?.skipped==='identity_ambiguous')ambiguous++;const prev=queued.previous;expected.queues.push(expectation(prev,{doi:queued.key,source_id:p.sourceId}));
+    if(queued.retainedConflict){
+     if(plan?.skipped==='identity_ambiguous')throw Object.assign(Error('retention requires a unique paper identity'),{code:'record_conflict'});
+     // Retaining a queue must never create a contradictory paper from this entry.
+     // The raw, pre-collapse capture is archived below, not just this projection.
+     retained.push({...queued.retainedConflict,sourceId:p.sourceId,queue:prev});continue;
+    }
+    if(!queued.noop)writes.push(queued.statement);
     if(plan&&!plan.skipped){const row=plan.row;expected.papers.push(expectation(row,{id:plan.id}));expected.members.push(expectation(cache.memberMap.get(plan.id),{paper_id:plan.id}));const record=cache.recordMap.get(plan.recordId);expected.records.push(expectation(record,{id:plan.recordId}));
      const unchanged=row&&!plan.changed&&row.content_hash===plan.contentHash&&row.provenance_json===JSON.stringify(plan.paper.provenance);
      if(unchanged){paperTouch.push(plan.id);if(record?.fields_json===plan.recordFields)recordTouch.push(plan.recordId);else writes.push(plan.writes[1]);}
      else{writes.push(...plan.writes);a+=row?0:1;u+=plan.changed?1:0;}
     }
+   }
+   if(retained.length){
+    const archiveKey='ingestion-retained:v1:'+work.id;
+    const capture={id:work.id,group_id:work.group_id,ordinal:work.ordinal,source_id:work.source_id,channel:work.channel,origin_run_id:work.origin_run_id,origin_batch_key:work.origin_batch_key,daily_cohort_key:work.daily_cohort_key,observed_at:work.observed_at,payload_json:work.payload_json,checkpoint_json:work.checkpoint_json,records:work.records};
+    const value=JSON.stringify({contract:'legacy-queue-retained-v1',disposition:'evidence_retained_fields_not_applied',capture,captureHash:await captureFingerprint(work),decisions:retained});
+    if(bytes(value)>1500000)throw Object.assign(Error('retained evidence too large'),{ingestionDeferred:'capture_too_large'});
+    const archived=await db.prepare('SELECT * FROM research_settings WHERE key=?').bind(archiveKey).first();
+    if(archived&&archived.value!==value)throw Object.assign(Error('retained evidence conflict'),{code:'record_conflict'});
+    expected.settings.push(expectation(archived,{key:archiveKey}));
+    if(!archived)writes.push(db.prepare('INSERT INTO research_settings(key,value) VALUES(?,?)').bind(archiveKey,value));
    }
    if(paperTouch.length)writes.push(db.prepare("UPDATE research_papers SET last_seen=max(last_seen,?),metadata_checked_at=CASE WHEN ?='crossref' THEN max(coalesce(metadata_checked_at,''),?) ELSE metadata_checked_at END WHERE id IN (SELECT value FROM json_each(?))").bind(work.observed_at,work.channel,work.observed_at,JSON.stringify(paperTouch)));
    if(recordTouch.length)writes.push(db.prepare('UPDATE research_records SET retrieved_at=max(retrieved_at,?) WHERE id IN (SELECT value FROM json_each(?))').bind(work.observed_at,JSON.stringify(recordTouch)));

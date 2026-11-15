@@ -75,3 +75,9 @@
 多片段与仅队列场景必须同时确认 runner 的 collection goal 为 ok/partial、批次标识与只读快照一致且批次 finished；客户端 unknown/deferred 不能因数据库已完成而判通过。预算场景须保留并验证下一原定窗口的 runner outcome。`isolated-pending-outcome.test.mjs` 是 boundaries 的必跑反例测试。云端未确认结果保留为失败证据，先只读对账，不能以换 generation 重试掩盖。
 
 隔离完整 bootstrap 保留末 8 条固定字段诊断及进程结果，用于区分客户端未确认与服务端已完成；不保存响应正文、凭证、请求头或原始异常。服务端 HTTP 成功不等于客户端确认。
+
+### 旧队列恢复补充矩阵
+
+receipts增加research-recovery-preload，boundaries增加research-legacy-queue-conflict及isolated-recovery-contract，worker增加test-isolated-recovery-worker。四场为recovery_legacy_preload、recovery_commit_ack_unknown、recovery_active_lock、recovery_missing_journal：真实candidate runner/Worker执行、合成历史seed明确标注、旧root未知不改、保全hash与原捕获及queue绑定；成功须客户端collection、批次及存储一致，拒绝须无新采集、无证据删除。任何云验收都绑定冻结源码SHA，不以dirty本机fixture冒充生产发布。
+
+本轮隔离恢复矩阵使用 34 条、20+14 两个工作片（分别属于两个 group），覆盖旧 preload 对账、真实提交后的 ACK 丢失、活动锁及缺失日志；不将该矩阵冒称单 group 多 ordinal checkpoint 验收。云端入口为固定干净源码的完整稳定 bootstrap，08 时段，成功恢复边界与最终批次/客户端联合断言；全部供应商合成、模型及费用为零。

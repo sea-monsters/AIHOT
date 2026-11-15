@@ -64,7 +64,8 @@ export async function planMetadataQueue(db:any,incoming:Paper,scopePending=false
   if(!incoming.doi&&incoming.url&&run?.captureObservedAt){const matches=typeof db.findMetadataUrlMatches==='function'?await db.findMetadataUrlMatches(incoming.sourceId,incoming.url):(await db.prepare("SELECT * FROM research_enrichment_queue WHERE source_id=? AND doi LIKE 'id:%' AND json_extract(paper_json,'$.doi') IS NULL AND json_extract(paper_json,'$.url')=? LIMIT 2").bind(incoming.sourceId,incoming.url).all()).results;if(matches.length>1||previous&&matches[0]&&previous.doi!==matches[0].doi)throw new AIError('record_conflict',409,'稳定地址对应多个补全记录，停止本地恢复');previous=previous||matches[0]||null;}
   let priorPaper=previous?parse(previous.paper_json,null):null;
   let observedStored=incoming.doi?await db.prepare('SELECT * FROM research_papers WHERE doi=?').bind(incoming.doi).first():run?.firstSeen?await db.prepare('SELECT * FROM research_papers WHERE doi=? OR (url=? AND source_id=? AND (doi IS NULL OR ? IS NULL OR doi=?)) ORDER BY CASE WHEN doi=? THEN 0 ELSE 1 END,id LIMIT 1').bind(null,incoming.url,incoming.sourceId,null,null,null).first():null;
-  if(!incoming.doi&&observedStored?.doi){const matches=await db.prepare('SELECT count(DISTINCT doi) n FROM research_papers WHERE source_id=? AND url=? AND doi IS NOT NULL').bind(incoming.sourceId,incoming.url).first();if(Number(matches?.n)>1)observedStored=null;}
+  let storedIdentityAmbiguous=false;
+  if(!incoming.doi&&observedStored?.doi){const matches=await db.prepare('SELECT count(DISTINCT doi) n FROM research_papers WHERE source_id=? AND url=? AND doi IS NOT NULL').bind(incoming.sourceId,incoming.url).first();if(Number(matches?.n)>1){observedStored=null;storedIdentityAmbiguous=true;}}
   // Only the fenced ingestion row supplies a capture time; updated_at is processing time.
   const captureAt=run?.captureObservedAt,priorCapture=parse(previous?.provider_json)?._capture;
   const validCapture=(v:any):v is string=>typeof v==='string'&&Number.isFinite(Date.parse(v))&&new Date(v).toISOString()===v;
@@ -72,7 +73,15 @@ export async function planMetadataQueue(db:any,incoming:Paper,scopePending=false
   const queueNewer=!!(priorPaper&&validCapture(captureAt)&&queueCapture&&captureAt<queueCapture);
   const storedNewer=!!(observedStored?.last_seen&&validCapture(captureAt)&&captureAt<observedStored.last_seen);
   const aliases=parse(previous?.provider_json),legacyAlias=!!(priorPaper?.doi&&!incoming.doi&&(aliases.anysearch?.originKey===lookupKey||aliases.aminer?.originKey===lookupKey)&&await digest(metadataFields({...priorPaper,doi:null}))===await digest(metadataFields(incoming)));
-  if(priorPaper&&!observedStored&&validCapture(captureAt)&&!queueCapture&&!legacyAlias&&await digest(metadataFields(priorPaper))!==await digest(metadataFields(incoming)))throw new AIError('record_conflict',409,'旧补全队列缺少采集时间证明，停止自动覆盖');
+  if(priorPaper&&!observedStored&&validCapture(captureAt)&&!queueCapture&&!legacyAlias&&await digest(metadataFields(priorPaper))!==await digest(metadataFields(incoming))){
+   // Unknown ordering is not permission to overwrite either observation. Only
+   // fenced ingestion consumes this decision, archiving the complete capture
+   // atomically before completing its work. Identity ambiguity still rejects above.
+   if(storedIdentityAmbiguous||priorPaper.sourceId!==incoming.sourceId)throw new AIError('record_conflict',409,'补全记录归属不唯一，保留原始证据');
+   const beforeDoi=normalizeDoi(priorPaper.doi),afterDoi=normalizeDoi(incoming.doi);
+   if(beforeDoi&&afterDoi&&beforeDoi!==afterDoi)throw new AIError('record_conflict',409,'补全记录标识冲突，保留原始证据');
+   return {statement:db.prepare('SELECT 1'),key:previous.doi,paper:priorPaper,previous,unchanged:true,noop:true,retainedConflict:{reason:'legacy_queue_order_unknown',lookupKey,queueKey:previous.doi}};
+  }
   const olderCapture=queueNewer||storedNewer||legacyAlias;
   let candidate=legacyAlias?priorPaper:queueNewer&&(!storedNewer||queueCapture>=observedStored.last_seen)?priorPaper:storedNewer?rowPaper(observedStored):incoming;
   let p=priorPaper?mergeCandidate(candidate,priorPaper):candidate;
@@ -92,7 +101,7 @@ export async function planMetadataQueue(db:any,incoming:Paper,scopePending=false
    next_attempt_at=CASE WHEN ? THEN research_enrichment_queue.next_attempt_at ELSE excluded.next_attempt_at END,
    provider_json=CASE WHEN ? THEN CASE WHEN json_type(excluded.provider_json,'$._capture')='object' THEN json_set(research_enrichment_queue.provider_json,'$._capture',json_extract(excluded.provider_json,'$._capture')) ELSE research_enrichment_queue.provider_json END ELSE excluded.provider_json END,
   updated_at=excluded.updated_at,input_hash=excluded.input_hash`).bind(key,p.sourceId,JSON.stringify(p),hash,scopePending?1:0,now,now,firstSeen,member?.run_id||run?.runId||null,originBatchKey,cohort,JSON.stringify(providers),unchanged?1:0,unchanged?1:0,unchanged?1:0);
- return {statement,key,paper:p,previous,unchanged,noop:unchanged&&previous.input_hash===hash&&previous.scope_pending<=(scopePending?1:0)&&latestCapture===queueCapture};
+ return {statement,key,paper:p,previous,unchanged,retainedConflict:null,noop:unchanged&&previous.input_hash===hash&&previous.scope_pending<=(scopePending?1:0)&&latestCapture===queueCapture};
 }
 export async function queueMetadata(db:any,papers:Paper[],scopePending=false,run?:{runId:string;batchKey:string|null;firstSeen?:string;cohortKey?:string|null}){
  const now=stamp();for(const incoming of papers)await (await planMetadataQueue(db,incoming,scopePending,run,now)).statement.run();return 0;
