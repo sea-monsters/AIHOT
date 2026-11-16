@@ -1,12 +1,29 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-11-16T12:47:23Z",
+  "latestVersion": "2026-11-16T14:41:34Z",
   "releases": [
+    {
+      "id": "hkis-upstream-category-correction-20261116",
+      "at": "2026-11-16T14:41:34Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "更正上游选择性适配记录的日志分类",
+      "body": [
+        "将11月16日选择性吸收上游的原记录归入既有“上游同步”分类，并补充上游审查范围来源。",
+        "保留原记录时间、实际采用范围及其他历史条目；本次是日志分类更正，不是新增一轮上游合并。"
+      ],
+      "sources": [
+        {
+          "label": "分类更正审计",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/changelog-classification-audit.md"
+        }
+      ]
+    },
     {
       "id": "hkis-upstream-selective-20261116",
       "at": "2026-11-16T12:47:23Z",
-      "kind": "fix",
+      "kind": "upstream",
       "basis": "record",
       "title": "选择性吸收上游菜单与动画修复",
       "body": [
@@ -18,6 +35,10 @@
         {
           "label": "上游选择性核查记录",
           "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/upstream-sync.md"
+        },
+        {
+          "label": "上游已审查范围（非全部采用）",
+          "url": "https://github.com/KKKKhazix/AIHOT/compare/d4e0374d6b32ab75681f2beffb2c52b91dbd93ab...209417b0dd614460926ba7d96760794d07d83711"
         }
       ]
     },

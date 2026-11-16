@@ -1,3 +1,4 @@
+import {Window} from 'happy-dom';
 import {Miniflare,convertV4MiniflareOptions} from 'miniflare';
 import {readFile,readdir} from 'node:fs/promises';
 import {strict as assert} from 'node:assert';
@@ -12,6 +13,12 @@ const changes=await (await mf.dispatchFetch('https://local.test/api/site/changel
 assert.ok(changes.releases.length>=16);assert.equal(changes.releases.find(r=>r.at==='2026-10-01T02:27:00Z').upstream.commits.length,12);
 assert.equal(changes.releases.find(r=>r.id==='upstream-selective-reliability-2026-10-04').upstream.commits.length,11);
 const changeHtml=await (await mf.dispatchFetch('https://local.test/changelog')).text();
+const upstreamRecord=changes.releases.find(r=>r.id==='hkis-upstream-selective-20261116');assert.equal(upstreamRecord.kind,'upstream');assert.equal(upstreamRecord.at,'2026-11-16T12:47:23Z');
+const changelogDom=new Window();changelogDom.document.body.innerHTML=changeHtml;
+assert.equal(changelogDom.document.getElementById('change-'+upstreamRecord.id)?.closest('[data-changelog-category]')?.getAttribute('data-changelog-category'),'upstream');
+assert.equal(changelogDom.document.getElementById('change-hkis-coverage-planning-20261116')?.closest('[data-changelog-category]')?.getAttribute('data-changelog-category'),'fix');
+await changelogDom.happyDOM.close();
+
 assert.ok(changeHtml.includes('id="d-2026-10-01"'));assert.ok(changeHtml.includes('id="d-2026-09-30"'));assert.ok(changeHtml.includes('UTC+08'));assert.ok(changeHtml.includes('/settings#diagnostics'));assert.ok(changeHtml.includes('ed0cf9a24790602902b6350bb2d2d18a6168a4e7'));
 assert.equal((await (await mf.dispatchFetch('https://local.test/api/site/meta')).json()).changelogVersion,changes.latestVersion);
 assert.equal(networkProbes,0);console.log('CHANGELOG WORKER OK: daily SSR, historical twelve and selective eleven reviewed upstream commits, source links, unread version, no provider calls');
