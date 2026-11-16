@@ -11,9 +11,9 @@ export function assertJointEvidence(e){
 }
 export async function verifyJoint({origin,token,expectedSource,generation,fetcher=fetch}){
  const endpoint=new URL('/fixture/joint',origin),headers={authorization:`Bearer ${token}`,'content-type':'application/json'};
- const read=async()=>{const r=await fetcher(endpoint,{headers});assert.equal(r.status,200);const v=await r.json();assert.equal(v.sourceRevision,expectedSource);return v};
+ const read=async()=>{const r=await fetcher(endpoint,{headers,redirect:'error',signal:AbortSignal.timeout(90000)});assert.equal(r.status,200);const v=await r.json();assert.equal(v.sourceRevision,expectedSource);return v};
  const before=await read();assert.equal(before.state,'empty','Never reset or replay an existing generation');
- let response;try{response=await fetcher(endpoint,{method:'POST',headers,body:JSON.stringify({expectedSource,generation})})}catch{}
+ let response;try{response=await fetcher(endpoint,{method:'POST',headers,redirect:'error',signal:AbortSignal.timeout(90000),body:JSON.stringify({expectedSource,generation})})}catch{}
  // Every POST, including an unknown transport outcome, is followed only by GET.
  const value=await read();assert.equal(value.generation,generation);assert.equal(value.state,'complete',JSON.stringify(value));assert.equal(value.contract,'joint-worker-v1');assertJointEvidence(value.evidence);return {...value,httpStatus:response?.status??null};
 }

@@ -14,3 +14,13 @@ const mutations={
  unknown:e=>e.persist.runnerStatus='unknown',deferred:e=>e.persist.runnerStatus='deferred',goal:e=>e.persist.collectionGoal='unknown',batch:e=>e.persist.batchKey='wrong',paid:e=>e.paidRequests=1,clock:e=>e.syntheticClock=false,gateway:e=>e.realGatewayFaultReproduced=true
 };
 for(const [name,mutate] of Object.entries(mutations))test('reject changed evidence: '+name,()=>{const e=evidence();mutate(e);assert.throws(()=>assertJointEvidence(e))});
+
+for(const failure of ['redirect','timeout'])test(`${failure} POST stops transport and only reads back once`,async()=>{
+ const methods=[],signals=[];let reads=0;
+ const fetcher=async(_,init)=>{methods.push(init.method||'GET');assert.equal(init.redirect,'error');assert.ok(init.signal instanceof AbortSignal);assert.equal(init.signal.aborted,false);signals.push(init.signal);
+  if(init.method==='POST')throw failure==='redirect'?new TypeError('unexpected redirect'):new DOMException('deadline','TimeoutError');
+  return Response.json(reads++?{sourceRevision:revision,generation,state:'complete',contract:'joint-worker-v1',evidence:evidence()}:{sourceRevision:revision,state:'empty'});
+ };
+ const result=await verifyJoint({origin:'https://fixture.invalid',expectedSource:revision,generation,fetcher});assert.equal(result.httpStatus,null);assert.deepEqual(methods,['GET','POST','GET']);assert.equal(new Set(signals).size,3);
+});
+for(const failure of ['redirect','timeout'])test(`${failure} initial GET cannot dispatch a POST`,async()=>{let calls=0;await assert.rejects(()=>verifyJoint({origin:'https://fixture.invalid',expectedSource:revision,generation,fetcher:async(_,init)=>{calls++;assert.equal(init.redirect,'error');assert.ok(init.signal instanceof AbortSignal);assert.notEqual(init.method,'POST');throw failure==='redirect'?new TypeError('unexpected redirect'):new DOMException('deadline','TimeoutError')}}));assert.equal(calls,1)});
