@@ -17,7 +17,8 @@ export async function collectBatchSlice(db:any,batchKey:string,call:(sourceId:st
  const claimed=await db.prepare(`INSERT INTO research_settings(key,value) SELECT ?,? WHERE ${workersIdle} ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE research_settings.value<? AND ${workersIdle}`).bind(key,lease,batchKey,batchKey,new Date(now()).toISOString(),batchKey,batchKey).run();
  if(!claimed.meta?.changes)return {status:'deferred',reason:'lock_busy',stopReason:'lock_busy',batchKey,calls:0,results,collectionControl:{stop:true,reason:'lock_busy',nextAction:'readback_reconcile'}};
  let stopReason='slice_deadline',control:any=null,reconcileControl:any=null;
- const tried=new Map<string,number>();
+ const tried=new Map<string,number>(),persistProgress=new Set<string>();let persistBoundary=false;
+ const storedWork=async(ids:string[])=>(await db.prepare("SELECT id,source_id,origin_batch_key,origin_run_id,records,status,finished_at FROM research_ingestion_work WHERE origin_batch_key=? AND source_id IN (SELECT value FROM json_each(?))").bind(batchKey,JSON.stringify(ids)).all()).results;
  try{
   while(results.length<Math.min(60,options.maxCalls)){
    checkCollectionCancellation(options.signal);
@@ -25,14 +26,22 @@ export async function collectBatchSlice(db:any,batchKey:string,call:(sourceId:st
    if(control.stop){stopReason=control.reason||'sources_exhausted';break;}
    if(deadline-now()<8000){stopReason='slice_deadline';break;}
    const candidates=(control.dispatchableSources||[control.nextSourceId]).filter((id:string)=>id&&(tried.get(id)||0)<(control.pass==='head'?1:2));
-   if(!candidates.length){stopReason='no_dispatchable_source';break;}
+   if(!candidates.length){const pending=control.dispatchableSources||[];persistBoundary=control.pass==='persist'&&pending.length>0&&pending.every((id:string)=>(tried.get(id)||0)>=2&&persistProgress.has(id));stopReason=persistBoundary?'slice_call_limit':'no_dispatchable_source';break;}
    const wave=candidates.slice(0,Math.min(3,Math.max(1,options.concurrency),options.maxCalls-results.length));
+   const before=control.pass==='persist'?await storedWork(wave):null;
+   checkCollectionCancellation(options.signal);if(deadline-now()<8000){stopReason='slice_deadline';break;}
    const settled=await Promise.all(wave.map(async(id:string)=>{tried.set(id,(tried.get(id)||0)+1);try{assertRuntimeBudget(options.runtimeBudget);return await call(id,Math.max(1,Math.min(20000,deadline-now()-2000)))}catch{return {sourceId:id,status:'unknown',reason:'collection_unknown',pending:true}}}));
    results.push(...settled);
    // Settle every dispatched worker before returning; never replay ambiguity.
    const reconciliation=settled.find(r=>r.collectionControl?.nextAction==='readback_reconcile');if(reconciliation){reconcileControl=reconciliation.collectionControl;stopReason=reconcileControl.reason||'collection_unknown';break;}
    if(settled.some(r=>r.status==='unknown'||r.status==='interrupted'||r.code)){stopReason='collection_unknown';break;}
    if(settled.some(r=>r.collectionControl?.stop&&/cooldown|rate_limit|429/.test(r.collectionControl.reason||''))){stopReason='provider_cooldown';break;}
+   if(before){const after=await storedWork(wave);for(const id of wave){persistProgress.delete(id);const result=settled.find(r=>r.sourceId===id),prior=before.filter((w:any)=>w.source_id===id&&w.status==='pending'),current=after.filter((w:any)=>w.source_id===id),remaining=current.filter((w:any)=>w.status==='pending');
+    if(!result||result.error||result.code||!['persist_pending','ok','backfill_pending'].includes(result.status)||!prior.length||remaining.length>=prior.length)continue;
+    const oldIds=new Set(prior.map((w:any)=>w.id));if(remaining.some((w:any)=>!oldIds.has(w.id)))continue;
+    const unchanged=prior.every((w:any)=>{const a=current.find((a:any)=>a.id===w.id);return a&&a.records===w.records&&a.origin_run_id===w.origin_run_id&&a.origin_batch_key===w.origin_batch_key&&(a.status==='pending'||a.status==='done'&&typeof a.finished_at==='string'&&Number.isFinite(Date.parse(a.finished_at)))});
+    if(unchanged&&remaining.reduce((n:number,w:any)=>n+w.records,0)<=prior.reduce((n:number,w:any)=>n+w.records,0))persistProgress.add(id);
+   }}
   }
   if(stopReason==='slice_deadline'&&results.length>=Math.min(60,options.maxCalls))stopReason='slice_call_limit';
   control=await collectionControl(db,batchKey,new Date(now()),options.resumeAfterCooldown===true);
@@ -42,7 +51,7 @@ export async function collectBatchSlice(db:any,batchKey:string,call:(sourceId:st
   const runs=(await db.prepare('SELECT source_id,status FROM research_runs WHERE batch_key=? ORDER BY started_at,id').bind(batchKey).all()).results,last=new Map<string,string>();for(const r of runs)last.set(r.source_id,r.status);
   const budget=await db.prepare('SELECT value FROM research_settings WHERE key=?').bind('collection-budget:'+collectionCycle(new Date(started).toISOString(),batchKey)).first(),pageAttempts=Number(budget?.value||0);
   const unknown=stopReason==='collection_unknown'||results.some(r=>['unknown','interrupted'].includes(r.status));
-  return {batchKey,status:unknown?'unknown':reconcileControl?'deferred':'partial',reason:stopReason,stopReason,calls:results.length,attempted:results.length,scanned:expected.length,results,collectionControl:control,diagnostics:{elapsedMs:now()-started,remainingMs:Math.max(0,deadline-now()),pageAttempts,remainingPages:Math.max(0,RESEARCH_PAGE_BUDGET-pageAttempts),expectedSources:expected.length,attemptedSources:expected.filter(id=>last.has(id)).length,missingSources:expected.filter(id=>!last.has(id)),failedSources:expected.filter(id=>['error','unknown','interrupted'].includes(last.get(id)||'')),pendingSources:expected.filter(id=>last.has(id)&&!['ok','error','unknown','interrupted'].includes(last.get(id)||''))}};
+  return {batchKey,status:unknown?'unknown':reconcileControl?'deferred':'partial',reason:stopReason,stopReason,calls:results.length,attempted:results.length,scanned:expected.length,results,collectionControl:control,diagnostics:{...(persistBoundary&&stopReason==='slice_call_limit'?{sliceBoundary:'persist_fairness_progress'}:{}),elapsedMs:now()-started,remainingMs:Math.max(0,deadline-now()),pageAttempts,remainingPages:Math.max(0,RESEARCH_PAGE_BUDGET-pageAttempts),expectedSources:expected.length,attemptedSources:expected.filter(id=>last.has(id)).length,missingSources:expected.filter(id=>!last.has(id)),failedSources:expected.filter(id=>['error','unknown','interrupted'].includes(last.get(id)||'')),pendingSources:expected.filter(id=>last.has(id)&&!['ok','error','unknown','interrupted'].includes(last.get(id)||''))}};
  }finally{await db.prepare('DELETE FROM research_settings WHERE key=? AND value=?').bind(key,lease).run();}
 }
 export function validateCollectorOptions(body:any){

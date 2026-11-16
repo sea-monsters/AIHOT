@@ -2,16 +2,23 @@ import {monthWindow,PIPELINE_VERSION} from './research-pipeline.ts';
 // Discovery-only version: never invalidate analysis caches or change AI configuration.
 export const CROSSREF_VERSION='latest-first-v1';
 const DAY=86400000,MAX_LATEST=64,MAX_HISTORY=40,MAX_LEDGER=128;
+export const MONTH_RECONCILIATION_COOLDOWN_MS=7*DAY;
 type Window=ReturnType<typeof monthWindow>;
 export type Scan={id:string;issn?:string;lane:'latest'|'history';reason:string;pubFrom:string;pubTo:string;indexFrom:string|null;indexTo:string;cursor:string;pages:number;status:'pending'|'complete';createdAt:string};
 export type Coverage={id:string;lane:string;reason:string;pubFrom:string;pubTo:string;indexFrom:string|null;indexTo:string;pages:number;status:string;at:string};
-export type CrossrefState={version:string;headThrough:string|null;lastHeadAttemptAt?:string|null;headCheckedThrough:string|null;latestWatermark:string|null;watermarkBlocked:boolean;latest:Scan[];history:Scan[];publicationThrough:string;continuationTurn:number;lastContinuationAttemptAt:string|null;cycle:{key:string;pages:number;headId:string|null};ledger:Coverage[];expiredIncomplete:number;completed:number};
+export type CrossrefState={version:string;lastMonthReconciliationAt?:string|null;headThrough:string|null;lastHeadAttemptAt?:string|null;headCheckedThrough:string|null;latestWatermark:string|null;watermarkBlocked:boolean;latest:Scan[];history:Scan[];publicationThrough:string;continuationTurn:number;lastContinuationAttemptAt:string|null;cycle:{key:string;pages:number;headId:string|null};ledger:Coverage[];expiredIncomplete:number;completed:number};
 const iso=(time:number)=>new Date(time).toISOString();
 const validTime=(value:any)=>typeof value==='string'&&Number.isFinite(Date.parse(value));
 const validDay=(value:any)=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value+'T00:00:00Z'))&&new Date(value+'T00:00:00Z').toISOString().slice(0,10)===value;
 export function collectionCycle(at:string,batchKey:string|null){if(typeof batchKey==='string'&&batchKey.startsWith('manual/'))return batchKey;const shifted=new Date(Date.parse(at)+8*3600000);if(shifted.getUTCHours()<8)shifted.setUTCDate(shifted.getUTCDate()-1);return shifted.toISOString().slice(0,10)+'/'+(shifted.getUTCHours()>=8&&shifted.getUTCHours()<20?'08':'20');}
 function scan(lane:Scan['lane'],reason:string,pubFrom:string,pubTo:string,indexFrom:string|null,indexTo:string,at:string):Scan{return {id:crypto.randomUUID(),lane,reason,pubFrom,pubTo,indexFrom,indexTo,cursor:'*',pages:0,status:'pending',createdAt:at};}
 function record(state:CrossrefState,job:Scan,status:string,at:string,events:Coverage[]){const {cursor,createdAt,...safe}=job;const event={...safe,status,at};state.ledger.push(event);state.ledger=state.ledger.slice(-MAX_LEDGER);events.push(event);if(status==='complete')state.completed++;else if(status.includes('incomplete')){state.expiredIncomplete++;if(job.lane==='latest')state.watermarkBlocked=true;}}
+// Only scheduler-owned evidence supplies this clock. A processing timestamp
+// cannot prove when a publication-range reconciliation was planned/completed.
+function reconciliationClock(state:CrossrefState,at:string){
+ const candidates=[state.lastMonthReconciliationAt,...state.history.filter(j=>j.reason==='month_reconciliation').map(j=>j.createdAt),...state.ledger.filter(j=>j.reason==='month_reconciliation'&&j.status==='complete').map(j=>j.at)];
+ return candidates.filter((v):v is string=>typeof v==='string'&&validTime(v)&&Date.parse(v)<=Date.parse(at)).sort((a,b)=>Date.parse(b)-Date.parse(a))[0]||null;
+}
 function compactLatest(state:CrossrefState){while(state.latest[0]?.status==='complete'){const job=state.latest.shift()!;if(!state.watermarkBlocked)state.latestWatermark=job.indexTo;}}
 export function prepareCrossref(raw:any,legacy:any,legacyWindow:any,recent:Window,at:string,batchKey:string|null){
  const events:Coverage[]=[];let state:CrossrefState;
@@ -23,8 +30,9 @@ export function prepareCrossref(raw:any,legacy:any,legacyWindow:any,recent:Windo
    const job=scan('history','legacy_cursor',legacyWindow.startDate,legacyWindow.endDate,legacy.window_start,legacy.window_end,at);job.cursor=legacy.cursor;state.history.push(job);
   }else if(legacy?.cursor){const job=scan('history','legacy_incompatible',recent.startDate,recent.endDate,null,at,at);record(state,job,'discarded_incomplete',at,events);}
   // Independent current-month coverage, including pre-indexed publications and the old frozen window's tail.
-  state.history.push(scan('history','month_reconciliation',recent.startDate,recent.endDate,null,at,at));
+  state.history.push(scan('history','month_reconciliation',recent.startDate,recent.endDate,null,at,at));state.lastMonthReconciliationAt=at;
  }
+ state.lastMonthReconciliationAt=reconciliationClock(state,at);
  for(const lane of ['latest','history'] as const){const keep:Scan[]=[];for(const job of state[lane]){if(job.pubTo<recent.startDate){if(job.status!=='complete')record(state,job,'expired_incomplete',at,events);}else keep.push(job);}state[lane]=keep;}
  compactLatest(state);
  if(state.publicationThrough<recent.endDate){
@@ -38,7 +46,7 @@ export function prepareCrossref(raw:any,legacy:any,legacyWindow:any,recent:Windo
  if(state.cycle.key!==key){
   const from=iso(Math.max(Date.parse(recent.startDate+'T00:00:00Z'),Date.parse(state.headThrough||at)-DAY));
   const job=scan('latest','fresh_head',recent.startDate,recent.endDate,from,at,at);state.latest.push(job);state.headThrough=at;state.cycle={key,pages:0,headId:job.id};
-  if(!state.history.length)state.history.push(scan('history','month_reconciliation',recent.startDate,recent.endDate,null,at,at));
+  if(!state.history.length&&(!state.lastMonthReconciliationAt||Date.parse(at)-Date.parse(state.lastMonthReconciliationAt)>=MONTH_RECONCILIATION_COOLDOWN_MS)){state.history.push(scan('history','month_reconciliation',recent.startDate,recent.endDate,null,at,at));state.lastMonthReconciliationAt=at;}
  }
  for(const [lane,limit] of [['latest',MAX_LATEST],['history',MAX_HISTORY]] as const)while(state[lane].length>limit){const job=state[lane].shift()!;if(job.status!=='complete')record(state,job,'capacity_incomplete',at,events);}
  return {state,events};
@@ -58,7 +66,7 @@ export function commitCrossrefPage(state:CrossrefState,job:Scan,itemCount:number
  if(itemCount>=100&&(typeof nextCursor!=='string'||!nextCursor||nextCursor===job.cursor))throw Error('Crossref cursor did not advance; window retained');
  const wasHead=job.id===state.cycle.headId&&job.pages===0;job.pages++;
  if(wasHead)state.headCheckedThrough=job.indexTo;else state.lastContinuationAttemptAt=at;
- if(itemCount<100){job.status='complete';record(state,job,'complete',at,events);if(job.lane==='history')state.history=state.history.filter(j=>j.id!==job.id);compactLatest(state);}
+ if(itemCount<100){if(job.reason==='month_reconciliation')state.lastMonthReconciliationAt=iso(Math.max(Date.parse(state.lastMonthReconciliationAt||at),Date.parse(at)));job.status='complete';record(state,job,'complete',at,events);if(job.lane==='history')state.history=state.history.filter(j=>j.id!==job.id);compactLatest(state);}
  else{job.cursor=nextCursor;if(job.lane==='history')state.history=[...state.history.filter(j=>j.id!==job.id),job];}
 }
-export function crossrefSummary(state:CrossrefState){return {version:state.version,lastHeadAttemptAt:state.lastHeadAttemptAt===undefined?(state.cycle.pages?state.headThrough:null):state.lastHeadAttemptAt,headCheckedThrough:state.headCheckedThrough,headPlannedThrough:state.headThrough,latestWatermark:state.latestWatermark,watermarkBlocked:state.watermarkBlocked,latestPending:state.latest.filter(j=>j.status==='pending').length,historyPending:state.history.length,expiredIncomplete:state.expiredIncomplete,completedWindows:state.completed,lastContinuationAttemptAt:state.lastContinuationAttemptAt,cycle:{...state.cycle,headId:undefined},pending:state.latest.some(j=>j.status==='pending')||state.history.length>0,coverage:state.ledger.slice(-12)};}
+export function crossrefSummary(state:CrossrefState,at=new Date().toISOString()){const lastMonthReconciliationAt=reconciliationClock(state,at);return {lastMonthReconciliationAt,nextMonthReconciliationAt:lastMonthReconciliationAt?iso(Date.parse(lastMonthReconciliationAt)+MONTH_RECONCILIATION_COOLDOWN_MS):null,monthReconciliationCooldownDays:MONTH_RECONCILIATION_COOLDOWN_MS/DAY,version:state.version,lastHeadAttemptAt:state.lastHeadAttemptAt===undefined?(state.cycle.pages?state.headThrough:null):state.lastHeadAttemptAt,headCheckedThrough:state.headCheckedThrough,headPlannedThrough:state.headThrough,latestWatermark:state.latestWatermark,watermarkBlocked:state.watermarkBlocked,latestPending:state.latest.filter(j=>j.status==='pending').length,historyPending:state.history.length,expiredIncomplete:state.expiredIncomplete,completedWindows:state.completed,lastContinuationAttemptAt:state.lastContinuationAttemptAt,cycle:{...state.cycle,headId:undefined},pending:state.latest.some(j=>j.status==='pending')||state.history.length>0,coverage:state.ledger.slice(-12)};}

@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-11-15T00:24:08Z",
+  "latestVersion": "2026-11-16T12:45:48Z",
   "releases": [
+    {
+      "id": "hkis-coverage-planning-20261116",
+      "at": "2026-11-16T12:45:48Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "减少重复整月扫描并修正持久片续处理边界",
+      "body": [
+        "整月复核增加有证据的最短周期，保留首次扫描、日增量、原游标和历史缺口；不扩大页数或时间预算。",
+        "只有确认持久进展时允许跨slice继续处理，未知与无进展仍停止；补充覆盖口径和可复用回归。",
+        "此记录表示代码维护，不能据此推定已部署或生产覆盖已完整。"
+      ],
+      "sources": [
+        {
+          "label": "覆盖可靠性说明",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/hkis-coverage-reliability.md"
+        }
+      ]
+    },
     {
       "id": "hkis-legacy-recovery-evidence-20261115",
       "at": "2026-11-15T00:24:08Z",

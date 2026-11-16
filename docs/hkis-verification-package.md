@@ -81,3 +81,8 @@
 receipts增加research-recovery-preload，boundaries增加research-legacy-queue-conflict及isolated-recovery-contract，worker增加test-isolated-recovery-worker。四场为recovery_legacy_preload、recovery_commit_ack_unknown、recovery_active_lock、recovery_missing_journal：真实candidate runner/Worker执行、合成历史seed明确标注、旧root未知不改、保全hash与原捕获及queue绑定；成功须客户端collection、批次及存储一致，拒绝须无新采集、无证据删除。任何云验收都绑定冻结源码SHA，不以dirty本机fixture冒充生产发布。
 
 本轮隔离恢复矩阵使用 34 条、20+14 两个工作片（分别属于两个 group），覆盖旧 preload 对账、真实提交后的 ACK 丢失、活动锁及缺失日志；不将该矩阵冒称单 group 多 ordinal checkpoint 验收。云端入口为固定干净源码的完整稳定 bootstrap，08 时段，成功恢复边界与最终批次/客户端联合断言；全部供应商合成、模型及费用为零。
+
+
+## 覆盖调度回归
+
+`boundaries` 必跑整月复核冷却、persist跨slice确认进展及四周固定预算回放。回放保持32源/35页/每源2页/尾部续抓分配，输出头部尝试分布、整月和日增量页数、失败与积压；它是合成状态模型，不代表实际HTTP、D1性能或生产缺陷发生率。详见 `docs/hkis-coverage-reliability.md`。
