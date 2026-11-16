@@ -1,0 +1,1648 @@
+{
+  "checkedAtUtc": "2026-11-16T12:47:23.646664+00:00",
+  "repository": "https://github.com/KKKKhazix/AIHOT",
+  "reviewedHead": "209417b0dd614460926ba7d96760794d07d83711",
+  "previousReviewedHead": "d4e0374d6b32ab75681f2beffb2c52b91dbd93ab",
+  "lastFullMerge": "cf8f8d07d68dfa9079becc72b0717a45b33485f3",
+  "targetBase": "c8aa1c583a0b60ef0694bdece197d2d0c1bb09c5",
+  "scope": "114 commit/file/diff applicability triage; only selected components/dependency runtime validated. Not a claim of full upstream functional validation or merge.",
+  "commits": [
+    {
+      "upstreamSha": "027d50abcd56ba9a66257986501c176e47038d78",
+      "date": "2026-11-02T00:21:11Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/api/src/routes/static.ts",
+        "apps/web/app/routes/report-latest.tsx",
+        "packages/backend/src/publication/sitemap.ts",
+        "tests/discovery-cache.test.ts",
+        "tests/discovery-scope.test.ts",
+        "tests/discovery-updates.test.ts",
+        "tests/outlet-invariants.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "38d130f26bf4807054ec8e71a732795761cfe438",
+      "date": "2026-11-02T00:26:33Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/features/item/StoryFollowups.tsx",
+        "apps/web/app/features/item/followups.server.ts",
+        "apps/web/app/features/report/ReportPaper.tsx",
+        "apps/web/app/routes/item-original.tsx",
+        "apps/web/app/routes/item.tsx",
+        "packages/backend/src/publication/reports.ts",
+        "packages/contracts/src/site.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "46a9334eb841b0f7feeba847b484c638db3431ff",
+      "date": "2026-11-02T07:13:29Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/operations/reports.ts",
+        "packages/backend/src/sources/health.ts",
+        "tests/source-health.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "5c10a6ec3a6e109b5de108e4924af19bc466cb94",
+      "date": "2026-11-02T10:34:28Z",
+      "subject": "fix: a listing's trailing live counts are no revision",
+      "files": [
+        "packages/backend/src/content/materials.ts",
+        "tests/materials.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "6e0cfaf5533b5a43fbe07a81ed7e235cd189ef7a",
+      "date": "2026-11-02T10:39:30Z",
+      "subject": "fix: tell the admin page when a configured model name does not exist",
+      "files": [
+        "apps/web/app/routes/admin/models.tsx",
+        "packages/backend/src/editorial/models.ts",
+        "packages/contracts/src/admin.ts",
+        "tests/model-vision-routing.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "独立站页面/样式/SEO/契约或测试配套，不在共享组件最小修复范围；未验证本地适配，不引入。"
+    },
+    {
+      "upstreamSha": "f88621f0eef984bb899e1182aff22d15e0d5e8f1",
+      "date": "2026-11-03T00:49:51Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/lib/admin.server.ts",
+        "apps/web/app/routes.ts",
+        "database/migrations/0121_articles_wechat_post_idx.sql",
+        "database/migrations/0122_articles_wechat_short_url_idx.sql",
+        "packages/backend/src/admin/content.ts",
+        "packages/backend/src/content/materials.ts",
+        "packages/backend/src/lib/url.ts",
+        "packages/backend/src/sources/collect.ts",
+        "packages/backend/src/sources/mp.ts",
+        "packages/contracts/src/modules.ts",
+        "tests/architecture.test.ts",
+        "tests/url-identity.standalone.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "9059707e098b451539596d3a3bc7b47f43a068d9",
+      "date": "2026-11-03T01:48:43Z",
+      "subject": "同步引擎",
+      "files": [
+        "database/migrations/0123_articles_wechat_external_id_idx.sql",
+        "packages/backend/src/content/materials.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "e6e3c68bdbe55e863eee8c08051f15e23408c228",
+      "date": "2026-11-03T02:05:13Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/editorial/models.ts",
+        "packages/backend/src/operations/feedback.ts",
+        "tests/alerts.test.ts",
+        "tests/feedback.test.ts",
+        "tests/setup.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "2c71b687bd7c5064b06d9d780e3b9174833284a5",
+      "date": "2026-11-03T02:21:18Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/content/extract.ts",
+        "packages/backend/src/sources/config-keys.ts",
+        "packages/backend/src/sources/json-list.ts",
+        "packages/backend/src/sources/rss.ts",
+        "packages/backend/src/sources/web-list.ts",
+        "tests/extraction-consistency.test.ts",
+        "tests/sources.standalone.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "ce97b4d804e3f7ddbb4ee868f9a0ff6605c616c3",
+      "date": "2026-11-03T04:11:12Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/editorial/models.ts",
+        "packages/backend/src/events/cards.ts",
+        "packages/backend/src/events/group.ts",
+        "packages/backend/src/events/merge.ts",
+        "packages/backend/src/events/recall.ts",
+        "packages/backend/src/events/related.ts",
+        "packages/backend/src/modules.ts",
+        "packages/backend/src/publication/publish.ts",
+        "packages/backend/src/publication/rules.ts",
+        "tests/events.test.ts",
+        "tests/news-value.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "29aa1abd95a51a953cfc9464289744c3f669b2d7",
+      "date": "2026-11-03T04:15:26Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/events/group.ts",
+        "packages/backend/src/events/merge.ts",
+        "tests/events.test.ts",
+        "tests/news-value.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "e05f58a492cb83dab9968e7396cc95dfcefaa055",
+      "date": "2026-11-03T04:23:04Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/sources/config-keys.ts",
+        "packages/backend/src/sources/web-list.ts",
+        "tests/source-parser-audit.standalone.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "41cee09f70518fdcacdc307dcba58d635505bb41",
+      "date": "2026-11-03T09:46:49Z",
+      "subject": "同步引擎",
+      "files": [
+        "tests/architecture.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "独立站页面/样式/SEO/契约或测试配套，不在共享组件最小修复范围；未验证本地适配，不引入。"
+    },
+    {
+      "upstreamSha": "dcb366e653709f516a7e0d3d1fd05aea003b1e17",
+      "date": "2026-11-03T10:31:34Z",
+      "subject": "fix: support keyboard navigation in article action menu",
+      "files": [
+        "apps/web/app/components/ui/Menu.tsx",
+        "apps/web/tests/item-copy.test.ts"
+      ],
+      "decision": "cherry-picked-with-resolution",
+      "localSha": "5f3ac58ac0f7054e378288513f98874f54a57118",
+      "reason": "共享组件或 XML 解析依赖；保留 HKIS 接口与锁文件其余依赖，详见报告。"
+    },
+    {
+      "upstreamSha": "cd424b0a513c7c8535b6f291b106a3086d6b75bf",
+      "date": "2026-11-03T10:31:34Z",
+      "subject": "fix: pressing an open menu's trigger closes it in Safari",
+      "files": [
+        "apps/web/app/components/ui/Menu.tsx",
+        "apps/web/tests/item-copy.test.ts"
+      ],
+      "decision": "cherry-picked-with-resolution",
+      "localSha": "a43c87782f3fbeaae6345f3692be87e85f20bc27",
+      "reason": "共享组件或 XML 解析依赖；保留 HKIS 接口与锁文件其余依赖，详见报告。"
+    },
+    {
+      "upstreamSha": "a3d0263da804fce1828bc8c1f23b8e3d5a9e7e70",
+      "date": "2026-11-05T10:47:02Z",
+      "subject": "fix(sources): 不再重买同一段 X 历史：backlog 只留一份、超过 3 天放弃",
+      "files": [
+        "packages/backend/src/sources/collect.ts",
+        "packages/backend/src/sources/x.ts",
+        "tests/collection.test.ts",
+        "tests/x-shards.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "15f7b2d831cc4df3f74361c30f4ac7ef119dfece",
+      "date": "2026-11-05T10:47:02Z",
+      "subject": "fix(sources): 分片重组后，积压里已移走账号的帖子也入库",
+      "files": [
+        "packages/backend/src/sources/collect.ts",
+        "tests/collection.test.ts",
+        "tests/x-shards.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "1e839a7b42b3973e4c795d7e95df8f382a164962",
+      "date": "2026-11-05T10:52:28Z",
+      "subject": "fix(web): 侧栏只点亮最具体的一项",
+      "files": [
+        "apps/web/app/components/shell/Sidebar.tsx",
+        "apps/web/app/components/shell/nav.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "与 HKIS 自定义导航、收藏、模块或 modal 实现存在结构差异；避免覆盖本地功能。"
+    },
+    {
+      "upstreamSha": "92e4a15dde652613858cc3ff33376a8d1fd38207",
+      "date": "2026-11-05T11:02:41Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/content/extract.ts",
+        "packages/backend/src/providers/jina.ts",
+        "tests/error-page-extraction.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "29648b2534857bfa538a0516a72671d83a089526",
+      "date": "2026-11-07T09:39:19Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/components/shell/nav.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "与 HKIS 自定义导航、收藏、模块或 modal 实现存在结构差异；避免覆盖本地功能。"
+    },
+    {
+      "upstreamSha": "6aafd935636d1856eb83517e9391ef698f8e3e4d",
+      "date": "2026-11-07T10:41:07Z",
+      "subject": "feat: add DingTalk custom-bot webhook as a content-push target",
+      "files": [
+        ".env.example",
+        "database/migrations/0124_notify_targets_kind_drop_check.sql",
+        "database/migrations/0125_notify_targets_kind_add_check.sql",
+        "database/migrations/0126_notify_targets_kind_validate_check.sql",
+        "docs/architecture.md",
+        "docs/deploy.md",
+        "packages/backend/src/admin/settings.ts",
+        "packages/backend/src/config.ts",
+        "packages/backend/src/notify/deliver.ts",
+        "packages/backend/src/notify/dingtalk.ts",
+        "packages/backend/src/notify/selected-content.ts",
+        "packages/backend/src/notify/selected.ts",
+        "tests/admin-ops.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "外部推送或通知集成超出本轮 Sites 需求，不启用新目的地。"
+    },
+    {
+      "upstreamSha": "22e31059bdd07a642627249a5fb754da3b2d0f87",
+      "date": "2026-11-07T10:41:07Z",
+      "subject": "fix(dingtalk): keep original links whole and date pushes like the Feishu card",
+      "files": [
+        "packages/backend/src/notify/dingtalk.ts",
+        "packages/backend/src/notify/selected-content.ts",
+        "tests/admin-ops.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "外部推送或通知集成超出本轮 Sites 需求，不启用新目的地。"
+    },
+    {
+      "upstreamSha": "0ce2d00fd80be416d78d675df732d5e1bef53b40",
+      "date": "2026-11-07T10:41:07Z",
+      "subject": "fix(dingtalk): share the webhook outcome rules, skip pushes with no DingTalk form, name the real group in alerts",
+      "files": [
+        "packages/backend/src/notify/deliver.ts",
+        "packages/backend/src/notify/dingtalk.ts",
+        "packages/backend/src/notify/feishu.ts",
+        "packages/backend/src/operations/alerts.ts",
+        "tests/admin-ops.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "外部推送或通知集成超出本轮 Sites 需求，不启用新目的地。"
+    },
+    {
+      "upstreamSha": "c2cb6f3f03b280755884ea8d6cbd65f693079b46",
+      "date": "2026-11-07T18:50:38Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/routes/about.tsx",
+        "apps/web/app/routes/agent.tsx",
+        "apps/web/app/routes/all.tsx",
+        "apps/web/app/routes/hot.tsx",
+        "apps/web/app/routes/report-latest.tsx",
+        "apps/web/app/routes/topic.tsx",
+        "tests/page-metadata.standalone.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "独立站页面/样式/SEO/契约或测试配套，不在共享组件最小修复范围；未验证本地适配，不引入。"
+    },
+    {
+      "upstreamSha": "4106602fde5f39c48715a2640d32cb2c4b05e6c8",
+      "date": "2026-11-07T18:50:38Z",
+      "subject": "site: 新增 SEO_TITLES（入口页在搜索结果里的标题）",
+      "files": [
+        "docs/deploy.md",
+        "site/site.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "上游部署、品牌与工作约定不是 HKIS 本地配置；保留现有约束。"
+    },
+    {
+      "upstreamSha": "07cce1826c708af6390ab0af6c791db7bc41f75a",
+      "date": "2026-11-07T19:14:45Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/components/shell/Sidebar.tsx",
+        "apps/web/app/routes/more.tsx"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "与 HKIS 自定义导航、收藏、模块或 modal 实现存在结构差异；避免覆盖本地功能。"
+    },
+    {
+      "upstreamSha": "4e45b6b54f5a2bc51bccaa35c7f899f427d9ccf3",
+      "date": "2026-11-07T19:14:45Z",
+      "subject": "site: 页脚默认显示“由 AIHOT 驱动”（SITE.poweredBy）",
+      "files": [
+        "docs/deploy.md",
+        "site/site.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "上游部署、品牌与工作约定不是 HKIS 本地配置；保留现有约束。"
+    },
+    {
+      "upstreamSha": "0fea2e4561e96354927b22d8f31dbf9981046195",
+      "date": "2026-11-07T19:39:05Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/lib/seo.ts",
+        "apps/web/app/routes/item.tsx",
+        "apps/web/tests/web-server.ts",
+        "packages/backend/src/publication/detail.ts",
+        "packages/backend/src/publication/items.ts",
+        "packages/backend/src/publication/sitemap.ts",
+        "packages/contracts/src/site.ts",
+        "tests/discovery-cache.test.ts",
+        "tests/discovery-focus.test.ts",
+        "tests/page-metadata.standalone.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "53e534becafe0da9a09b0f5b305b41d6c070a6f3",
+      "date": "2026-11-07T19:39:05Z",
+      "subject": "site: 新增 SITE.siteVerification（站长平台的网站验证标签）",
+      "files": [
+        "docs/deploy.md",
+        "site/site.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "上游部署、品牌与工作约定不是 HKIS 本地配置；保留现有约束。"
+    },
+    {
+      "upstreamSha": "9f43747532a47c530b269b8f493411ba054b020f",
+      "date": "2026-11-07T19:45:13Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/routes/home.tsx"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "独立站页面/样式/SEO/契约或测试配套，不在共享组件最小修复范围；未验证本地适配，不引入。"
+    },
+    {
+      "upstreamSha": "1da0ff16fe554a4fadd5550bf0ab3a11eed88ec9",
+      "date": "2026-11-07T20:11:59Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/routes/hot.tsx"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "独立站页面/样式/SEO/契约或测试配套，不在共享组件最小修复范围；未验证本地适配，不引入。"
+    },
+    {
+      "upstreamSha": "2d0448ff0753513141975ee4ca46f913220710ba",
+      "date": "2026-11-07T23:01:13Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/notify/feishu.ts",
+        "packages/backend/src/operations/alerts.ts",
+        "tests/agent-wake.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "外部推送或通知集成超出本轮 Sites 需求，不启用新目的地。"
+    },
+    {
+      "upstreamSha": "bedfb5146fce8738c02f779f62e282c8b3fa4221",
+      "date": "2026-11-07T23:12:16Z",
+      "subject": "同步引擎",
+      "files": [
+        "tests/architecture.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "独立站页面/样式/SEO/契约或测试配套，不在共享组件最小修复范围；未验证本地适配，不引入。"
+    },
+    {
+      "upstreamSha": "df70f8f76d0fe891cf3ce9be58ead0b050d01146",
+      "date": "2026-11-08T07:12:12Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/worker/src/schedules.ts",
+        "packages/backend/src/config.ts",
+        "packages/backend/src/operations/alerts.ts",
+        "packages/backend/src/operations/baidu-push.ts",
+        "tests/alerts.test.ts",
+        "tests/baidu-push.test.ts",
+        "tests/setup.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "外部推送或通知集成超出本轮 Sites 需求，不启用新目的地。"
+    },
+    {
+      "upstreamSha": "4edbe4bb90e750504acd8519b244fbd290d6d0bd",
+      "date": "2026-11-08T07:12:12Z",
+      "subject": "开源版：补上百度主动推送的环境变量和升级说明",
+      "files": [
+        ".env.example",
+        "AGENTS.md",
+        "docs/architecture.md",
+        "docs/deploy.md"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "上游部署、品牌与工作约定不是 HKIS 本地配置；保留现有约束。"
+    },
+    {
+      "upstreamSha": "ee2ba20ca2b8da21d2706efc1b2f415e6f282c6b",
+      "date": "2026-11-08T07:22:51Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/components/ui/MentionText.tsx",
+        "apps/web/app/features/report/ReportPaper.tsx",
+        "apps/web/app/routes/item.tsx",
+        "apps/web/app/routes/story.tsx",
+        "apps/web/tests/navigation-performance.test.ts",
+        "apps/web/tests/page-width.test.ts",
+        "apps/web/tests/report-ordinals.test.ts",
+        "apps/web/tests/web-server.ts",
+        "packages/backend/src/modules.ts",
+        "packages/backend/src/publication/detail.ts",
+        "packages/backend/src/publication/mentions.ts",
+        "packages/backend/src/publication/reports.ts",
+        "packages/backend/src/publication/stories.ts",
+        "packages/contracts/src/mentions.ts",
+        "packages/contracts/src/site.ts",
+        "tests/mentions.standalone.test.ts",
+        "tests/mentions.test.ts",
+        "tests/page-metadata.standalone.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "155d006c6c7f3c2992223a3668d71f5fcd3c93ef",
+      "date": "2026-11-08T08:27:03Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/app.css",
+        "apps/web/app/lib/format.ts",
+        "apps/web/app/routes/item.tsx"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "独立站页面/样式/SEO/契约或测试配套，不在共享组件最小修复范围；未验证本地适配，不引入。"
+    },
+    {
+      "upstreamSha": "c605442d3ac0a2d6001f7bf52934cd3907eb82a7",
+      "date": "2026-11-08T08:46:17Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/contracts/src/mentions.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "独立站页面/样式/SEO/契约或测试配套，不在共享组件最小修复范围；未验证本地适配，不引入。"
+    },
+    {
+      "upstreamSha": "4befc77716d5bebaabdd852b9de064f065231608",
+      "date": "2026-11-08T09:05:25Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/routes/item.tsx",
+        "packages/backend/src/content/extract.ts",
+        "packages/backend/src/content/posts.ts",
+        "packages/backend/src/content/sanitize.ts",
+        "packages/backend/src/providers/socialdata.ts",
+        "packages/backend/src/publication/detail.ts",
+        "packages/backend/src/publication/feeds.ts",
+        "packages/backend/src/publication/items.ts",
+        "packages/backend/src/sources/x.ts",
+        "packages/contracts/src/site.ts",
+        "tests/reading.test.ts",
+        "tests/x-article.test.ts",
+        "tests/x-original-posts.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "7327bccfd098af76271b45f926fde2318af23085",
+      "date": "2026-11-08T09:51:48Z",
+      "subject": "同步引擎",
+      "files": [
+        "tests/agent-wake.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "独立站页面/样式/SEO/契约或测试配套，不在共享组件最小修复范围；未验证本地适配，不引入。"
+    },
+    {
+      "upstreamSha": "2756634185b6002c3dbe988a3e91100c04dea2a0",
+      "date": "2026-11-08T11:09:44Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/app.css",
+        "apps/web/app/components/shell/Filings.tsx"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "独立站页面/样式/SEO/契约或测试配套，不在共享组件最小修复范围；未验证本地适配，不引入。"
+    },
+    {
+      "upstreamSha": "5f425206ef1f7dc4ec2212b692f06531733024ca",
+      "date": "2026-11-08T11:34:25Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/app.css",
+        "apps/web/app/components/ui/MentionText.tsx",
+        "apps/web/app/features/feed/FeedItem.tsx",
+        "apps/web/app/features/item/QuotedPost.tsx",
+        "apps/web/app/routes/hot.tsx",
+        "apps/web/app/routes/item.tsx",
+        "apps/web/app/routes/starred.tsx",
+        "apps/web/app/routes/story.tsx",
+        "packages/backend/src/content/sanitize.ts",
+        "packages/backend/src/publication/detail.ts",
+        "packages/backend/src/sources/x.ts",
+        "packages/contracts/src/addresses.ts",
+        "packages/contracts/src/mentions.ts",
+        "packages/contracts/src/site.ts",
+        "tests/mentions.standalone.test.ts",
+        "tests/reading.test.ts",
+        "tests/translate.test.ts",
+        "tests/x-fulltext-license.test.ts",
+        "tests/x-original-posts.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "7475435a3079b6dda50072c8bc9a5c2fb0796dfe",
+      "date": "2026-11-08T12:04:21Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/content/posts.ts",
+        "packages/backend/src/editorial/translate.ts",
+        "packages/backend/src/publication/detail.ts",
+        "packages/backend/src/publication/feeds.ts",
+        "tests/translate.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "61ef3bb0b27783c24a3ba31c52eb052592a7d8f5",
+      "date": "2026-11-08T14:16:27Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/operations/baidu-push.ts",
+        "tests/baidu-push.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "外部推送或通知集成超出本轮 Sites 需求，不启用新目的地。"
+    },
+    {
+      "upstreamSha": "5e17c25da572209df2a641ec1544440c0013d79c",
+      "date": "2026-11-08T14:45:32Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/content/extract.ts",
+        "tests/article-components.standalone.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "61f72c55e4bbb45fd12f0c6f2459cfe684d564bf",
+      "date": "2026-11-08T15:20:25Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/content/extract.ts",
+        "tests/article-components.standalone.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "c0b2f36b08e4e69875595491ac12963e14188eec",
+      "date": "2026-11-08T15:37:49Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/features/report/ReportPaper.tsx",
+        "apps/web/app/lib/seo.ts",
+        "apps/web/app/routes/item.tsx",
+        "apps/web/app/routes/report-detail.tsx",
+        "apps/web/app/routes/report-latest.tsx",
+        "tests/page-metadata.standalone.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "独立站页面/样式/SEO/契约或测试配套，不在共享组件最小修复范围；未验证本地适配，不引入。"
+    },
+    {
+      "upstreamSha": "377e6c9a96f3aee2224dcdeb1acc3d86cf9ebdba",
+      "date": "2026-11-08T17:05:59Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/content/extract.ts",
+        "tests/article-components.standalone.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "265ddc2d95b20bd2febcd8f0376861b8512674a9",
+      "date": "2026-11-08T18:28:23Z",
+      "subject": "同步引擎",
+      "files": [
+        "database/migrations/0127_article_cover.sql",
+        "packages/backend/src/content/cover.ts",
+        "packages/backend/src/content/extract.ts",
+        "packages/backend/src/publication/detail.ts",
+        "packages/backend/src/publication/feeds.ts",
+        "packages/backend/src/publication/sitemap.ts",
+        "packages/backend/src/sources/collect.ts",
+        "packages/backend/src/sources/web-list.ts",
+        "tests/article-cover.standalone.test.ts",
+        "tests/article-cover.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "5627ee7ce57f58918720e5cf2e98f3a7fc710b9f",
+      "date": "2026-11-08T18:36:37Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/routes/all.tsx",
+        "apps/web/app/routes/story.tsx",
+        "packages/backend/src/publication/detail.ts",
+        "packages/backend/src/publication/items.ts",
+        "packages/backend/src/publication/sitemap.ts",
+        "packages/contracts/src/site.ts",
+        "tests/baidu-push.test.ts",
+        "tests/discovery-focus.test.ts",
+        "tests/discovery-updates.test.ts",
+        "tests/page-metadata.standalone.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "c595317fb32f509a77aef489ce43faefb12c118d",
+      "date": "2026-11-08T19:17:19Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/components/icons.tsx",
+        "apps/web/app/features/report/ReportPaper.tsx",
+        "apps/web/app/lib/seo.ts",
+        "apps/web/app/routes/item.tsx",
+        "apps/web/app/routes/story.tsx",
+        "apps/web/tests/web-server.ts",
+        "packages/backend/src/publication/agent.ts",
+        "packages/backend/src/publication/detail.ts",
+        "packages/backend/src/publication/reports.ts",
+        "packages/backend/src/publication/topics.ts",
+        "packages/backend/src/reports/compose.ts",
+        "packages/backend/src/reports/edition.ts",
+        "packages/contracts/src/site.ts",
+        "tests/daily-highlights.test.ts",
+        "tests/page-links.standalone.test.ts",
+        "tests/page-metadata.standalone.test.ts",
+        "tests/report-outlets.test.ts",
+        "tests/topics.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "9e85919baa88a7cfe904ebd820949fd3f5bc3061",
+      "date": "2026-11-08T19:28:01Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/publication/reports.ts",
+        "tests/daily-highlights.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "cf4a9d979a1677ccb85ee4309f75e5b8c57cb049",
+      "date": "2026-11-08T19:55:39Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/contracts/src/http-policy.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "独立站页面/样式/SEO/契约或测试配套，不在共享组件最小修复范围；未验证本地适配，不引入。"
+    },
+    {
+      "upstreamSha": "6fe293def358f3920cccc4a381ead758313bbd78",
+      "date": "2026-11-08T20:08:27Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/content/extract.ts",
+        "tests/article-components.standalone.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "d92d42fd6bd3c36a1b092eb6a1c2dd70def60273",
+      "date": "2026-11-09T00:53:15Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/content/extract.ts",
+        "tests/article-components.standalone.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "f71cf5cb45f7ce147c413e14eb874f7059f1b663",
+      "date": "2026-11-09T03:26:33Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/operations/feedback.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "e7dba131b1b1e8f586589baef8461a27838f33f8",
+      "date": "2026-11-09T06:12:22Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/components/shell/Sidebar.tsx"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "与 HKIS 自定义导航、收藏、模块或 modal 实现存在结构差异；避免覆盖本地功能。"
+    },
+    {
+      "upstreamSha": "f925285aae6c5ff456db3bf3e7bc96dbcf75b731",
+      "date": "2026-11-09T10:03:49Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/api/src/routes/media.ts",
+        "packages/backend/src/content/extract.ts",
+        "packages/backend/src/content/materials.ts",
+        "packages/backend/src/editorial/translate.ts",
+        "packages/backend/src/lib/video-url.ts",
+        "packages/backend/src/media/images.ts",
+        "packages/backend/src/media/imgproxy.ts",
+        "packages/backend/src/providers/socialdata.ts",
+        "packages/backend/src/sources/x.ts",
+        "tests/x-article.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "ad3e934d376e4399ce350d981b4b5eb7a61f860e",
+      "date": "2026-11-09T10:47:51Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/content/extract.ts",
+        "tests/error-page-extraction.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "a6641fa5d92a5708cf4e03363385d02754359d01",
+      "date": "2026-11-09T16:08:13Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/modules.ts",
+        "apps/web/app/routes/feedback.tsx"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "与 HKIS 自定义导航、收藏、模块或 modal 实现存在结构差异；避免覆盖本地功能。"
+    },
+    {
+      "upstreamSha": "2d8410f4abc713660e16410853fc95c37b2ef78e",
+      "date": "2026-11-09T17:49:17Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/features/report/ReportPaper.tsx",
+        "apps/worker/package.json",
+        "packages/backend/src/content/sanitize.ts",
+        "packages/backend/src/providers/socialdata.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "b5297e847eac34d40a11a99c997f43a09f05e1be",
+      "date": "2026-11-09T19:38:00Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/contracts/src/http-policy.ts",
+        "tests/malformed-public-paths.standalone.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "独立站页面/样式/SEO/契约或测试配套，不在共享组件最小修复范围；未验证本地适配，不引入。"
+    },
+    {
+      "upstreamSha": "623c629fd43bf5ce92f34558e3080024140d05e4",
+      "date": "2026-11-09T20:22:13Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/admin/feedback.ts",
+        "packages/backend/src/modules.ts",
+        "packages/backend/src/notify/feishu.ts",
+        "packages/backend/src/operations/feedback.ts",
+        "tests/feedback.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "外部推送或通知集成超出本轮 Sites 需求，不启用新目的地。"
+    },
+    {
+      "upstreamSha": "a040b22b96fb3a66612c7d5291e189802b1476de",
+      "date": "2026-11-09T21:08:09Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/lib/clicks.ts",
+        "apps/web/app/modules.ts",
+        "apps/web/app/routes/feedback.tsx"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "与 HKIS 自定义导航、收藏、模块或 modal 实现存在结构差异；避免覆盖本地功能。"
+    },
+    {
+      "upstreamSha": "9a7f5bd634f777ecbf820627b7935362479b709b",
+      "date": "2026-11-10T04:27:08Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/sources/collect.ts",
+        "packages/backend/src/sources/config-keys.ts",
+        "packages/backend/src/sources/json-list.ts",
+        "packages/backend/src/sources/types.ts",
+        "tests/source-publication-window.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "8e02c9578b6917ce0b2ed077f61606673ad24008",
+      "date": "2026-11-10T10:12:49Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/operations/feedback.ts",
+        "packages/backend/src/sources/x-renames.ts",
+        "tests/x-renames.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "7140b6f6f5a336fbd5668021c5ada750c7333ff2",
+      "date": "2026-11-10T10:24:44Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/worker/src/schedules.ts",
+        "tests/agent-wake.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "独立站页面/样式/SEO/契约或测试配套，不在共享组件最小修复范围；未验证本地适配，不引入。"
+    },
+    {
+      "upstreamSha": "bb9a507b9fca8009c9e3cd6bdc366401b0df622a",
+      "date": "2026-11-10T11:39:22Z",
+      "subject": "Fix grouping state consistency and large recall queries",
+      "files": [
+        "packages/backend/src/events/consolidate.ts",
+        "packages/backend/src/events/group.ts",
+        "packages/backend/src/events/merge.ts",
+        "packages/backend/src/providers/embeddings.ts",
+        "packages/backend/src/publication/stories.ts",
+        "tests/embedding-dimensions.test.ts",
+        "tests/events.test.ts",
+        "tests/signals.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "ba3e9b87c8ad78f516e39aa2aa3e69d94f240ea7",
+      "date": "2026-11-10T11:39:22Z",
+      "subject": "讨论帖找不到事件时，只撤下召回还能找到的事件里的热度",
+      "files": [
+        "packages/backend/src/events/group.ts",
+        "tests/signals.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "863bc1a584e9a80841045398f088d74ed7660264",
+      "date": "2026-11-10T11:39:22Z",
+      "subject": "合并事件时先锁住全部报道再逐篇重发",
+      "files": [
+        "packages/backend/src/events/merge.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "be59ff360e718df0d7f165613f7580e264785433",
+      "date": "2026-11-10T11:39:22Z",
+      "subject": "向量不可用时不改讨论帖已有的热度",
+      "files": [
+        "packages/backend/src/events/group.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "7781f01d9441e9dc1c47bc524c1113bbc34f6cf9",
+      "date": "2026-11-10T11:39:22Z",
+      "subject": "讨论帖被撤下热度后，新报道到来时能重新匹配",
+      "files": [
+        "packages/backend/src/events/group.ts",
+        "tests/signals.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "eed37dac26f00d63ca252fd4ca8eb4b8dfac9dd7",
+      "date": "2026-11-10T11:39:22Z",
+      "subject": "热度测试的造数放到一分钟前",
+      "files": [
+        "tests/signals.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "独立站页面/样式/SEO/契约或测试配套，不在共享组件最小修复范围；未验证本地适配，不引入。"
+    },
+    {
+      "upstreamSha": "45ebf34711490243b58d19170bd0f2db97503adb",
+      "date": "2026-11-10T11:39:22Z",
+      "subject": "合并事件时先锁报道再锁事件",
+      "files": [
+        "packages/backend/src/events/merge.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "d4f1f7fb6ac67e529305f7a49421254f529deb76",
+      "date": "2026-11-10T11:39:22Z",
+      "subject": "讨论帖当前所在事件的事实每次都重新判断",
+      "files": [
+        "packages/backend/src/events/group.ts",
+        "tests/signals.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "cce802596a14b847af1f13a43da6315c462e43e7",
+      "date": "2026-11-10T11:39:22Z",
+      "subject": "判断事件能否被召回时沿用召回自己的证据条件",
+      "files": [
+        "packages/backend/src/events/group.ts",
+        "tests/signals.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "69a9d5f9c8ca535fe46fc9431ed972a7b825447a",
+      "date": "2026-11-10T11:39:22Z",
+      "subject": "合并事件按事实、报道、事件的顺序加锁",
+      "files": [
+        "packages/backend/src/events/merge.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "a500884ca391aa0d47b2e576a90067d2436ba9a1",
+      "date": "2026-11-10T19:41:34Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/features/about/SignalRiver.tsx",
+        "apps/web/app/features/report/Halftone.tsx",
+        "apps/web/app/lib/motion.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "独立站页面/样式/SEO/契约或测试配套，不在共享组件最小修复范围；未验证本地适配，不引入。"
+    },
+    {
+      "upstreamSha": "2f9df7e54e01c939bf6b2232cc18819b7705f042",
+      "date": "2026-11-10T20:44:47Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/worker/src/main.ts",
+        "packages/backend/src/editorial/translate.ts",
+        "packages/backend/src/jobs/queue.ts",
+        "packages/backend/src/jobs/runs.ts",
+        "packages/backend/src/notify/deliver.ts",
+        "packages/backend/src/operations/alerts.ts",
+        "packages/backend/src/operations/recover.ts",
+        "packages/backend/src/sources/collect.ts",
+        "packages/backend/src/sources/mp.ts",
+        "tests/collection-detail-budget.test.ts",
+        "tests/collection.test.ts",
+        "tests/delivery-resolution.test.ts",
+        "tests/queue-recovery.test.ts",
+        "tests/rss-conditional.test.ts",
+        "tests/translate.test.ts",
+        "tests/x-shards.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "外部推送或通知集成超出本轮 Sites 需求，不启用新目的地。"
+    },
+    {
+      "upstreamSha": "269765738daf6b15316fa69e504087a73f54738b",
+      "date": "2026-11-11T02:44:44Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/editorial/translate.ts",
+        "tests/translate.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "独立站页面/样式/SEO/契约或测试配套，不在共享组件最小修复范围；未验证本地适配，不引入。"
+    },
+    {
+      "upstreamSha": "83b32d3f168940c8e796d1be2468197900292db1",
+      "date": "2026-11-11T08:35:15Z",
+      "subject": "英文 README 跟上 Agent 入口的说明，开关清单补上钉钉推送 (#390)",
+      "files": [
+        "AGENTS.md",
+        "README.en.md"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "上游部署、品牌与工作约定不是 HKIS 本地配置；保留现有约束。"
+    },
+    {
+      "upstreamSha": "26e9e24a17bf5894d5c64612643bbb64446e4b01",
+      "date": "2026-11-12T07:51:45Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/notify/agent.ts",
+        "packages/backend/src/notify/feishu.ts",
+        "tests/agent-wake.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "外部推送或通知集成超出本轮 Sites 需求，不启用新目的地。"
+    },
+    {
+      "upstreamSha": "408d1127a1bda8ab4aa026a2d403b48941d78528",
+      "date": "2026-11-12T10:22:12Z",
+      "subject": "chore(deps): bump fast-xml-parser from 5.11.1 to 5.12.0",
+      "files": [
+        "package-lock.json",
+        "packages/backend/package.json"
+      ],
+      "decision": "cherry-picked-with-resolution",
+      "localSha": "3fbb4d55d5d2a7be506e7b4b6186fe8e1deb8bdf",
+      "reason": "共享组件或 XML 解析依赖；保留 HKIS 接口与锁文件其余依赖，详见报告。"
+    },
+    {
+      "upstreamSha": "d342846e785db3a9a713a869efbc78b9a2dca67c",
+      "date": "2026-11-12T10:22:12Z",
+      "subject": "锁文件与 fast-xml-parser 的固定版本一致",
+      "files": [
+        "package-lock.json"
+      ],
+      "decision": "equivalent-resolution",
+      "localSha": null,
+      "reason": "上游固定版本锁文件修正已纳入 408d1127 冲突解决；没有独立 cherry-pick，不计作独立合入。"
+    },
+    {
+      "upstreamSha": "e3857943ddb53b1d2ea13d346be2e06709b2be19",
+      "date": "2026-11-12T14:50:35Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/components/ui/Score.tsx"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "独立站页面/样式/SEO/契约或测试配套，不在共享组件最小修复范围；未验证本地适配，不引入。"
+    },
+    {
+      "upstreamSha": "11da55cca2ee7b21d37ed432efe9362cce3b7b05",
+      "date": "2026-11-13T21:13:51Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/api/src/http/respond.ts",
+        "apps/web/app/lib/seo.ts",
+        "packages/backend/src/modules.ts",
+        "packages/backend/src/publication/agent.ts",
+        "tests/page-markdown.standalone.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "70d134925fd7ca038184d19d7d80b2856a066f43",
+      "date": "2026-11-14T14:16:35Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/components/shell/Sidebar.tsx",
+        "apps/web/app/lib/local-state.ts",
+        "apps/web/app/modules.ts",
+        "apps/web/app/routes/more.tsx",
+        "packages/backend/src/modules.ts",
+        "packages/backend/src/operations/alerts.ts",
+        "packages/contracts/src/sync.ts",
+        "tests/architecture.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "af712e5119a1594a5908213ef6c74463a2737b0d",
+      "date": "2026-11-14T17:23:00Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/components/shell/Sidebar.tsx"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "与 HKIS 自定义导航、收藏、模块或 modal 实现存在结构差异；避免覆盖本地功能。"
+    },
+    {
+      "upstreamSha": "860ee12060f2dfb940a4a2ca92a440c8779d5d84",
+      "date": "2026-11-14T18:01:17Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/components/ui/Presence.tsx"
+      ],
+      "decision": "cherry-picked-with-resolution",
+      "localSha": "3b3ed076de5baafdec8e91179fc5422307b05bd8",
+      "reason": "共享组件或 XML 解析依赖；保留 HKIS 接口与锁文件其余依赖，详见报告。"
+    },
+    {
+      "upstreamSha": "ad5472c00dc527e762894061cab5d234fd3987e2",
+      "date": "2026-11-14T19:24:38Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/routes/starred.tsx"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "与 HKIS 自定义导航、收藏、模块或 modal 实现存在结构差异；避免覆盖本地功能。"
+    },
+    {
+      "upstreamSha": "e3bd0adc637da20c0d0740a8de85a431ed3397cd",
+      "date": "2026-11-14T19:43:20Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/routes/starred.tsx"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "与 HKIS 自定义导航、收藏、模块或 modal 实现存在结构差异；避免覆盖本地功能。"
+    },
+    {
+      "upstreamSha": "02c484357d4daf82655b19af2985abec30b2e7d2",
+      "date": "2026-11-14T22:26:54Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/lib/local-state.ts",
+        "packages/backend/src/lib/url.ts",
+        "packages/contracts/src/sync.ts",
+        "tests/architecture.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "与 HKIS 自定义导航、收藏、模块或 modal 实现存在结构差异；避免覆盖本地功能。"
+    },
+    {
+      "upstreamSha": "7be84c2dc3684dfd11a928e96dbb7d2a8d218c31",
+      "date": "2026-11-15T00:39:38Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/components/ui/modal.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "与 HKIS 自定义导航、收藏、模块或 modal 实现存在结构差异；避免覆盖本地功能。"
+    },
+    {
+      "upstreamSha": "cb5d4e533f85f07e9a417ac169d5225c5a69d2b8",
+      "date": "2026-11-15T01:33:50Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/modules.ts",
+        "apps/web/app/routes/starred.tsx"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "与 HKIS 自定义导航、收藏、模块或 modal 实现存在结构差异；避免覆盖本地功能。"
+    },
+    {
+      "upstreamSha": "a9f7faa2ad966257421a2066e4d8253d127adfdc",
+      "date": "2026-11-15T09:29:28Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/features/report/ReportPaper.tsx",
+        "apps/web/app/routes/item.tsx",
+        "apps/web/app/routes/starred.tsx"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "与 HKIS 自定义导航、收藏、模块或 modal 实现存在结构差异；避免覆盖本地功能。"
+    },
+    {
+      "upstreamSha": "4468bb56c29e90ac8c85206ef02074cb068e7823",
+      "date": "2026-11-15T10:02:56Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/app/modules.ts",
+        "apps/web/app/routes/starred.tsx"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "与 HKIS 自定义导航、收藏、模块或 modal 实现存在结构差异；避免覆盖本地功能。"
+    },
+    {
+      "upstreamSha": "1596c5248511b4b8f5252a228c6703040c37e515",
+      "date": "2026-11-15T10:10:20Z",
+      "subject": "jobs: record a paid-call budget pause as skipped, not failed",
+      "files": [
+        "packages/backend/src/jobs/queue.ts",
+        "tests/queue-recovery.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "76e3b6ea52ac45ed3e2f30272514c83f1845b989",
+      "date": "2026-11-15T10:25:39Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/jobs/events.ts",
+        "packages/backend/src/operations/backup.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "a22aba8b4e76f720bf7c21545c984b586e74ae2a",
+      "date": "2026-11-15T11:39:58Z",
+      "subject": "同步引擎",
+      "files": [
+        "database/migrations/0140_embeddings_text_hash_idx.sql",
+        "packages/backend/src/operations/retention.ts",
+        "packages/backend/src/providers/embeddings.ts",
+        "packages/backend/src/providers/receipts.ts",
+        "tests/embedding-response.test.ts",
+        "tests/embedding-storage.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "991a36ad01e6c6a1eb668d34ea51110cce1fed0a",
+      "date": "2026-11-15T12:03:25Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/api/src/app.ts",
+        "apps/api/src/main.ts",
+        "apps/api/src/routes/admin-auth.ts",
+        "apps/api/src/routes/admin.ts",
+        "apps/web/app/lib/admin.server.ts",
+        "apps/web/app/modules.ts",
+        "apps/web/app/root.tsx",
+        "apps/web/app/routes/admin-login.tsx",
+        "apps/web/app/routes/feedback.tsx",
+        "apps/web/tests/cache.test.ts",
+        "apps/web/tests/gray-loader.test.ts",
+        "packages/backend/src/admin/auth.ts",
+        "packages/backend/src/admin/preview.ts",
+        "packages/backend/src/config.ts",
+        "packages/backend/src/modules.ts",
+        "packages/backend/src/notify/agent.ts",
+        "packages/backend/src/notify/feishu.ts",
+        "packages/contracts/src/modules.ts",
+        "tests/admin-corrections.test.ts",
+        "tests/admin-session-revocation.test.ts",
+        "tests/agent-wake.test.ts",
+        "tests/architecture.test.ts",
+        "tests/error-logging.test.ts",
+        "tests/preview.standalone.test.ts",
+        "tests/private-routes.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "登录、会话与数据库迁移绑定独立部署；不替换 Sites 身份验证。"
+    },
+    {
+      "upstreamSha": "e01104cd61b61b356feeaf76a6c6e525232249d3",
+      "date": "2026-11-15T12:03:25Z",
+      "subject": "开源版文档：后台只用管理员密码登录",
+      "files": [
+        ".env.example",
+        "docs/deploy.md"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "上游部署、品牌与工作约定不是 HKIS 本地配置；保留现有约束。"
+    },
+    {
+      "upstreamSha": "18d147cfe57bfb7de250712e985a3f362051b184",
+      "date": "2026-11-15T12:16:09Z",
+      "subject": "同步引擎",
+      "files": [
+        "database/migrations/0146_drop_admin_sessions_auth_claims.sql",
+        "database/migrations/0147_drop_admin_users_feishu_union_id.sql",
+        "tests/architecture.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "登录、会话与数据库迁移绑定独立部署；不替换 Sites 身份验证。"
+    },
+    {
+      "upstreamSha": "6c6c9ea0aafa19438c8ce62b6e513f7e5b5c0324",
+      "date": "2026-11-15T12:16:09Z",
+      "subject": "开源版文档：升级时自动删掉飞书登录留下的两列",
+      "files": [
+        "docs/deploy.md"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "上游部署、品牌与工作约定不是 HKIS 本地配置；保留现有约束。"
+    },
+    {
+      "upstreamSha": "df278f6fa643d788a0358ed3a235cbfc1bfb33a5",
+      "date": "2026-11-15T13:28:10Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/notify/agent.ts",
+        "tests/agent-wake.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "外部推送或通知集成超出本轮 Sites 需求，不启用新目的地。"
+    },
+    {
+      "upstreamSha": "84ed3a2c93db7a07f09b2ece9f25b19682a75b1b",
+      "date": "2026-11-15T13:53:25Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/web/server.ts",
+        "apps/web/tests/cache.test.ts",
+        "packages/backend/src/admin/auth.ts",
+        "packages/backend/src/admin/preview.ts",
+        "packages/contracts/src/http-policy.ts",
+        "tests/admin-session-revocation.test.ts",
+        "tests/private-routes.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "登录、会话与数据库迁移绑定独立部署；不替换 Sites 身份验证。"
+    },
+    {
+      "upstreamSha": "f8fe46e2ce52d0321a016d11d618ff3e19238dd1",
+      "date": "2026-11-15T14:04:39Z",
+      "subject": "同步引擎",
+      "files": [
+        "database/migrations/0149_admin_sessions_auth_method_drop_check.sql",
+        "database/migrations/0150_admin_sessions_auth_method_add_check.sql",
+        "tests/admin-session-revocation.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "登录、会话与数据库迁移绑定独立部署；不替换 Sites 身份验证。"
+    },
+    {
+      "upstreamSha": "594c7ce876e9fe22bc6efe4f58e3d4583923e341",
+      "date": "2026-11-15T14:22:16Z",
+      "subject": "精简规则文件：删掉往事、日期和讲原因的话 (#420)",
+      "files": [
+        "AGENTS.md"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "上游部署、品牌与工作约定不是 HKIS 本地配置；保留现有约束。"
+    },
+    {
+      "upstreamSha": "a60010148a4d41ace783a249926488ccf01148c2",
+      "date": "2026-11-15T17:26:47Z",
+      "subject": "同步引擎",
+      "files": [
+        "packages/backend/src/operations/backup.ts",
+        "tests/backup-multipart.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "后端采集/任务/提取改动绑定上游 PG 或社媒流水线；与 Sites runner 非同一路径，不整块引入，保留后续独立适配候选。"
+    },
+    {
+      "upstreamSha": "21845572fdad281b863458a19b9b8d9a61166233",
+      "date": "2026-11-15T18:10:31Z",
+      "subject": "同步引擎",
+      "files": [
+        "database/migrations/0151_publications_suppress_original.sql",
+        "packages/backend/src/admin/content.ts",
+        "packages/backend/src/content/extract.ts",
+        "packages/backend/src/content/materials.ts",
+        "packages/backend/src/content/presentation.ts",
+        "packages/backend/src/editorial/analyze.ts",
+        "packages/backend/src/editorial/input.ts",
+        "packages/backend/src/editorial/translate.ts",
+        "packages/backend/src/events/digest.ts",
+        "packages/backend/src/events/group.ts",
+        "packages/backend/src/jobs/content.ts",
+        "packages/backend/src/lib/text.ts",
+        "packages/backend/src/modules.ts",
+        "packages/backend/src/providers/llm.ts",
+        "packages/backend/src/providers/receipts.ts",
+        "packages/backend/src/publication/hot.ts",
+        "packages/backend/src/publication/items.ts",
+        "packages/backend/src/publication/publish.ts",
+        "packages/backend/src/publication/reports.ts",
+        "packages/backend/src/publication/stories.ts",
+        "packages/backend/src/publication/story-evidence.ts",
+        "packages/backend/src/publication/v1.ts",
+        "packages/contracts/src/admin.ts",
+        "tests/publication.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "PG 新闻事件/发布与编辑架构变更，不是 HKIS Sites 覆盖路径；需单独适配与数据库验证。"
+    },
+    {
+      "upstreamSha": "a3e43495d139dd6704e9039b9dabc360d3cd442d",
+      "date": "2026-11-16T10:34:21Z",
+      "subject": "fix(egress): DoH upstream fallback and optional hostname CONNECT for rule-based proxies",
+      "files": [
+        ".env.example",
+        "packages/backend/src/config.ts",
+        "packages/backend/src/lib/egress-proxy.ts",
+        "packages/backend/src/lib/http-fetch.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "代理、DNS 与出口安全配置不同；不能以降低 DNS 固定或安全验证作为 Sites 采集修复。"
+    },
+    {
+      "upstreamSha": "fe9be059a1d9f0d5daca6e5ea88f75918c18c4e1",
+      "date": "2026-11-16T10:34:21Z",
+      "subject": "test(egress): cover DoH upstream fallback and unpinned CONNECT",
+      "files": [
+        "tests/egress-proxy.standalone.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "代理、DNS 与出口安全配置不同；不能以降低 DNS 固定或安全验证作为 Sites 采集修复。"
+    },
+    {
+      "upstreamSha": "23d38826acd70fe9a40dabd1e116f840322b8cbf",
+      "date": "2026-11-16T10:34:21Z",
+      "subject": "docs(egress): say what EGRESS_PIN_DNS=false gives up",
+      "files": [
+        ".env.example",
+        "packages/backend/src/lib/egress-proxy.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "代理、DNS 与出口安全配置不同；不能以降低 DNS 固定或安全验证作为 Sites 采集修复。"
+    },
+    {
+      "upstreamSha": "700f7c7006a27507da462b6f83b56b1389efaa57",
+      "date": "2026-11-16T10:34:21Z",
+      "subject": "fix(egress): an internal answer ends the lookup even when the other query fails",
+      "files": [
+        "packages/backend/src/lib/egress-proxy.ts",
+        "tests/egress-proxy.standalone.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "代理、DNS 与出口安全配置不同；不能以降低 DNS 固定或安全验证作为 Sites 采集修复。"
+    },
+    {
+      "upstreamSha": "209417b0dd614460926ba7d96760794d07d83711",
+      "date": "2026-11-16T11:09:50Z",
+      "subject": "同步引擎",
+      "files": [
+        "apps/api/src/routes/admin-auth.ts",
+        "apps/web/app/lib/admin.server.ts",
+        "apps/web/app/root.tsx",
+        "apps/web/app/routes.ts",
+        "apps/web/app/routes/admin/module-layout.tsx",
+        "apps/web/tests/cache.test.ts",
+        "packages/backend/src/admin/preview.ts",
+        "packages/backend/src/events/cards.ts",
+        "packages/backend/src/events/group.ts",
+        "packages/backend/src/events/recall.ts",
+        "packages/backend/src/modules.ts",
+        "packages/backend/src/operations/backup.ts",
+        "packages/contracts/src/modules.ts",
+        "tests/architecture.test.ts",
+        "tests/backup.test.ts",
+        "tests/databases.ts",
+        "tests/local-postgres.py",
+        "tests/news-value.test.ts",
+        "tests/preview.standalone.test.ts"
+      ],
+      "decision": "deferred-not-imported",
+      "localSha": null,
+      "reason": "登录、会话与数据库迁移绑定独立部署；不替换 Sites 身份验证。"
+    }
+  ]
+}

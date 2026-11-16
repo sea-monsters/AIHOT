@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-11-16T12:45:48Z",
+  "latestVersion": "2026-11-16T12:47:23Z",
   "releases": [
+    {
+      "id": "hkis-upstream-selective-20261116",
+      "at": "2026-11-16T12:47:23Z",
+      "kind": "fix",
+      "basis": "record",
+      "title": "选择性吸收上游菜单与动画修复",
+      "body": [
+        "核查上游至 209417b0，记录 114 个提交的取舍；审查点不代表全量合并点。",
+        "保留 HKIS 导航和 Sites 结构，吸收菜单键盘/重复开关、Presence 动画及 XML 解析依赖更新。",
+        "新增可复用组件回归测试；此维护记录不代表生产部署或采集覆盖问题已经解决。"
+      ],
+      "sources": [
+        {
+          "label": "上游选择性核查记录",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/upstream-sync.md"
+        }
+      ]
+    },
     {
       "id": "hkis-coverage-planning-20261116",
       "at": "2026-11-16T12:45:48Z",

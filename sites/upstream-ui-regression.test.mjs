@@ -1,0 +1,38 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { build } from 'esbuild';
+import { mkdir } from 'node:fs/promises';
+import { Window } from 'happy-dom';
+await mkdir('.sites-runtime', { recursive: true });
+await build({stdin:{contents:`export {Menu,MenuItem} from './apps/web/app/components/ui/Menu'; export {Presence} from './apps/web/app/components/ui/Presence';`,resolveDir:process.cwd(),loader:'tsx'},bundle:true,format:'esm',packages:'external',jsx:'automatic',outfile:'.sites-runtime/upstream-ui.mjs'});
+const {Menu,MenuItem,Presence}=await import('../.sites-runtime/upstream-ui.mjs');
+const React=await import('react');
+const {createRoot}=await import('react-dom/client');
+const {act,createElement:h}=React;
+test('upstream Menu: keyboard, focus, repeated trigger, outside, Tab, align, selection', async()=>{
+ const w=new Window(); Object.assign(globalThis,{window:w,document:w.document,HTMLElement:w.HTMLElement,Node:w.Node,IS_REACT_ACT_ENVIRONMENT:true});
+ const el=document.createElement('div'); document.body.append(el); const root=createRoot(el);
+ await act(()=>root.render(h(Menu,{label:'Actions',trigger:'Open',align:'left'},close=>[h(MenuItem,{key:'a',onSelect:close},'A'),h(MenuItem,{key:'b',onSelect:close},'B')])));
+ const trigger=el.querySelector('button');
+ const key=async(target,key)=>act(()=>target.dispatchEvent(new w.KeyboardEvent('keydown',{key,bubbles:true})));
+ const click=async target=>act(()=>target.click());
+ const items=()=>[...el.querySelectorAll('[role=menuitem]')];
+ await key(trigger,'ArrowUp'); assert.equal(document.activeElement,items()[1]); assert.match(el.querySelector('[role=menu]').className,/left-0/);
+ await key(items()[1],'ArrowDown'); assert.equal(document.activeElement,items()[0]);
+ await key(items()[0],'End'); assert.equal(document.activeElement,items()[1]);
+ await key(items()[1],'Home'); assert.equal(document.activeElement,items()[0]);
+ await key(items()[0],'Escape'); assert.equal(trigger.getAttribute('aria-expanded'),'false'); assert.equal(document.activeElement,trigger);
+ await click(trigger); await click(trigger); assert.equal(trigger.getAttribute('aria-expanded'),'false');
+ await click(trigger); await key(items()[0],'Tab'); assert.equal(trigger.getAttribute('aria-expanded'),'false');
+ await click(trigger); await act(()=>document.body.dispatchEvent(new w.PointerEvent('pointerdown',{bubbles:true}))); assert.equal(trigger.getAttribute('aria-expanded'),'false');
+ await click(trigger); await click(items()[0]); assert.equal(trigger.getAttribute('aria-expanded'),'false'); assert.equal(document.activeElement,trigger);
+ await act(()=>root.unmount()); w.happyDOM.abort();
+});
+test('Presence initial display and interrupted exit/reopen',async()=>{
+ const w=new Window();Object.assign(globalThis,{window:w,document:w.document,HTMLElement:w.HTMLElement,Node:w.Node,IS_REACT_ACT_ENVIRONMENT:true});
+ const el=document.createElement('div');document.body.append(el);const root=createRoot(el);
+ const render=show=>act(()=>root.render(h(Presence,{show,enter:'enter',exit:'exit',duration:10},h('span',null,'body'))));
+ await render(true);assert.equal(el.firstChild.className,'');await render(false);assert.equal(el.firstChild.className,'exit');await render(true);assert.equal(el.firstChild.className,'enter');
+ await act(()=>new Promise(r=>setTimeout(r,25)));assert.ok(el.firstChild);await render(false);await act(()=>new Promise(r=>setTimeout(r,25)));assert.equal(el.firstChild,null);
+ await act(()=>root.unmount());w.happyDOM.abort();
+});
