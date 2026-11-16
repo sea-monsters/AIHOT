@@ -1,3 +1,7 @@
+## 2026-11-16 selective review (not full merge)
+
+Reviewed through `209417b0dd614460926ba7d96760794d07d83711`. [Decisions, exact SHA mappings and test limits](hkis-selective-adaptation-2026-11-16.md). Last full merge unchanged; 114 delta commits triaged, four selectively cherry-picked with documented resolutions.
+
 # 上游同步记录
 
 ## 当前同步索引
