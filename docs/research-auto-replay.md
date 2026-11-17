@@ -1,0 +1,9 @@
+# Automatic continuation fairness replay
+
+`scripts/verify-hkis.mjs boundaries` includes `sites/research-auto-continuation-replay.test.ts`. The original legacy and slow-capacity replay remains unchanged.
+
+The new offline model uses the actual collection-control and Crossref state transitions, a synthetic query-only database, 32 sources and 56 consecutive scheduled windows. It exercises a high-volume 50-page case, mixed failures and non-advancing cursors, and a late-start case with a trusted 55-second remaining collection deadline and at most nine dispatches. Every case passes `collectionFirst` and the same frozen deadline through each decision; no production database, supplier, model or network is used.
+
+For each source the output separately lists windows in which a continuation became eligible, eligible dispatch opportunities, attempts, successful cursor advances, failed attempts, non-advances, maximum and current successive eligible opportunities without successful progress, and whether a wait remains open at the finite end of the sample. A failure or non-advancing cursor never resets the waiting count or counts as successful progress. Sources that never become eligible cannot pass the fairness check. The 250 eligible-opportunity maximum is a regression threshold for these fixed synthetic workloads, not a service-level guarantee.
+
+A source may be unable to qualify in a particular window because its head has not been tried or because it has no cursor; those periods are not fabricated as eligible opportunities. A pending wait at the end is explicitly reported and cannot establish absence of future starvation. The model does not prove gateway latency, D1 throughput, actual publisher behavior, or indefinite fairness; independent cloud and production observation are still required.
