@@ -1,0 +1,5 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {validateSteppedBudgetSite} from './verify-isolated-budget50-stepped.mjs';
+const site=()=>({id:'appgprj_6afbbfb0d2588191ac9a8dcb6923a453',status:'active',current_user_role:'owner',access_mode:'custom',access_policy:{allowed_users:[{role:'owner'}]},automations:[],current_live_url:'https://fixture.chatgpt.site',siwc_bypass_bearer_token:'synthetic-test'});
+test('cloud runner accepts only fixed owner-private empty-schedule isolation',()=>{assert.equal(validateSteppedBudgetSite(site()),'https://fixture.chatgpt.site');for(const patch of [{id:'appgprj_6abc4fd381ec8191a22761c6ba246fe2'},{access_mode:'public'},{current_user_role:'editor'},{automations:[{}]},{automations:undefined},{current_live_url:'https://other.invalid'},{current_live_url:'http://fixture.chatgpt.site'},{siwc_bypass_bearer_token:null},{access_policy:{allowed_users:[{role:'owner'},{role:'viewer'}]}},{access_policy:{allowed_users:[{role:'owner'}],allowed_groups:[{}]}},{access_policy:{allowed_users:[{role:'owner',is_external:true}]}}])assert.throws(()=>validateSteppedBudgetSite({...site(),...patch}));});
