@@ -1,5 +1,5 @@
 // Shared durable Crossref page-attempt cap; changing this requires owner approval.
-export const RESEARCH_PAGE_BUDGET=35;
+export const RESEARCH_PAGE_BUDGET=50;
 export const PUBLISHERS:string[]=['IEEE','Wiley','Elsevier','Nature','Science','IOP','ACS','AIP','SPIE'];
 export type Publisher = 'IEEE'|'Wiley'|'Elsevier'|'Nature'|'Science'|'IOP'|'ACS'|'AIP'|'SPIE';
 export interface JournalSource {id:string;publisher:Publisher;name:string;issn:string;issns?:string[];rss:string|null;homepage:string;topicFilter?:boolean;initialDays?:number;publisherName?:string;feedCoverage?:string;verifiedAt?:string}

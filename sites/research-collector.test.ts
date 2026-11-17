@@ -55,15 +55,15 @@ test('absolute whole-run deadline spans slices and nested concurrent admission s
 
 test('failed provider attempt consumes the permanent atomic page budget across later slices without refund or reset',async()=>{
  const {initResearch,syncSource}=await import('./research.ts'),{RESEARCH_SOURCES}=await import('./research-config.ts'),f=setup(),old=globalThis.fetch;let calls=0;
- try{await initResearch(f.db);f.sql.prepare('INSERT INTO research_settings(key,value) VALUES(?,?)').run('collection-budget:'+f.key,'34');globalThis.fetch=async()=>{calls++;throw Error('Synthetic unknown transport')};
+ try{await initResearch(f.db);f.sql.prepare('INSERT INTO research_settings(key,value) VALUES(?,?)').run('collection-budget:'+f.key,'49');globalThis.fetch=async()=>{calls++;throw Error('Synthetic unknown transport')};
   const callback=(id:string,maxMs:number)=>syncSource(f.db,{...RESEARCH_SOURCES.find(s=>s.id===id)!,rss:undefined},1,f.key,'internal',new Date().toISOString(),{},maxMs,undefined,undefined,true);
-  await collectBatchSlice(f.db,f.key,callback,{maxMs:75000,maxCalls:35,concurrency:3});assert.equal(calls,1);assert.equal(f.sql.prepare('SELECT value FROM research_settings WHERE key=?').get('collection-budget:'+f.key)!.value,'35');
-  const next=await collectBatchSlice(f.db,f.key,callback,{maxMs:75000,maxCalls:35,concurrency:3});assert.equal(next.calls,0);assert.equal(calls,1);assert.equal(f.sql.prepare('SELECT value FROM research_settings WHERE key=?').get('collection-budget:'+f.key)!.value,'35');
+  await collectBatchSlice(f.db,f.key,callback,{maxMs:75000,maxCalls:35,concurrency:3});assert.equal(calls,1);assert.equal(f.sql.prepare('SELECT value FROM research_settings WHERE key=?').get('collection-budget:'+f.key)!.value,'50');
+  const next=await collectBatchSlice(f.db,f.key,callback,{maxMs:75000,maxCalls:35,concurrency:3});assert.equal(next.calls,0);assert.equal(calls,1);assert.equal(f.sql.prepare('SELECT value FROM research_settings WHERE key=?').get('collection-budget:'+f.key)!.value,'50');
  }finally{globalThis.fetch=old;f.sql.close()}
 });
 test('slow connect diagnostic never dispatches after deadline or cancellation',async(t)=>{const {readURL}=await import('./research.ts'),original=globalThis.fetch;t.mock.timers.enable({apis:['Date'],now:Date.now()});let calls=0;try{globalThis.fetch=async()=>{calls++;return Response.json({})};const expired:any={async begin(){t.mock.timers.tick(2000)}};await assert.rejects(readURL('https://api.crossref.org/journals/0000-0000/works','json',Date.now()+1000,undefined,undefined,undefined,undefined,expired));const controller=new AbortController(),aborted:any={async begin(){controller.abort()}};await assert.rejects(readURL('https://api.crossref.org/journals/0000-0000/works','json',Date.now()+1000,undefined,undefined,undefined,controller.signal,aborted),{code:'collection_canceled'});assert.equal(calls,0);}finally{globalThis.fetch=original}});
 
-test('three admitted sources at page budget34 consume exactly one provider attempt',async()=>{const {initResearch,syncSource}=await import('./research.ts'),{RESEARCH_SOURCES}=await import('./research-config.ts'),f=setup(),original=globalThis.fetch;let fetches=0;try{await initResearch(f.db);f.sql.prepare('INSERT INTO research_settings(key,value) VALUES(?,?)').run('collection-budget:'+f.key,'34');globalThis.fetch=async()=>{fetches++;return Response.json({message:{items:[]}})};const results=await Promise.all(f.ids.slice(0,3).map(id=>syncSource(f.db,{...RESEARCH_SOURCES.find(s=>s.id===id)!,rss:undefined},1,f.key,'internal',new Date().toISOString(),{},20000,undefined,undefined,true)));assert.equal(fetches,1);assert.equal(f.sql.prepare('SELECT value FROM research_settings WHERE key=?').get('collection-budget:'+f.key)!.value,'35');assert.equal(results.reduce((n,r)=>n+(r.crossrefPages?.length||0),0),1);}finally{globalThis.fetch=original;f.sql.close()}});
+test('three admitted sources at page budget49 consume exactly one provider attempt',async()=>{const {initResearch,syncSource}=await import('./research.ts'),{RESEARCH_SOURCES}=await import('./research-config.ts'),f=setup(),original=globalThis.fetch;let fetches=0;try{await initResearch(f.db);f.sql.prepare('INSERT INTO research_settings(key,value) VALUES(?,?)').run('collection-budget:'+f.key,'49');globalThis.fetch=async()=>{fetches++;return Response.json({message:{items:[]}})};const results=await Promise.all(f.ids.slice(0,3).map(id=>syncSource(f.db,{...RESEARCH_SOURCES.find(s=>s.id===id)!,rss:undefined},1,f.key,'internal',new Date().toISOString(),{},20000,undefined,undefined,true)));assert.equal(fetches,1);assert.equal(f.sql.prepare('SELECT value FROM research_settings WHERE key=?').get('collection-budget:'+f.key)!.value,'50');assert.equal(results.reduce((n,r)=>n+(r.crossrefPages?.length||0),0),1);}finally{globalThis.fetch=original;f.sql.close()}});
 
 test('a Crossref 429 freezes concurrent queued requests and preserves the advertised cooldown',async()=>{
  const {readURL}=await import('./research.ts'),f=database(),original=globalThis.fetch;let calls=0,debits=0;
@@ -73,4 +73,23 @@ test('a Crossref 429 freezes concurrent queued requests and preserves the advert
   const cooldown=f.sql.prepare("SELECT value FROM research_settings WHERE key='crossref_http_cooldown'").get()!;assert.ok(Date.parse(String(cooldown.value))>=started+120000);
   assert.equal(f.sql.prepare("SELECT count(*) n FROM research_settings WHERE key='crossref_http_lock'").get()!.n,0);
  }finally{globalThis.fetch=original;f.sql.close()}
+});
+
+test('trusted fairness survives collector slice restarts and preserves head progress',async()=>{
+ const f=setup(),started=Date.now(),clock=started+60000,seen:string[]=[];
+ const budget={deadlineAt:started+538000,collectionDeadlineAt:started+420000,collectionFirst:true as const};
+ try{for(let i=0;i<5;i++){
+  const r=await collectBatchSlice(f.db,f.key,async id=>{
+   const k='crossref:'+id,row=f.sql.prepare('SELECT value FROM research_settings WHERE key=?').get(k),state=row?JSON.parse(String(row.value)):{cycle:{key:f.key,pages:0},history:[{}],latest:[],lastContinuationAttemptAt:null};
+   const head=state.cycle.pages===0;state.cycle.pages++;if(!head)state.lastContinuationAttemptAt=new Date(clock+i*1000).toISOString();
+   f.sql.prepare('INSERT OR REPLACE INTO research_settings(key,value) VALUES(?,?)').run(k,JSON.stringify(state));
+   f.sql.prepare('INSERT OR REPLACE INTO research_settings(key,value) VALUES(?,?)').run('collection-budget:'+f.key,String(i+1));
+   f.sql.prepare("INSERT INTO research_runs(id,source_id,batch_key,started_at,finished_at,status,details_json) VALUES(?,?,?,?,?,'backfill_pending',?)").run(crypto.randomUUID(),id,f.key,new Date(clock).toISOString(),new Date(clock).toISOString(),JSON.stringify({crossrefPages:[{head,status:'pending'}]}));
+   seen.push(head?'head':'continuation');return {sourceId:id,status:'backfill_pending'};
+  },{maxMs:35000,maxCalls:1,concurrency:1,now:()=>clock+i*1000,runtimeBudget:budget});
+  assert.equal(r.calls,1);assert.equal(r.status,'partial');
+ }
+ assert.deepEqual(seen,['head','head','head','continuation','head']);
+ assert.equal(f.sql.prepare("SELECT value FROM research_settings WHERE key=?").get('collection-budget:'+f.key)!.value,'5');
+ }finally{f.sql.close()}
 });

@@ -6,10 +6,10 @@ import {RESEARCH_PAGE_BUDGET} from './research-config.ts';
 import {checkCollectionCancellation,databaseNowSql} from './research-lifecycle.ts';
 const parse=(s:any,f:any)=>{try{return JSON.parse(s)}catch{return f}};
 /** Finite waves: independent sources overlap persistence/RSS, but all head work
- * settles before continuations. The provider gate still serializes Crossref. */
+ * may interleave with eligible continuations. The provider gate serializes Crossref. */
 export async function collectBatchSlice(db:any,batchKey:string,call:(sourceId:string,maxMs:number)=>Promise<any>,options:{maxMs:number;maxCalls:number;concurrency:number;signal?:AbortSignal;now?:()=>number;startedMs?:number;runtimeBudget?:RuntimeBudget;resumeAfterCooldown?:boolean}){
  const now=options.now||Date.now,started=options.startedMs??now(),deadline=runtimeDeadline(started+Math.min(75000,options.maxMs),options.runtimeBudget),results:any[]=[];
- if(deadline-now()<8000)return {batchKey,status:'partial',reason:'slice_deadline',stopReason:'slice_deadline',calls:0,attempted:0,results,collectionControl:await collectionControl(db,batchKey,new Date(now()),options.resumeAfterCooldown===true)};
+ if(deadline-now()<8000)return {batchKey,status:'partial',reason:'slice_deadline',stopReason:'slice_deadline',calls:0,attempted:0,results,collectionControl:await collectionControl(db,batchKey,new Date(now()),options.resumeAfterCooldown===true,options.runtimeBudget)};
  const key='batch-collector:'+batchKey,lease=new Date(deadline+5000).toISOString()+'|'+crypto.randomUUID();
  // Coordinator expiry does not cancel source workers delayed by persistence.
  // Fence both first admission and takeover in SQL, including legacy source locks.
@@ -22,7 +22,7 @@ export async function collectBatchSlice(db:any,batchKey:string,call:(sourceId:st
  try{
   while(results.length<Math.min(60,options.maxCalls)){
    checkCollectionCancellation(options.signal);
-   control=await collectionControl(db,batchKey,new Date(now()),options.resumeAfterCooldown===true);
+   control=await collectionControl(db,batchKey,new Date(now()),options.resumeAfterCooldown===true,options.runtimeBudget);
    if(control.stop){stopReason=control.reason||'sources_exhausted';break;}
    if(deadline-now()<8000){stopReason='slice_deadline';break;}
    const candidates=(control.dispatchableSources||[control.nextSourceId]).filter((id:string)=>id&&(tried.get(id)||0)<(control.pass==='head'?1:2));
@@ -44,7 +44,7 @@ export async function collectBatchSlice(db:any,batchKey:string,call:(sourceId:st
    }}
   }
   if(stopReason==='slice_deadline'&&results.length>=Math.min(60,options.maxCalls))stopReason='slice_call_limit';
-  control=await collectionControl(db,batchKey,new Date(now()),options.resumeAfterCooldown===true);
+  control=await collectionControl(db,batchKey,new Date(now()),options.resumeAfterCooldown===true,options.runtimeBudget);
   if(reconcileControl)control=reconcileControl;
   if(control.stop)stopReason=control.reason||stopReason;
   const batch=await db.prepare('SELECT sources_json FROM research_batches WHERE key=?').bind(batchKey).first(),expected:string[]=parse(batch?.sources_json,[]);

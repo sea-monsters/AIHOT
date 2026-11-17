@@ -1,8 +1,25 @@
 {
   "schemaVersion": 1,
   "timeZone": "Asia/Shanghai",
-  "latestVersion": "2026-11-16T14:41:34Z",
+  "latestVersion": "2026-11-17T01:36:23Z",
   "releases": [
+    {
+      "id": "hkis-bounded-continuation-20261117",
+      "at": "2026-11-17T01:36:23Z",
+      "kind": "feature",
+      "basis": "record",
+      "title": "提升采集页预算并为续页保留公平份额",
+      "body": [
+        "将每个采集周期的 Crossref 页面尝试上限由 35 调整为 50；单源两页和原有 60 次调用、时间预算及安全屏障保持不变。",
+        "依据冻结运行合同中的阶段时间及已尝试页数，在新头与已有续页之间分配机会；未完成范围继续保留为待处理。"
+      ],
+      "sources": [
+        {
+          "label": "采集页预算与续页公平性",
+          "url": "https://github.com/sea-monsters/AIHOT/blob/main/docs/research-page-budget.md"
+        }
+      ]
+    },
     {
       "id": "hkis-upstream-category-correction-20261116",
       "at": "2026-11-16T14:41:34Z",

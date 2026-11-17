@@ -36,7 +36,7 @@ export function validateRuntimeManifest(value:any){
  keys(value.limits,Object.keys(RUNTIME_CEILINGS));
  for(const [key,cap] of Object.entries(RUNTIME_CEILINGS))if(!Number.isInteger(value.limits[key])||value.limits[key]<1||value.limits[key]>cap)fail('runtime_budget_invalid');
  // Only per-slice limits are configurable. Whole-slot limits are fixed; the
- // server's atomic 35-page budget is distinct from bootstrap source-call count.
+ // server's atomic 50-page budget is distinct from bootstrap source-call count.
  for(const key of ['totalMs','collectionCalls','collection8Ms','collection20Ms'] as const)if(value.limits[key]!==RUNTIME_CEILINGS[key])fail('runtime_budget_invalid');
  keys(value.slots,['8','20']);
  for(const slot of ['8','20']){
